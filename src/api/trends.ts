@@ -75,10 +75,10 @@ export async function listTrends(genre?: string): Promise<TrendReference[]> {
   return request<TrendReference[]>(`/trends${query}`);
 }
 
-export async function getTrendSummary(period: "week" | "month"): Promise<TrendGenreSummary[]> {
-  return request<TrendGenreSummary[]>(`/trends/summary?period=${period}`);
+export async function getTrendSummary(period: "week" | "month", niche = "reddit"): Promise<TrendGenreSummary[]> {
+  return request<TrendGenreSummary[]>(`/trends/summary?period=${period}&niche=${encodeURIComponent(niche)}`);
 }
 
-export async function triggerTrendScout(window: "week" | "month"): Promise<{ digestsRefreshed: number }> {
-  return request(`/trends/scout`, { method: "POST", body: JSON.stringify({ window }) });
+export async function triggerTrendScout(window: "week" | "month", niche = "reddit"): Promise<{ digestsRefreshed: number }> {
+  return request(`/trends/scout`, { method: "POST", body: JSON.stringify({ window, niche }) });
 }

@@ -5,6 +5,7 @@ import { getTrendSummary, triggerTrendScout, type TrendGenreSummary } from "@/ap
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { PanelTitle, panelClassName } from "@/components/ui/panel";
+import { NICHES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -23,6 +24,7 @@ function formatBestTime(dayOfWeek: number, hourUtc: number): string {
 }
 
 export function TrendsScreen() {
+  const [niche, setNiche] = useState<string>("reddit");
   const [period, setPeriod] = useState<"week" | "month">("week");
   const [summary, setSummary] = useState<TrendGenreSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export function TrendsScreen() {
     setLoading(true);
     setError(undefined);
     try {
-      setSummary(await getTrendSummary(period));
+      setSummary(await getTrendSummary(period, niche));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load trend summary");
     } finally {
@@ -44,13 +46,13 @@ export function TrendsScreen() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, niche]);
 
   async function runScout() {
     setScouting(true);
     setError(undefined);
     try {
-      await triggerTrendScout(period);
+      await triggerTrendScout(period, niche);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run trend scout");
@@ -67,12 +69,27 @@ export function TrendsScreen() {
             <TrendingUp size={22} className="text-primary" /> Trend Scout
           </h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Top-performing Reddit-story Shorts per genre, pulled from YouTube — feeds hooks, titles, and
-            thumbnail prompts.
+            Top-performing {NICHES.find((n) => n.value === niche)?.label ?? niche} Shorts per genre, pulled
+            from YouTube — feeds hooks, titles, and thumbnail prompts.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={period} onChange={(event) => setPeriod(event.target.value as "week" | "month")}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            className="w-auto min-w-[9.5rem]"
+            value={niche}
+            onChange={(event) => setNiche(event.target.value)}
+          >
+            {NICHES.map((n) => (
+              <option key={n.value} value={n.value}>
+                {n.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            className="w-auto min-w-[8rem]"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value as "week" | "month")}
+          >
             <option value="week">This week</option>
             <option value="month">This month</option>
           </Select>
