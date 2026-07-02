@@ -1,11 +1,11 @@
 import { Film, Loader2, RefreshCw, Shuffle, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CreateReelInput, TtsVoiceOption } from "@/api/reels";
+import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption } from "@/api/reels";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { panelClassName } from "@/components/ui/panel";
-import { REEL_GENRES } from "@/constants/reels";
+import { NICHE_GENRES, NICHES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 import { useReelStudio } from "@/store/reel-studio";
 import { formatLabel, parsePartsValue } from "@/utils/reel";
@@ -19,6 +19,7 @@ const defaultForm: CreateReelInput = {
   source: "hybrid",
   parts: "off",
   gameplayKey: "",
+  imageModel: "",
 };
 
 interface CreateReelFormProps {
@@ -31,23 +32,51 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const loading = useReelStudio((state) => state.loading);
   const load = useReelStudio((state) => state.load);
   const gameplayClips = useReelStudio((state) => state.gameplayClips);
+  const imageModels = useReelStudio((state) => state.imageModels);
   const loadGameplay = useReelStudio((state) => state.loadGameplay);
+  const loadImageModels = useReelStudio((state) => state.loadImageModels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
   const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
+  const [resolvedDefaults, setResolvedDefaults] = useState<ReelDefaults | undefined>();
 
   useEffect(() => {
     void loadGameplay();
-  }, [loadGameplay]);
+    void loadImageModels();
+  }, [loadGameplay, loadImageModels]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getReelDefaults(form.niche, form.tier ?? "cheap")
+      .then((defaults) => {
+        if (!cancelled) setResolvedDefaults(defaults);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedDefaults(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.niche, form.tier]);
 
   const selectedClip = gameplayClips.find((clip) => clip.key === form.gameplayKey);
+  const selectedImageModel = imageModels.find((option) => option.model === form.imageModel);
+  const selectedVoice = useReelStudio((state) =>
+    state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
+  );
+  const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
+  const genreOptions = NICHE_GENRES[form.niche] ?? [];
 
   return (
     <form
       className={cn(panelClassName, "mb-2.5 grid gap-3 p-4")}
       onSubmit={async (event) => {
         event.preventDefault();
-        const ok = await create({ ...form, gameplayKey: form.gameplayKey || undefined });
+        const ok = await create({
+          ...form,
+          gameplayKey: form.gameplayKey || undefined,
+          imageModel: form.imageModel || undefined,
+        });
         if (ok) onCreated?.();
       }}
     >
@@ -68,14 +97,25 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       <div className="grid gap-3 md:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_minmax(145px,0.8fr)_minmax(120px,0.6fr)_minmax(90px,0.45fr)]">
         <Label>
           Niche
-          <Select value={form.niche} onChange={(event) => setForm({ ...form, niche: event.target.value })}>
-            <option value="reddit">Reddit Stories</option>
+          <Select
+            value={form.niche}
+            onChange={(event) => {
+              const niche = event.target.value;
+              const genres = NICHE_GENRES[niche] ?? [];
+              setForm({ ...form, niche, genre: genres[0] });
+            }}
+          >
+            {NICHES.map((niche) => (
+              <option key={niche.value} value={niche.value}>
+                {niche.label}
+              </option>
+            ))}
           </Select>
         </Label>
         <Label>
           Genre
           <Select value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })}>
-            {REEL_GENRES.map((genre) => (
+            {genreOptions.map((genre) => (
               <option key={genre} value={genre}>
                 {formatLabel(genre)}
               </option>
@@ -152,34 +192,58 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
 
         {topicMode === "auto" ? (
           <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on
-            the spot if the bank is empty. You don't need to type anything; this is the default for
-            high-volume posting.
+            {isGameplayNiche
+              ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty. You don't need to type anything; this is the default for high-volume posting."
+              : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns. You don't need to type anything."}
           </p>
         ) : (
           <Input
             value={form.topic ?? ""}
             onChange={(event) => setForm({ ...form, topic: event.target.value })}
-            placeholder="e.g. a dispute over splitting a wedding gift"
+            placeholder={isGameplayNiche ? "e.g. a dispute over splitting a wedding gift" : "e.g. an abandoned hospital wing that shouldn't be there"}
             autoFocus
           />
         )}
       </Label>
 
-      <Label>
-        Gameplay Background
-        <Select
-          value={form.gameplayKey ?? ""}
-          onChange={(event) => setForm({ ...form, gameplayKey: event.target.value })}
-        >
-          <option value="">Random from S3 pool</option>
-          {gameplayClips.map((clip) => (
-            <option key={clip.key} value={clip.key}>
-              {clip.filename}
-            </option>
-          ))}
-        </Select>
-      </Label>
+      {isGameplayNiche && (
+        <Label>
+          Gameplay Background
+          <Select
+            value={form.gameplayKey ?? ""}
+            onChange={(event) => setForm({ ...form, gameplayKey: event.target.value })}
+          >
+            <option value="">Random from S3 pool</option>
+            {gameplayClips.map((clip) => (
+              <option key={clip.key} value={clip.key}>
+                {clip.filename}
+              </option>
+            ))}
+          </Select>
+        </Label>
+      )}
+
+      {!isGameplayNiche && (
+        <Label>
+          Image Model
+          <Select
+            value={form.imageModel ?? ""}
+            onChange={(event) => setForm({ ...form, imageModel: event.target.value })}
+          >
+            <option value="">Tier default</option>
+            {imageModels.map((option: ImageModelOption) => (
+              <option key={option.model} value={option.model}>
+                {option.label} · {option.priceLabel}
+              </option>
+            ))}
+          </Select>
+          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            {selectedImageModel
+              ? `${selectedImageModel.priceLabel}. ${selectedImageModel.priceNote}`
+              : "Uses the niche/tier default image model. Exact request cost is captured after generation when OpenRouter exposes usage."}
+          </p>
+        </Label>
+      )}
 
       <Label>
         Voice
@@ -210,55 +274,93 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </div>
 
         {voiceMode === "default" ? (
-          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Uses the selected tier's default TTS model/voice (or the genre's voice override, if it has one).
-          </p>
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            {resolvedDefaults?.tts ? (
+              <>
+                <div className="font-extrabold text-foreground">Default voice: {resolvedDefaults.tts.label}</div>
+                <div className="mt-1">
+                  {resolvedDefaults.tts.provider ?? resolvedDefaults.tts.model} · {resolvedDefaults.tts.voice} ·{" "}
+                  {resolvedDefaults.tts.format}
+                </div>
+                <div className="mt-1">
+                  Unit economics: {resolvedDefaults.tts.priceLabel ?? "usage-priced"}
+                  {resolvedDefaults.tts.unitPriceLabel ? ` · ${resolvedDefaults.tts.unitPriceLabel}` : ""}
+                </div>
+                {resolvedDefaults.tts.priceNote ? <div className="mt-1">{resolvedDefaults.tts.priceNote}</div> : null}
+              </>
+            ) : (
+              "Uses the selected tier's default TTS model/voice, plus niche overrides when configured."
+            )}
+          </div>
         ) : (
-          <VoicePickerList
-            isSelected={(option: TtsVoiceOption) => form.ttsModel === option.model && form.ttsVoice === option.voice}
-            onToggle={(option: TtsVoiceOption) => {
-              const alreadySelected = form.ttsModel === option.model && form.ttsVoice === option.voice;
-              setForm((current) => ({
-                ...current,
-                ttsModel: alreadySelected ? undefined : option.model,
-                ttsVoice: alreadySelected ? undefined : option.voice,
-                ttsFormat: alreadySelected ? undefined : option.format,
-              }));
-            }}
-            selectedLabel="Selected"
-            unselectedLabel="Use"
-          />
+          <div className="grid gap-2">
+            {selectedVoice ? (
+              <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs leading-relaxed">
+                <div className="font-extrabold text-primary">Selected voice: {selectedVoice.label}</div>
+                <div className="mt-1 text-muted-foreground">
+                  {selectedVoice.provider ?? selectedVoice.model} · {selectedVoice.voice} · {selectedVoice.format}
+                </div>
+                <div className="mt-1 text-muted-foreground">
+                  Unit economics: {selectedVoice.priceLabel ?? "usage-priced"}
+                  {selectedVoice.unitPriceLabel ? ` · ${selectedVoice.unitPriceLabel}` : ""}
+                </div>
+                {selectedVoice.priceNote ? (
+                  <div className="mt-1 text-muted-foreground">{selectedVoice.priceNote}</div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs font-bold text-warning-foreground">
+                No custom voice selected yet.
+              </div>
+            )}
+            <VoicePickerList
+              isSelected={(option: TtsVoiceOption) => form.ttsModel === option.model && form.ttsVoice === option.voice}
+              onToggle={(option: TtsVoiceOption) => {
+                const alreadySelected = form.ttsModel === option.model && form.ttsVoice === option.voice;
+                setForm((current) => ({
+                  ...current,
+                  ttsModel: alreadySelected ? undefined : option.model,
+                  ttsVoice: alreadySelected ? undefined : option.voice,
+                  ttsFormat: alreadySelected ? undefined : option.format,
+                }));
+              }}
+              selectedLabel="Selected"
+              unselectedLabel="Use"
+            />
+          </div>
         )}
       </Label>
 
-      <div className="grid gap-1.5">
-        <span className="text-xs font-bold text-foreground/80">Preview</span>
-        {selectedClip ? (
-          <div className="grid w-fit gap-1.5">
-            <video
-              key={selectedClip.key}
-              className="aspect-[9/16] h-64 rounded-lg border border-border bg-black object-cover"
-              src={selectedClip.url}
-              muted
-              loop
-              autoPlay
-              playsInline
-              controls
-            />
-            <span className="max-w-64 truncate text-xs text-muted-foreground">{selectedClip.filename}</span>
-          </div>
-        ) : (
-          <div className="grid aspect-[9/16] h-64 place-items-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground">
-            <Shuffle size={22} />
-            <span className="max-w-40 text-center text-xs leading-relaxed">
-              A random clip from the S3 pool will be picked at render time
-            </span>
-          </div>
-        )}
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Film size={13} /> {gameplayClips.length} clip{gameplayClips.length === 1 ? "" : "s"} in the pool
-        </span>
-      </div>
+      {isGameplayNiche && (
+        <div className="grid gap-1.5">
+          <span className="text-xs font-bold text-foreground/80">Preview</span>
+          {selectedClip ? (
+            <div className="grid w-fit gap-1.5">
+              <video
+                key={selectedClip.key}
+                className="aspect-[9/16] h-64 rounded-lg border border-border bg-black object-cover"
+                src={selectedClip.url}
+                muted
+                loop
+                autoPlay
+                playsInline
+                controls
+              />
+              <span className="max-w-64 truncate text-xs text-muted-foreground">{selectedClip.filename}</span>
+            </div>
+          ) : (
+            <div className="grid aspect-[9/16] h-64 place-items-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground">
+              <Shuffle size={22} />
+              <span className="max-w-40 text-center text-xs leading-relaxed">
+                A random clip from the S3 pool will be picked at render time
+              </span>
+            </div>
+          )}
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Film size={13} /> {gameplayClips.length} clip{gameplayClips.length === 1 ? "" : "s"} in the pool
+          </span>
+        </div>
+      )}
     </form>
   );
 }

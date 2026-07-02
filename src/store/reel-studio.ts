@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import {
   createReel,
+  deleteReel,
   getReel,
   getReview,
   listGameplay,
+  listImageModels,
   listReels,
   listTtsVoices,
   promoteVoiceVariant,
+  purgeFailedReels,
   publishReel,
   regenerateThumbnail,
   revoiceReel,
@@ -14,6 +17,7 @@ import {
   useFrameAsThumbnail,
   type CreateReelInput,
   type GameplayClip,
+  type ImageModelOption,
   type Reel,
   type ReelReview,
   type RevoiceVariantInput,
@@ -28,10 +32,12 @@ interface ReelStudioState {
   error?: string;
   draftReview?: ReelReview;
   gameplayClips: GameplayClip[];
+  imageModels: ImageModelOption[];
   ttsVoices: TtsVoiceOption[];
   revoicing: boolean;
   load: () => Promise<void>;
   loadGameplay: () => Promise<void>;
+  loadImageModels: () => Promise<void>;
   loadTtsVoices: () => Promise<void>;
   select: (id: string) => Promise<void>;
   create: (input: CreateReelInput) => Promise<boolean>;
@@ -41,6 +47,9 @@ interface ReelStudioState {
   useFrameAsThumbnail: (atSeconds: number) => Promise<void>;
   approveReview: () => Promise<void>;
   publish: () => Promise<void>;
+  deleteSelected: () => Promise<void>;
+  deleteById: (id: string) => Promise<void>;
+  purgeFailed: () => Promise<void>;
   revoice: (variants: RevoiceVariantInput[]) => Promise<void>;
   promoteVariant: (variantId: string) => Promise<void>;
 }
@@ -49,6 +58,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   reels: [],
   loading: false,
   gameplayClips: [],
+  imageModels: [],
   ttsVoices: [],
   revoicing: false,
 
@@ -58,6 +68,15 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       set({ gameplayClips });
     } catch {
       // non-fatal — the create form falls back to random gameplay selection
+    }
+  },
+
+  async loadImageModels() {
+    try {
+      const imageModels = await listImageModels();
+      set({ imageModels });
+    } catch {
+      // non-fatal — create form falls back to tier defaults
     }
   },
 
@@ -185,6 +204,42 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     if (!id) return;
     await publishReel(id);
     await get().pollSelected();
+  },
+
+  async deleteSelected() {
+    const id = get().selectedId;
+    if (!id) return;
+    await get().deleteById(id);
+  },
+
+  async deleteById(id) {
+    set({ loading: true, error: undefined });
+    try {
+      await deleteReel(id);
+      set((state) => {
+        const reels = state.reels.filter((item) => reelId(item) !== id);
+        const selectedId = state.selectedId === id ? reelId(reels[0]) || undefined : state.selectedId;
+        return {
+          reels,
+          selectedId,
+          draftReview: state.selectedId === id ? undefined : state.draftReview,
+          loading: false,
+        };
+      });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to delete reel", loading: false });
+    }
+  },
+
+  async purgeFailed() {
+    set({ loading: true, error: undefined });
+    try {
+      await purgeFailedReels();
+      await get().load();
+      set({ loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to purge failed reels", loading: false });
+    }
   },
 
   async revoice(variants) {

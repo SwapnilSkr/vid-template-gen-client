@@ -105,8 +105,9 @@ export function VoicePickerList({
     <div className={cn("max-h-64 overflow-y-auto rounded-md border border-border", className)}>
       {grouped.map(([model, voices]) => (
         <div key={model}>
-          <div className="sticky top-0 bg-muted px-2.5 py-1.5 text-[11px] font-extrabold uppercase text-muted-foreground">
-            {modelLabel(model)}
+          <div className="sticky top-0 flex items-center justify-between gap-2 bg-muted px-2.5 py-1.5 text-[11px] font-extrabold uppercase text-muted-foreground">
+            <span>{voices[0]?.provider ?? modelLabel(model)}</span>
+            {voices[0]?.priceLabel ? <span className="normal-case">{voices[0].priceLabel}</span> : null}
           </div>
           {voices.map((option) => {
             const key = voiceKey(option.model, option.voice);
@@ -115,10 +116,22 @@ export function VoicePickerList({
             return (
               <div
                 key={key}
-                className="flex items-center justify-between gap-2 border-t border-border/60 px-2.5 py-1.5 text-xs"
+                className={cn(
+                  "flex items-center justify-between gap-2 border-t border-border/60 px-2.5 py-1.5 text-xs",
+                  selected && "bg-primary/5"
+                )}
+                data-selected={selected ? "true" : undefined}
               >
-                <span className="min-w-0 flex-1 truncate font-semibold text-foreground">
-                  {voiceLabel(option.label)}
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block truncate font-semibold text-foreground", selected && "text-primary")}>
+                    {selected ? "Selected: " : ""}
+                    {voiceLabel(option.label)}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {option.priceLabel ?? "usage-priced"}
+                    {option.unitPriceLabel ? ` · ${option.unitPriceLabel}` : ""}
+                    {option.recommendedFor?.length ? ` · ${option.recommendedFor.join(", ")}` : ""}
+                  </span>
                 </span>
                 <button
                   type="button"
