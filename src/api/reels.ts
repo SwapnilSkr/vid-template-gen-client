@@ -118,6 +118,7 @@ export interface ReelDefaults {
   niche: string;
   tier: "cheap" | "value" | "premium";
   tts: TtsVoiceOption;
+  scriptModel: string;
 }
 
 export interface VoiceVariant {

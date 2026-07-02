@@ -27,6 +27,16 @@ interface CreateReelFormProps {
   onCreated?: () => void;
 }
 
+function modelDisplayName(model?: string): string {
+  if (!model) return "tier default";
+  const friendly: Record<string, string> = {
+    "anthropic/claude-sonnet-5": "Claude Sonnet 5",
+    "google/gemini-2.5-flash": "Gemini 2.5 Flash",
+    "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  };
+  return friendly[model] ?? model;
+}
+
 export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const create = useReelStudio((state) => state.create);
   const loading = useReelStudio((state) => state.loading);
@@ -195,14 +205,26 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             {isGameplayNiche
               ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty. You don't need to type anything; this is the default for high-volume posting."
               : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns. You don't need to type anything."}
+            {resolvedDefaults?.scriptModel ? (
+              <span className="mt-1 block font-bold text-foreground">
+                Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
+              </span>
+            ) : null}
           </p>
         ) : (
-          <Input
-            value={form.topic ?? ""}
-            onChange={(event) => setForm({ ...form, topic: event.target.value })}
-            placeholder={isGameplayNiche ? "e.g. a dispute over splitting a wedding gift" : "e.g. an abandoned hospital wing that shouldn't be there"}
-            autoFocus
-          />
+          <div className="grid gap-1.5">
+            <Input
+              value={form.topic ?? ""}
+              onChange={(event) => setForm({ ...form, topic: event.target.value })}
+              placeholder={isGameplayNiche ? "e.g. a dispute over splitting a wedding gift" : "e.g. an abandoned hospital wing that shouldn't be there"}
+              autoFocus
+            />
+            {resolvedDefaults?.scriptModel ? (
+              <p className="m-0 text-xs font-bold text-muted-foreground">
+                Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
+              </p>
+            ) : null}
+          </div>
         )}
       </Label>
 
