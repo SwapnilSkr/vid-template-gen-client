@@ -42,8 +42,10 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const loading = useReelStudio((state) => state.loading);
   const load = useReelStudio((state) => state.load);
   const gameplayClips = useReelStudio((state) => state.gameplayClips);
+  const horrorAudios = useReelStudio((state) => state.horrorAudios);
   const imageModels = useReelStudio((state) => state.imageModels);
   const loadGameplay = useReelStudio((state) => state.loadGameplay);
+  const loadHorrorAudio = useReelStudio((state) => state.loadHorrorAudio);
   const loadImageModels = useReelStudio((state) => state.loadImageModels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
   const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
@@ -52,8 +54,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
 
   useEffect(() => {
     void loadGameplay();
+    void loadHorrorAudio();
     void loadImageModels();
-  }, [loadGameplay, loadImageModels]);
+  }, [loadGameplay, loadHorrorAudio, loadImageModels]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +73,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   }, [form.niche, form.tier]);
 
   const selectedClip = gameplayClips.find((clip) => clip.key === form.gameplayKey);
+  const selectedHorrorAudio = horrorAudios.find((audio) => audio.key === form.horrorAudioKey);
   const selectedImageModel = imageModels.find((option) => option.model === form.imageModel);
   const selectedVoice = useReelStudio((state) =>
     state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
@@ -86,6 +90,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           ...form,
           gameplayKey: form.gameplayKey || undefined,
           imageModel: form.imageModel || undefined,
+          horrorAudioKey: form.horrorAudioKey || undefined,
         });
         if (ok) onCreated?.();
       }}
@@ -242,6 +247,37 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               </option>
             ))}
           </Select>
+        </Label>
+      )}
+
+      {form.niche === "horror" && (
+        <Label>
+          Horror Background Audio
+          <Select
+            value={form.horrorAudioKey ?? ""}
+            onChange={(event) => setForm({ ...form, horrorAudioKey: event.target.value || undefined })}
+          >
+            <option value="">Random from horror library</option>
+            {horrorAudios.map((audio) => (
+              <option key={audio.key} value={audio.key}>
+                {audio.label}
+                {audio.license ? ` · ${audio.license.toUpperCase()}` : ""}
+              </option>
+            ))}
+          </Select>
+          <div className="rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            {selectedHorrorAudio ? (
+              <div className="grid gap-2">
+                <div>
+                  <strong className="text-foreground">{selectedHorrorAudio.label}</strong>
+                  {selectedHorrorAudio.license ? ` · ${selectedHorrorAudio.license.toUpperCase()}` : ""}
+                </div>
+                <audio controls preload="none" src={selectedHorrorAudio.url} className="h-8 w-full" />
+              </div>
+            ) : (
+              "Uses a random CC0/Public Domain horror bed from S3 and mixes it quietly under narration."
+            )}
+          </div>
         </Label>
       )}
 
