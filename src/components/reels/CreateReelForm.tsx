@@ -86,8 +86,11 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       className={cn(panelClassName, "mb-2.5 grid gap-3 p-4")}
       onSubmit={async (event) => {
         event.preventDefault();
+        const isComicHorror = form.niche === "horror" && form.genre === "2d_comic_horror";
         const ok = await create({
           ...form,
+          niche: isComicHorror ? "horror_comic" : form.niche,
+          genre: isComicHorror ? "analog_horror" : form.genre,
           gameplayKey: form.gameplayKey || undefined,
           imageModel: form.imageModel || undefined,
           horrorAudioKey: form.horrorAudioKey || undefined,
@@ -250,7 +253,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </Label>
       )}
 
-      {form.niche === "horror" && (
+      {form.niche.startsWith("horror") && (
         <Label>
           Horror Background Audio
           <Select
