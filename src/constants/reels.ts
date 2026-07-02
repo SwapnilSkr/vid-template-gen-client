@@ -13,6 +13,7 @@ export const REEL_GENRES = [
 
 // Mirrors HORROR_TARGETS in server/src/services/trend-scout.service.ts
 export const HORROR_GENRES = [
+  "2d_comic_horror",
   "urban_legend",
   "creepypasta",
   "paranormal",

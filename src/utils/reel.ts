@@ -6,6 +6,7 @@ export function reelId(reel?: Reel): string {
 }
 
 export function formatLabel(value?: string) {
+  if (value === "2d_comic_horror") return "2D Comic Horror";
   return value ? value.replace(/_/g, " ") : "reddit";
 }
 
