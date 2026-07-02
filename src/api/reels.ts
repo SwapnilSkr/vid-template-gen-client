@@ -22,6 +22,23 @@ export interface ReelReview {
   updatedAt?: string;
 }
 
+export interface ReelCostLine {
+  label: string;
+  model?: string;
+  units: number;
+  unit: string;
+  unitCostUsd: number;
+  costUsd: number;
+}
+
+export interface ReelCostBreakdown {
+  currency: "USD";
+  totalUsd: number;
+  lines: ReelCostLine[];
+  note?: string;
+  generatedAt?: string;
+}
+
 export interface Reel {
   _id?: string;
   id?: string;
@@ -37,6 +54,8 @@ export interface Reel {
   progress: number;
   outputUrl?: string;
   subtitlesUrl?: string;
+  costUsd?: number;
+  costBreakdown?: ReelCostBreakdown;
   error?: string;
   review?: ReelReview;
   youtube?: {
@@ -50,6 +69,7 @@ export interface Reel {
   partCount?: number;
   createdAt?: string;
   gameplayKey?: string;
+  imageModelOverride?: string;
   voiceOverride?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
 }
@@ -62,6 +82,7 @@ export interface CreateReelInput {
   source?: "llm" | "hybrid" | "verbatim";
   parts?: "off" | "auto" | number;
   gameplayKey?: string;
+  imageModel?: string;
   ttsModel?: string;
   ttsVoice?: string;
   ttsFormat?: "mp3" | "pcm";
@@ -78,6 +99,25 @@ export interface TtsVoiceOption {
   voice: string;
   format: "mp3" | "pcm";
   label: string;
+  provider?: string;
+  priceLabel?: string;
+  unitPriceLabel?: string;
+  priceNote?: string;
+  recommendedFor?: string[];
+}
+
+export interface ImageModelOption {
+  model: string;
+  label: string;
+  priceLabel: string;
+  priceNote: string;
+  recommendedTier: "cheap" | "value" | "premium";
+}
+
+export interface ReelDefaults {
+  niche: string;
+  tier: "cheap" | "value" | "premium";
+  tts: TtsVoiceOption;
 }
 
 export interface VoiceVariant {
@@ -150,12 +190,31 @@ export async function publishReel(id: string): Promise<void> {
   await request(`/reels/${id}/publish`, { method: "POST" });
 }
 
+export async function deleteReel(id: string): Promise<void> {
+  await request(`/reels/${id}`, { method: "DELETE" });
+}
+
+export async function purgeFailedReels(): Promise<{ deleted: string[]; errors: { id: string; error: string }[] }> {
+  return request("/maintenance/reels/purge-failed", { method: "POST" });
+}
+
 export async function listGameplay(): Promise<GameplayClip[]> {
   return request<GameplayClip[]>("/gameplay");
 }
 
+export async function listImageModels(): Promise<ImageModelOption[]> {
+  return request<ImageModelOption[]>("/image-models");
+}
+
 export async function listTtsVoices(): Promise<TtsVoiceOption[]> {
   return request<TtsVoiceOption[]>("/tts-voices");
+}
+
+export async function getReelDefaults(
+  niche: string,
+  tier: "cheap" | "value" | "premium" = "cheap"
+): Promise<ReelDefaults> {
+  return request<ReelDefaults>(`/reel-defaults?niche=${encodeURIComponent(niche)}&tier=${encodeURIComponent(tier)}`);
 }
 
 export async function getVoiceSample(model: string, voice: string): Promise<string> {
