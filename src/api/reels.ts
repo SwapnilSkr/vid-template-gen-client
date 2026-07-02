@@ -69,6 +69,7 @@ export interface Reel {
   partCount?: number;
   createdAt?: string;
   gameplayKey?: string;
+  horrorAudioKey?: string;
   imageModelOverride?: string;
   voiceOverride?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
@@ -82,6 +83,7 @@ export interface CreateReelInput {
   source?: "llm" | "hybrid" | "verbatim";
   parts?: "off" | "auto" | number;
   gameplayKey?: string;
+  horrorAudioKey?: string;
   imageModel?: string;
   ttsModel?: string;
   ttsVoice?: string;
@@ -92,6 +94,15 @@ export interface GameplayClip {
   key: string;
   url: string;
   filename: string;
+}
+
+export interface HorrorAudioOption {
+  key: string;
+  url: string;
+  label: string;
+  title?: string;
+  license?: string;
+  landingUrl?: string;
 }
 
 export interface TtsVoiceOption {
@@ -201,6 +212,10 @@ export async function purgeFailedReels(): Promise<{ deleted: string[]; errors: {
 
 export async function listGameplay(): Promise<GameplayClip[]> {
   return request<GameplayClip[]>("/gameplay");
+}
+
+export async function listHorrorAudio(): Promise<HorrorAudioOption[]> {
+  return request<HorrorAudioOption[]>("/horror-audio");
 }
 
 export async function listImageModels(): Promise<ImageModelOption[]> {

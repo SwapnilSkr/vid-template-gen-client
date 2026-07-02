@@ -5,6 +5,7 @@ import {
   getReel,
   getReview,
   listGameplay,
+  listHorrorAudio,
   listImageModels,
   listReels,
   listTtsVoices,
@@ -17,6 +18,7 @@ import {
   useFrameAsThumbnail,
   type CreateReelInput,
   type GameplayClip,
+  type HorrorAudioOption,
   type ImageModelOption,
   type Reel,
   type ReelReview,
@@ -32,11 +34,13 @@ interface ReelStudioState {
   error?: string;
   draftReview?: ReelReview;
   gameplayClips: GameplayClip[];
+  horrorAudios: HorrorAudioOption[];
   imageModels: ImageModelOption[];
   ttsVoices: TtsVoiceOption[];
   revoicing: boolean;
   load: () => Promise<void>;
   loadGameplay: () => Promise<void>;
+  loadHorrorAudio: () => Promise<void>;
   loadImageModels: () => Promise<void>;
   loadTtsVoices: () => Promise<void>;
   select: (id: string) => Promise<void>;
@@ -58,6 +62,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   reels: [],
   loading: false,
   gameplayClips: [],
+  horrorAudios: [],
   imageModels: [],
   ttsVoices: [],
   revoicing: false,
@@ -68,6 +73,15 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       set({ gameplayClips });
     } catch {
       // non-fatal — the create form falls back to random gameplay selection
+    }
+  },
+
+  async loadHorrorAudio() {
+    try {
+      const horrorAudios = await listHorrorAudio();
+      set({ horrorAudios });
+    } catch {
+      // non-fatal — horror rendering falls back to a random S3 bed if present
     }
   },
 
