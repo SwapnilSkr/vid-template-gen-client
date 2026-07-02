@@ -1,7 +1,9 @@
 import { getRouteApi } from "@tanstack/react-router";
+import { Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import type { Reel } from "@/api/reels";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { GenerationTimeline } from "@/components/reels/GenerationTimeline";
 import { RecentReelsList } from "@/components/reels/RecentReelsList";
 import { ReviewInspector } from "@/components/reels/ReviewInspector";
@@ -33,6 +35,8 @@ export function ReviewScreen() {
   const selectedId = useReelStudio((state) => state.selectedId);
   const draftReview = useReelStudio((state) => state.draftReview);
   const error = useReelStudio((state) => state.error);
+  const loading = useReelStudio((state) => state.loading);
+  const purgeFailed = useReelStudio((state) => state.purgeFailed);
 
   const activeFilter = status ? STATUS_FILTERS[status] : undefined;
   const filteredReels = useMemo(
@@ -45,6 +49,7 @@ export function ReviewScreen() {
     [reels, selectedId]
   );
   const review = draftReview ?? selected?.review;
+  const failedCount = reels.filter((reel) => reel.status === "failed").length;
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
@@ -53,6 +58,28 @@ export function ReviewScreen() {
       {error ? (
         <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs leading-relaxed text-destructive">
           {error}
+        </div>
+      ) : null}
+
+      {status === "rejected" && failedCount > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5">
+          <span className="text-xs font-bold text-destructive">
+            {failedCount} failed reel{failedCount === 1 ? "" : "s"} can be deleted with recorded S3 assets.
+          </span>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={loading}
+            onClick={() => {
+              const ok = window.confirm(
+                "Delete all failed reels and their recorded S3 assets? Global gameplay clips and voice samples will not be touched."
+              );
+              if (ok) void purgeFailed();
+            }}
+          >
+            <Trash2 size={16} />
+            Purge Failed
+          </Button>
         </div>
       ) : null}
 

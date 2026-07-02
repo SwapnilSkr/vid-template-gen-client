@@ -1,4 +1,4 @@
-import { CheckCircle2, Clapperboard, Image, Loader2, RefreshCw, Send } from "lucide-react";
+import { CheckCircle2, Clapperboard, Image, Loader2, ReceiptText, RefreshCw, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Reel, ReelReview } from "@/api/reels";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const useFrameAsThumbnail = useReelStudio((state) => state.useFrameAsThumbnail);
   const approveReview = useReelStudio((state) => state.approveReview);
   const publish = useReelStudio((state) => state.publish);
+  const deleteSelected = useReelStudio((state) => state.deleteSelected);
 
   const [draft, setDraft] = useState<ReelReview | undefined>(review);
   const [frameSeconds, setFrameSeconds] = useState("1");
@@ -37,6 +38,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
 
   const completed = reel?.status === "completed";
   const canReview = completed && Boolean(draft);
+  const costBreakdown = reel?.costBreakdown;
 
   function updateDraft(updater: (current: ReelReview) => ReelReview) {
     setDraft((current) => (current ? updater(current) : current));
@@ -161,6 +163,37 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         {draft?.visibilityNotes ?? "Visibility guidance appears after the reel finishes."}
       </div>
 
+      {costBreakdown ? (
+        <div className="grid gap-2 rounded-lg border border-border bg-muted/40 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+              <ReceiptText size={16} />
+              Generation Cost
+            </span>
+            <span className="text-sm font-extrabold text-foreground">
+              ${costBreakdown.totalUsd.toFixed(4)}
+            </span>
+          </div>
+          <div className="grid gap-1.5">
+            {costBreakdown.lines.map((line) => (
+              <div key={`${line.label}-${line.model ?? line.unit}`} className="grid gap-0.5 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-foreground">{line.label}</span>
+                  <span className="font-bold text-foreground">${line.costUsd.toFixed(4)}</span>
+                </div>
+                <span className="truncate text-muted-foreground">
+                  {line.units} {line.unit} × ${line.unitCostUsd.toFixed(5)}
+                  {line.model ? ` · ${line.model}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          {costBreakdown.note ? (
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">{costBreakdown.note}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <Label>
         Publish Status
         <Select
@@ -191,6 +224,24 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         <Send size={17} />
         Publish to YouTube Shorts
       </Button>
+
+      {reel ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          disabled={loading}
+          onClick={() => {
+            const ok = window.confirm(
+              "Delete this reel and its recorded S3 assets? Global gameplay clips and voice samples will not be touched."
+            );
+            if (ok) void deleteSelected();
+          }}
+        >
+          <Trash2 size={17} />
+          Delete Reel + Assets
+        </Button>
+      ) : null}
 
       {reel?.youtube?.url ? (
         <a
