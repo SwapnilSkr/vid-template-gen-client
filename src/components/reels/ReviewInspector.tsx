@@ -53,11 +53,12 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   useEffect(() => {
     const defaultChannel =
       reel?.youtube?.channelId ??
+      reel?.outroChannelId ??
       youtubeChannels.find((channel) => channel.isDefault)?.id ??
       youtubeChannels[0]?.id ??
       "";
     setSelectedChannelId(defaultChannel);
-  }, [reel?.youtube?.channelId, youtubeChannels]);
+  }, [reel?.outroChannelId, reel?.youtube?.channelId, youtubeChannels]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
