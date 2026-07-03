@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { panelClassName } from "@/components/ui/panel";
-import { NICHE_GENRES, NICHES } from "@/constants/reels";
+import { MOTION_MODES, NICHE_GENRES, NICHES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 import { useReelStudio } from "@/store/reel-studio";
 import { formatLabel, parsePartsValue } from "@/utils/reel";
@@ -44,9 +44,11 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const gameplayClips = useReelStudio((state) => state.gameplayClips);
   const horrorAudios = useReelStudio((state) => state.horrorAudios);
   const imageModels = useReelStudio((state) => state.imageModels);
+  const artStyles = useReelStudio((state) => state.artStyles);
   const loadGameplay = useReelStudio((state) => state.loadGameplay);
   const loadHorrorAudio = useReelStudio((state) => state.loadHorrorAudio);
   const loadImageModels = useReelStudio((state) => state.loadImageModels);
+  const loadArtStyles = useReelStudio((state) => state.loadArtStyles);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
   const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
@@ -56,7 +58,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     void loadGameplay();
     void loadHorrorAudio();
     void loadImageModels();
-  }, [loadGameplay, loadHorrorAudio, loadImageModels]);
+    void loadArtStyles();
+  }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +82,14 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
   );
   const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
+  const isHorrorNiche = form.niche.startsWith("horror");
   const genreOptions = NICHE_GENRES[form.niche] ?? [];
+  const horrorArtStyles = artStyles.filter((style) => style.niches.includes("horror"));
+  const selectedArtStyle = horrorArtStyles.find((style) => style.id === form.artStyleId);
+  const refArtModelWarning = Boolean(
+    form.artStyleId && selectedImageModel && selectedImageModel.supportsReferenceArt === false
+  );
+  const motionMode = form.motionMode ?? "parallax";
 
   return (
     <form
@@ -295,6 +305,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             {imageModels.map((option: ImageModelOption) => (
               <option key={option.model} value={option.model}>
                 {option.label} · {option.priceLabel}
+                {option.supportsReferenceArt ? " · ref-art ✓" : ""}
               </option>
             ))}
           </Select>
@@ -303,7 +314,84 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               ? `${selectedImageModel.priceLabel}. ${selectedImageModel.priceNote}`
               : "Uses the niche/tier default image model. Exact request cost is captured after generation when OpenRouter exposes usage."}
           </p>
+          {refArtModelWarning ? (
+            <p className="m-0 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs font-bold text-warning-foreground">
+              This image model can’t follow reference art — the selected art style will be applied by prompt only. Pick a “ref-art ✓” model to use the reference images.
+            </p>
+          ) : null}
         </Label>
+      )}
+
+      {isHorrorNiche && (
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <span className="text-xs font-bold text-foreground/80">Animation Art Style</span>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, artStyleId: undefined })}
+                className={cn(
+                  "w-28 shrink-0 rounded-lg border p-2 text-left",
+                  !form.artStyleId ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+                )}
+              >
+                <div className="grid aspect-square w-full place-items-center rounded-md bg-muted text-muted-foreground">
+                  <Shuffle size={20} />
+                </div>
+                <span className="mt-1 block text-xs font-bold text-foreground">Auto (rotate)</span>
+              </button>
+              {horrorArtStyles.map((style) => (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => setForm({ ...form, artStyleId: style.id })}
+                  className={cn(
+                    "w-28 shrink-0 rounded-lg border p-2 text-left",
+                    form.artStyleId === style.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+                  )}
+                >
+                  {style.thumbnailUrl ? (
+                    <img
+                      src={style.thumbnailUrl}
+                      alt={style.displayName}
+                      loading="lazy"
+                      className="aspect-square w-full rounded-md border border-border object-cover"
+                    />
+                  ) : (
+                    <div className="grid aspect-square w-full place-items-center rounded-md bg-muted text-center text-[10px] text-muted-foreground">
+                      prompt-only
+                    </div>
+                  )}
+                  <span className="mt-1 block truncate text-xs font-bold text-foreground">{style.displayName}</span>
+                </button>
+              ))}
+            </div>
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+              {selectedArtStyle
+                ? `${selectedArtStyle.description}${selectedArtStyle.attribution?.[0]?.title ? ` · ref: ${selectedArtStyle.attribution[0].title} (${selectedArtStyle.attribution[0].license ?? "PD"})` : ""}`
+                : "Auto rotates a style per video (anti-slop). A selected style's reference art steers the look on ref-art ✓ image models."}
+            </p>
+          </div>
+
+          <Label>
+            Motion
+            <Select
+              value={motionMode}
+              onChange={(event) =>
+                setForm({ ...form, motionMode: event.target.value as CreateReelInput["motionMode"] })
+              }
+            >
+              {MOTION_MODES.map((mode) => (
+                <option key={mode.value} value={mode.value}>
+                  {mode.label}
+                </option>
+              ))}
+            </Select>
+            <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              {MOTION_MODES.find((mode) => mode.value === motionMode)?.hint}
+            </p>
+          </Label>
+        </div>
       )}
 
       <Label>
