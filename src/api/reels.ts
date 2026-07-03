@@ -158,6 +158,7 @@ export interface YouTubeChannelOption {
   label: string;
   googleChannelId?: string;
   googleChannelTitle?: string;
+  googleChannelHandle?: string;
   logoUrl?: string;
   privacyStatus: "private" | "unlisted" | "public";
   categoryId: string;
