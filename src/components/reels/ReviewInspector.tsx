@@ -40,6 +40,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const [newChannelPrivacy, setNewChannelPrivacy] = useState<"private" | "unlisted" | "public">("public");
   const [newChannelPreset, setNewChannelPreset] = useState<"reddit" | "horror" | "both">("reddit");
   const [channelConnectMessage, setChannelConnectMessage] = useState("");
+  const [hasUnsavedReviewEdits, setHasUnsavedReviewEdits] = useState(false);
   const tagsText = useMemo(() => draft?.tags.join(", ") ?? "", [draft?.tags]);
   const selectedChannel = useMemo(
     () => youtubeChannels.find((channel) => channel.id === selectedChannelId),
@@ -47,8 +48,8 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   );
 
   useEffect(() => {
-    setDraft(review);
-  }, [review]);
+    if (!hasUnsavedReviewEdits) setDraft(review);
+  }, [hasUnsavedReviewEdits, review]);
 
   useEffect(() => {
     const defaultChannel =
@@ -121,7 +122,32 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         : "Used for both Reddit and horror generation defaults.";
 
   function updateDraft(updater: (current: ReelReview) => ReelReview) {
+    setHasUnsavedReviewEdits(true);
     setDraft((current) => (current ? updater(current) : current));
+  }
+
+  async function saveDraftReview(nextDraft = draft): Promise<ReelReview | undefined> {
+    if (!nextDraft) return undefined;
+    await saveReview(nextDraft);
+    setHasUnsavedReviewEdits(false);
+    return nextDraft;
+  }
+
+  async function approveDraftReview() {
+    if (!draft) return;
+    await saveDraftReview({ ...draft, status: "approved" });
+    await approveReview();
+  }
+
+  async function regenerateDraftThumbnail() {
+    if (!draft) return;
+    await regenerateThumbnail(draft);
+    setHasUnsavedReviewEdits(false);
+  }
+
+  async function publishDraftReview() {
+    if (hasUnsavedReviewEdits) await saveDraftReview();
+    await publish(selectedChannelId || undefined);
   }
 
   function channelName(channel: typeof youtubeChannels[number]) {
@@ -225,7 +251,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           type="button"
           variant="outline"
           disabled={!canReview || loading}
-          onClick={() => draft && void regenerateThumbnail(draft)}
+          onClick={() => void regenerateDraftThumbnail()}
         >
           {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
           Regenerate Thumbnail (AI)
@@ -311,11 +337,11 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
       </Label>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Button type="button" variant="outline" disabled={!canReview} onClick={() => draft && void saveReview(draft)}>
+        <Button type="button" variant="outline" disabled={!canReview} onClick={() => void saveDraftReview()}>
           <RefreshCw size={16} />
-          Save Changes
+          {hasUnsavedReviewEdits ? "Save Changes" : "Saved"}
         </Button>
-        <Button type="button" variant="default" disabled={!canReview} onClick={() => void approveReview()}>
+        <Button type="button" variant="default" disabled={!canReview} onClick={() => void approveDraftReview()}>
           <CheckCircle2 size={16} />
           Approve
         </Button>
@@ -512,7 +538,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         variant="default"
         className="w-full"
         disabled={!completed || publishInFlight || loading}
-        onClick={() => void publish(selectedChannelId || undefined)}
+        onClick={() => void publishDraftReview()}
       >
         {publishInFlight ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />}
         {publishButtonLabel}
@@ -539,10 +565,12 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
               Thumbnail:{" "}
               {reel.youtube.thumbnailStatus === "uploaded"
                 ? "uploaded"
+                : reel.youtube.thumbnailStatus === "failed"
+                  ? "not uploaded"
                 : reel.youtube.thumbnailStatus}
             </div>
           ) : null}
-          {reel.youtube.thumbnailError ? <div>{reel.youtube.thumbnailError}</div> : null}
+          {reel.youtube.thumbnailError ? <div>{thumbnailPublishMessage(reel.youtube.thumbnailError)}</div> : null}
           {reel.youtube.publishedAt ? (
             <div>Published {new Date(reel.youtube.publishedAt).toLocaleString()}</div>
           ) : null}
@@ -579,4 +607,11 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
       ) : null}
     </aside>
   );
+}
+
+function thumbnailPublishMessage(error: string): string {
+  if (/permissions to upload and set custom video thumbnails/i.test(error)) {
+    return "This YouTube channel cannot set custom thumbnails yet. Enable custom thumbnails/advanced features in YouTube Studio, then reconnect or retry publish.";
+  }
+  return error;
 }
