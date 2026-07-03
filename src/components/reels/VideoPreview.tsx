@@ -2,12 +2,15 @@ import { ExternalLink, Film, MoreVertical } from "lucide-react";
 import type { Reel } from "@/api/reels";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelHeader, PanelTitle } from "@/components/ui/panel";
+import { useReelStudio } from "@/store/reel-studio";
 
 interface VideoPreviewProps {
   reel?: Reel;
 }
 
 export function VideoPreview({ reel }: VideoPreviewProps) {
+  const setPreviewTimeSeconds = useReelStudio((state) => state.setPreviewTimeSeconds);
+
   return (
     <Panel className="overflow-hidden">
       <PanelHeader>
@@ -34,7 +37,7 @@ export function VideoPreview({ reel }: VideoPreviewProps) {
       </PanelHeader>
 
       <div className="m-3.5 flex min-h-60 items-center justify-center rounded-md bg-foreground p-4 md:min-h-[310px]">
-        <div className="aspect-[9/16] h-[min(520px,70vh)] w-auto max-w-full overflow-hidden rounded-md bg-black">
+        <div className="aspect-9/16 h-[min(520px,70vh)] w-auto max-w-full overflow-hidden rounded-md bg-black">
           {reel?.outputUrl ? (
             <video
               className="h-full w-full object-contain"
@@ -42,6 +45,9 @@ export function VideoPreview({ reel }: VideoPreviewProps) {
               src={reel.outputUrl}
               controls
               playsInline
+              onLoadedMetadata={(event) => setPreviewTimeSeconds(event.currentTarget.currentTime)}
+              onSeeked={(event) => setPreviewTimeSeconds(event.currentTarget.currentTime)}
+              onTimeUpdate={(event) => setPreviewTimeSeconds(event.currentTarget.currentTime)}
             />
           ) : (
             <div className="grid h-full place-items-center gap-2 px-4 text-center text-secondary-foreground">

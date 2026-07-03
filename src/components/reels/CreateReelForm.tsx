@@ -19,6 +19,7 @@ const defaultForm: CreateReelInput = {
   source: "hybrid",
   parts: "off",
   gameplayKey: "",
+  thumbnailMode: "frame",
   imageModel: "",
 };
 
@@ -172,6 +173,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           imageModel: form.imageModel || undefined,
           horrorAudioKey: form.horrorAudioKey || undefined,
           outroChannelId: form.outroChannelId || undefined,
+          thumbnailMode: form.thumbnailMode ?? "frame",
         });
         if (ok) onCreated?.();
       }}
@@ -454,6 +456,22 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           ) : null}
         </Label>
       )}
+
+      <Label>
+        Thumbnail
+        <Select
+          value={form.thumbnailMode ?? "frame"}
+          onChange={(event) =>
+            setForm({ ...form, thumbnailMode: event.target.value as CreateReelInput["thumbnailMode"] })
+          }
+        >
+          <option value="frame">Choose video frame later (no AI image cost)</option>
+          <option value="ai">Generate AI thumbnail during render</option>
+        </Select>
+        <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          Frame mode only generates AI title, description, tags, and prompt. It does not create or upload a thumbnail until you save a selected frame in review.
+        </p>
+      </Label>
 
       {isHorrorNiche && (
         <div className="grid gap-3">

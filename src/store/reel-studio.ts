@@ -46,6 +46,7 @@ interface ReelStudioState {
   ttsVoices: TtsVoiceOption[];
   youtubeChannels: YouTubeChannelOption[];
   revoicing: boolean;
+  previewTimeSeconds: number;
   load: () => Promise<void>;
   loadGameplay: () => Promise<void>;
   loadHorrorAudio: () => Promise<void>;
@@ -74,6 +75,7 @@ interface ReelStudioState {
   purgeFailed: () => Promise<void>;
   revoice: (variants: RevoiceVariantInput[]) => Promise<void>;
   promoteVariant: (variantId: string) => Promise<void>;
+  setPreviewTimeSeconds: (seconds: number) => void;
 }
 
 export const useReelStudio = create<ReelStudioState>((set, get) => ({
@@ -86,6 +88,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   ttsVoices: [],
   youtubeChannels: [],
   revoicing: false,
+  previewTimeSeconds: 0,
 
   async loadGameplay() {
     try {
@@ -371,5 +374,10 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
         loading: false,
       });
     }
+  },
+
+  setPreviewTimeSeconds(seconds) {
+    if (!Number.isFinite(seconds)) return;
+    set({ previewTimeSeconds: Math.max(seconds, 0) });
   },
 }));
