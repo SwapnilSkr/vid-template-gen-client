@@ -37,6 +37,15 @@ function modelDisplayName(model?: string): string {
   return friendly[model] ?? model;
 }
 
+function imageModelCostSummary(option: ImageModelOption | undefined, sceneCount: number): string {
+  if (!option) return "Uses the niche/tier default image model. Exact request cost is captured after generation when OpenRouter exposes usage.";
+  if (option.pricingType === "flat" && option.perImageUsd !== undefined) {
+    return `${option.priceLabel}. Predictable image cost: about $${(option.perImageUsd * sceneCount).toFixed(3)} for ${sceneCount} scene images, plus thumbnail if generated. ${option.priceNote}`;
+  }
+  const probe = option.probeCostUsd !== undefined ? ` Validation probe was $${option.probeCostUsd.toFixed(4)}, but real reference-art requests can differ.` : "";
+  return `${option.priceLabel}. Variable/token-priced model: final image cost can increase with prompt length or reference art.${probe} ${option.priceNote}`;
+}
+
 export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const create = useReelStudio((state) => state.create);
   const loading = useReelStudio((state) => state.loading);
@@ -84,6 +93,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
   const isHorrorNiche = form.niche.startsWith("horror");
   const genreOptions = NICHE_GENRES[form.niche] ?? [];
+  const estimatedSceneCount = form.niche.startsWith("horror") ? 9 : 5;
   const horrorArtStyles = artStyles.filter((style) => style.niches.includes("horror"));
   const selectedArtStyle = horrorArtStyles.find((style) => style.id === form.artStyleId);
   const refArtModelWarning = Boolean(
@@ -310,9 +320,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             ))}
           </Select>
           <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {selectedImageModel
-              ? `${selectedImageModel.priceLabel}. ${selectedImageModel.priceNote}`
-              : "Uses the niche/tier default image model. Exact request cost is captured after generation when OpenRouter exposes usage."}
+            {imageModelCostSummary(selectedImageModel, estimatedSceneCount)}
           </p>
           {refArtModelWarning ? (
             <p className="m-0 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs font-bold text-warning-foreground">
