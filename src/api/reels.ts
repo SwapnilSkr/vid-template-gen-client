@@ -63,6 +63,8 @@ export interface Reel {
     videoId?: string;
     url?: string;
     error?: string;
+    channelId?: string;
+    channelLabel?: string;
     thumbnailStatus?: "pending" | "uploaded" | "missing" | "failed";
     thumbnailError?: string;
     publishedAt?: string;
@@ -151,6 +153,20 @@ export interface TtsVoiceOption {
   recommendedFor?: string[];
 }
 
+export interface YouTubeChannelOption {
+  id: string;
+  label: string;
+  googleChannelId?: string;
+  googleChannelTitle?: string;
+  privacyStatus: "private" | "unlisted" | "public";
+  categoryId: string;
+  niches?: string[];
+  isDefault: boolean;
+  source: "env" | "database";
+  status?: "active" | "needs_reauth" | "disabled";
+  lastError?: string;
+}
+
 export interface ImageModelOption {
   model: string;
   label: string;
@@ -211,6 +227,27 @@ export async function listReels(): Promise<Reel[]> {
   return request<Reel[]>("/reels?limit=40");
 }
 
+export async function listYouTubeChannels(): Promise<YouTubeChannelOption[]> {
+  return request<YouTubeChannelOption[]>("/youtube/channels");
+}
+
+export async function startYouTubeChannelConnect(input: {
+  label: string;
+  channelKey?: string;
+  privacyStatus?: "private" | "unlisted" | "public";
+  categoryId?: string;
+  niches?: string[];
+}): Promise<{ authUrl: string }> {
+  return request<{ authUrl: string }>("/youtube/connect/start", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteYouTubeChannel(id: string): Promise<void> {
+  await request(`/youtube/channels/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export async function createReel(input: CreateReelInput): Promise<{ id: string; parts: Reel[] }> {
   return request("/reels", { method: "POST", body: JSON.stringify(input) });
 }
@@ -237,8 +274,14 @@ export async function regenerateThumbnail(id: string, review: Partial<ReelReview
   });
 }
 
-export async function publishReel(id: string): Promise<{ youtube?: YouTubePublishStatus }> {
-  return request<{ youtube?: YouTubePublishStatus }>(`/reels/${id}/publish`, { method: "POST" });
+export async function publishReel(
+  id: string,
+  channelId?: string
+): Promise<{ youtube?: YouTubePublishStatus }> {
+  return request<{ youtube?: YouTubePublishStatus }>(`/reels/${id}/publish`, {
+    method: "POST",
+    body: JSON.stringify({ channelId }),
+  });
 }
 
 export async function deleteReel(id: string): Promise<void> {
