@@ -230,7 +230,19 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   async publish() {
     const id = get().selectedId;
     if (!id) return;
-    await publishReel(id);
+    set({ loading: true, error: undefined });
+    try {
+      const result = await publishReel(id);
+      set((state) => ({
+        loading: false,
+        reels: state.reels.map((item) =>
+          reelId(item) === id ? { ...item, youtube: result.youtube ?? { status: "pending" } } : item
+        ),
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to publish reel", loading: false });
+      return;
+    }
     await get().pollSelected();
   },
 

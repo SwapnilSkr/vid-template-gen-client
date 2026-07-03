@@ -78,6 +78,8 @@ export interface Reel {
   voiceVariants?: VoiceVariant[];
 }
 
+export type YouTubePublishStatus = NonNullable<Reel["youtube"]>;
+
 export type MotionMode = "ken_burns" | "parallax" | "ai_hybrid" | "ai_full";
 
 export interface StoryBible {
@@ -233,8 +235,8 @@ export async function regenerateThumbnail(id: string, review: Partial<ReelReview
   });
 }
 
-export async function publishReel(id: string): Promise<void> {
-  await request(`/reels/${id}/publish`, { method: "POST" });
+export async function publishReel(id: string): Promise<{ youtube?: YouTubePublishStatus }> {
+  return request<{ youtube?: YouTubePublishStatus }>(`/reels/${id}/publish`, { method: "POST" });
 }
 
 export async function deleteReel(id: string): Promise<void> {
