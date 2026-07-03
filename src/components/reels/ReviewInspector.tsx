@@ -1,4 +1,4 @@
-import { CheckCircle2, Clapperboard, Image, Loader2, ReceiptText, RefreshCw, Send, Trash2 } from "lucide-react";
+import { CheckCircle2, Clapperboard, ExternalLink, Image, Loader2, ReceiptText, RefreshCw, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Reel, ReelReview } from "@/api/reels";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,18 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const completed = reel?.status === "completed";
   const canReview = completed && Boolean(draft);
   const costBreakdown = reel?.costBreakdown;
+  const youtubeStatus = reel?.youtube?.status;
+  const publishInFlight = youtubeStatus === "pending" || youtubeStatus === "uploading";
+  const publishButtonLabel =
+    youtubeStatus === "published"
+      ? "Republish to YouTube Shorts"
+      : youtubeStatus === "failed"
+        ? "Retry YouTube Publish"
+        : publishInFlight
+          ? youtubeStatus === "uploading"
+            ? "Uploading to YouTube..."
+            : "YouTube publish queued..."
+          : "Publish to YouTube Shorts";
 
   function updateDraft(updater: (current: ReelReview) => ReelReview) {
     setDraft((current) => (current ? updater(current) : current));
@@ -220,10 +232,35 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Button>
       </div>
 
-      <Button type="button" variant="default" className="w-full" disabled={!completed} onClick={() => void publish()}>
-        <Send size={17} />
-        Publish to YouTube Shorts
+      <Button
+        type="button"
+        variant="default"
+        className="w-full"
+        disabled={!completed || publishInFlight || loading}
+        onClick={() => void publish()}
+      >
+        {publishInFlight ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />}
+        {publishButtonLabel}
       </Button>
+
+      {reel?.youtube ? (
+        <div
+          className={cn(
+            "rounded-lg border px-3 py-2 text-xs leading-relaxed",
+            reel.youtube.status === "failed"
+              ? "border-destructive/30 bg-destructive/10 text-destructive"
+              : "border-border bg-muted/40 text-muted-foreground"
+          )}
+        >
+          <div className="font-bold text-foreground">
+            YouTube: {reel.youtube.status === "pending" ? "Queued" : reel.youtube.status}
+          </div>
+          {reel.youtube.error ? <div>{reel.youtube.error}</div> : null}
+          {reel.youtube.publishedAt ? (
+            <div>Published {new Date(reel.youtube.publishedAt).toLocaleString()}</div>
+          ) : null}
+        </div>
+      ) : null}
 
       {reel ? (
         <Button
@@ -250,7 +287,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           target="_blank"
           rel="noreferrer"
         >
-          Open published Short
+          <ExternalLink className="inline align-[-2px]" size={14} /> Open published Short
         </a>
       ) : null}
     </aside>
