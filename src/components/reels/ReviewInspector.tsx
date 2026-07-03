@@ -1,4 +1,4 @@
-import { CheckCircle2, Clapperboard, ExternalLink, Image, Loader2, Plus, ReceiptText, RefreshCw, Send, Trash2, X } from "lucide-react";
+import { CheckCircle2, Clapperboard, ExternalLink, Image, Loader2, Plus, ReceiptText, RefreshCw, Send, Trash2, UserCircle, X, Youtube } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Reel, ReelReview } from "@/api/reels";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,10 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const [newChannelPreset, setNewChannelPreset] = useState<"reddit" | "horror" | "both">("reddit");
   const [channelConnectMessage, setChannelConnectMessage] = useState("");
   const tagsText = useMemo(() => draft?.tags.join(", ") ?? "", [draft?.tags]);
+  const selectedChannel = useMemo(
+    () => youtubeChannels.find((channel) => channel.id === selectedChannelId),
+    [selectedChannelId, youtubeChannels]
+  );
 
   useEffect(() => {
     setDraft(review);
@@ -108,8 +112,36 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
             : "YouTube publish queued..."
           : "Publish to YouTube Shorts";
 
+  const channelPresetHelp =
+    newChannelPreset === "reddit"
+      ? "Used for Reddit stories, AITA, and gameplay reels."
+      : newChannelPreset === "horror"
+        ? "Used for AI horror, comic horror, and analog horror reels."
+        : "Used for both Reddit and horror generation defaults.";
+
   function updateDraft(updater: (current: ReelReview) => ReelReview) {
     setDraft((current) => (current ? updater(current) : current));
+  }
+
+  function channelName(channel: typeof youtubeChannels[number]) {
+    return channel.googleChannelTitle || channel.label;
+  }
+
+  function channelHandle(channel: typeof youtubeChannels[number]) {
+    return channel.googleChannelHandle
+      ? channel.googleChannelHandle.replace(/^@?/, "@")
+      : channel.googleChannelId
+        ? `ID ${channel.googleChannelId}`
+        : channel.source === "env"
+          ? "Server default"
+          : "Connected account";
+  }
+
+  function channelPurpose(channel: typeof youtubeChannels[number]) {
+    const niches = channel.niches ?? [];
+    if (niches.some((niche) => niche.startsWith("horror"))) return "Horror";
+    if (niches.some((niche) => niche.startsWith("reddit") || niche === "aita")) return "Reddit";
+    return channel.isDefault ? "Default" : "General";
   }
 
   return (
@@ -288,26 +320,77 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Button>
       </div>
 
-      <Label>
-        YouTube Channel
-        <Select
-          disabled={!completed || publishInFlight || youtubeChannels.length === 0}
-          value={selectedChannelId}
-          onChange={(event) => setSelectedChannelId(event.target.value)}
-        >
-          {youtubeChannels.length === 0 ? (
-            <option value="">Default server channel</option>
-          ) : (
-            youtubeChannels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.label} ({channel.privacyStatus})
-              </option>
-            ))
-          )}
-        </Select>
-      </Label>
+      <div className="grid gap-2.5 rounded-lg border border-border bg-muted/25 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+            <Youtube size={17} />
+            YouTube Publishing
+          </span>
+          <span className="text-xs font-bold text-muted-foreground">
+            {youtubeChannels.length} channel{youtubeChannels.length === 1 ? "" : "s"}
+          </span>
+        </div>
 
-      <div className="grid gap-2 rounded-lg border border-border bg-muted/25 p-2.5">
+        <Label>
+          Publish destination
+          <Select
+            disabled={!completed || publishInFlight || youtubeChannels.length === 0}
+            value={selectedChannelId}
+            onChange={(event) => setSelectedChannelId(event.target.value)}
+          >
+            {youtubeChannels.length === 0 ? (
+              <option value="">No connected channel</option>
+            ) : (
+              youtubeChannels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channelName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
+                </option>
+              ))
+            )}
+          </Select>
+        </Label>
+
+        {selectedChannel ? (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-background/70 p-2.5">
+            {selectedChannel.logoUrl ? (
+              <img
+                className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
+                src={selectedChannel.logoUrl}
+                alt=""
+              />
+            ) : (
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+                <UserCircle size={24} />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-extrabold text-foreground">
+                {channelName(selectedChannel)}
+              </div>
+              <div className="truncate text-xs font-semibold text-muted-foreground">
+                {channelHandle(selectedChannel)}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  {channelPurpose(selectedChannel)}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  {selectedChannel.privacyStatus}
+                </span>
+                {selectedChannel.source === "env" ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                    server default
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-warning/35 bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
+            Add a YouTube channel before publishing.
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-extrabold text-foreground">Channel Accounts</span>
           <Button
@@ -322,30 +405,44 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </div>
 
         {showChannelConnect ? (
-          <div className="grid gap-2">
-            <Input
-              value={newChannelLabel}
-              placeholder="Channel label"
-              onChange={(event) => setNewChannelLabel(event.target.value)}
-            />
-            <Select
-              value={newChannelPreset}
-              onChange={(event) => setNewChannelPreset(event.target.value as "reddit" | "horror" | "both")}
-            >
-              <option value="reddit">Reddit stories channel</option>
-              <option value="horror">Horror channel</option>
-              <option value="both">Use for both</option>
-            </Select>
-            <Select
-              value={newChannelPrivacy}
-              onChange={(event) =>
-                setNewChannelPrivacy(event.target.value as "private" | "unlisted" | "public")
-              }
-            >
-              <option value="public">Public</option>
-              <option value="unlisted">Unlisted</option>
-              <option value="private">Private</option>
-            </Select>
+          <div className="grid gap-2 rounded-md border border-border bg-background/70 p-2.5">
+            <Label>
+              Internal nickname
+              <Input
+                value={newChannelLabel}
+                placeholder="Example: Horror Main"
+                onChange={(event) => setNewChannelLabel(event.target.value)}
+              />
+              <small className="text-xs text-muted-foreground">
+                Only used inside this app. The real YouTube name and logo are pulled from Google after connect.
+              </small>
+            </Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Label>
+                Content type
+                <Select
+                  value={newChannelPreset}
+                  onChange={(event) => setNewChannelPreset(event.target.value as "reddit" | "horror" | "both")}
+                >
+                  <option value="reddit">Reddit stories</option>
+                  <option value="horror">Horror reels</option>
+                  <option value="both">Both</option>
+                </Select>
+              </Label>
+              <Label>
+                Default privacy
+                <Select
+                  value={newChannelPrivacy}
+                  onChange={(event) =>
+                    setNewChannelPrivacy(event.target.value as "private" | "unlisted" | "public")
+                  }
+                >
+                  <option value="public">Public</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="private">Private</option>
+                </Select>
+              </Label>
+            </div>
             <Button
               type="button"
               variant="default"
@@ -359,21 +456,40 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
               <p className="text-xs font-semibold text-warning">{channelConnectMessage}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Pick the Google account that owns the channel, then approve YouTube upload and channel read access.
+                {channelPresetHelp} Pick the Google account that owns the channel, then approve YouTube upload and channel read access.
               </p>
             )}
           </div>
         ) : null}
 
         {youtubeChannels.filter((channel) => channel.source === "database").length > 0 ? (
-          <div className="grid gap-1">
+          <div className="grid gap-2">
             {youtubeChannels
               .filter((channel) => channel.source === "database")
               .map((channel) => (
-                <div key={channel.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="min-w-0 truncate font-semibold text-muted-foreground">
-                    {channel.label}
-                  </span>
+                <div
+                  key={channel.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background/60 p-2 text-xs"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {channel.logoUrl ? (
+                      <img
+                        className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
+                        src={channel.logoUrl}
+                        alt=""
+                      />
+                    ) : (
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border bg-muted">
+                        <UserCircle size={18} />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate font-extrabold text-foreground">{channelName(channel)}</div>
+                      <div className="truncate font-semibold text-muted-foreground">
+                        {channel.label} · {channelPurpose(channel)} · {channel.privacyStatus}
+                      </div>
+                    </div>
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
