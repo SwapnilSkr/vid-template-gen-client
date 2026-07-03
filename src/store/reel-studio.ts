@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   createReel,
   deleteReel,
+  deleteYouTubeChannel,
   getReel,
   getReview,
   listArtStyles,
@@ -10,11 +11,13 @@ import {
   listImageModels,
   listReels,
   listTtsVoices,
+  listYouTubeChannels,
   promoteVoiceVariant,
   purgeFailedReels,
   publishReel,
   regenerateThumbnail,
   revoiceReel,
+  startYouTubeChannelConnect,
   updateReview,
   useFrameAsThumbnail,
   type ArtStyleOption,
@@ -26,6 +29,7 @@ import {
   type ReelReview,
   type RevoiceVariantInput,
   type TtsVoiceOption,
+  type YouTubeChannelOption,
 } from "@/api/reels";
 import { reelId } from "@/utils/reel";
 
@@ -40,6 +44,7 @@ interface ReelStudioState {
   imageModels: ImageModelOption[];
   artStyles: ArtStyleOption[];
   ttsVoices: TtsVoiceOption[];
+  youtubeChannels: YouTubeChannelOption[];
   revoicing: boolean;
   load: () => Promise<void>;
   loadGameplay: () => Promise<void>;
@@ -47,6 +52,15 @@ interface ReelStudioState {
   loadImageModels: () => Promise<void>;
   loadArtStyles: () => Promise<void>;
   loadTtsVoices: () => Promise<void>;
+  loadYouTubeChannels: () => Promise<void>;
+  connectYouTubeChannel: (input: {
+    label: string;
+    channelKey?: string;
+    privacyStatus?: "private" | "unlisted" | "public";
+    categoryId?: string;
+    niches?: string[];
+  }) => Promise<string | undefined>;
+  removeYouTubeChannel: (id: string) => Promise<void>;
   select: (id: string) => Promise<void>;
   create: (input: CreateReelInput) => Promise<boolean>;
   pollSelected: () => Promise<void>;
@@ -54,7 +68,7 @@ interface ReelStudioState {
   regenerateThumbnail: (review: ReelReview) => Promise<void>;
   useFrameAsThumbnail: (atSeconds: number) => Promise<void>;
   approveReview: () => Promise<void>;
-  publish: () => Promise<void>;
+  publish: (channelId?: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
   deleteById: (id: string) => Promise<void>;
   purgeFailed: () => Promise<void>;
@@ -70,6 +84,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   imageModels: [],
   artStyles: [],
   ttsVoices: [],
+  youtubeChannels: [],
   revoicing: false,
 
   async loadGameplay() {
@@ -114,6 +129,44 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       set({ ttsVoices });
     } catch {
       // non-fatal — revoice falls back to typing a model/voice manually
+    }
+  },
+
+  async loadYouTubeChannels() {
+    try {
+      const youtubeChannels = await listYouTubeChannels();
+      set({ youtubeChannels });
+    } catch {
+      // non-fatal — publish will still report the server-side config error
+    }
+  },
+
+  async connectYouTubeChannel(input) {
+    set({ loading: true, error: undefined });
+    try {
+      const result = await startYouTubeChannelConnect(input);
+      set({ loading: false });
+      return result.authUrl;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to start YouTube channel connect",
+        loading: false,
+      });
+      return undefined;
+    }
+  },
+
+  async removeYouTubeChannel(id) {
+    set({ loading: true, error: undefined });
+    try {
+      await deleteYouTubeChannel(id);
+      await get().loadYouTubeChannels();
+      set({ loading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to remove YouTube channel",
+        loading: false,
+      });
     }
   },
 
@@ -227,16 +280,18 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     set({ draftReview: saved });
   },
 
-  async publish() {
+  async publish(channelId) {
     const id = get().selectedId;
     if (!id) return;
     set({ loading: true, error: undefined });
     try {
-      const result = await publishReel(id);
+      const result = await publishReel(id, channelId);
       set((state) => ({
         loading: false,
         reels: state.reels.map((item) =>
-          reelId(item) === id ? { ...item, youtube: result.youtube ?? { status: "pending" } } : item
+          reelId(item) === id
+            ? { ...item, youtube: result.youtube ?? { status: "pending", channelId } }
+            : item
         ),
       }));
     } catch (error) {
