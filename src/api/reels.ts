@@ -71,8 +71,36 @@ export interface Reel {
   gameplayKey?: string;
   horrorAudioKey?: string;
   imageModelOverride?: string;
+  artStyleId?: string;
+  motionMode?: MotionMode;
+  storyBible?: StoryBible;
   voiceOverride?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
+}
+
+export type MotionMode = "ken_burns" | "parallax" | "ai_hybrid" | "ai_full";
+
+export interface StoryBible {
+  premise: string;
+  setting: string;
+  protagonist: string;
+  anchorObject: string;
+  impossibleRule: string;
+  escalation: string[];
+  soundCues?: string[];
+  artDirection: string;
+  finalTwist: string;
+}
+
+export interface ArtStyleOption {
+  id: string;
+  displayName: string;
+  description: string;
+  niches: string[];
+  referenceKeys: string[];
+  thumbnailUrl?: string;
+  attribution: { title?: string; license?: string; source?: string }[];
+  motionHint?: "parallax" | "ai_motion";
 }
 
 export interface CreateReelInput {
@@ -85,6 +113,8 @@ export interface CreateReelInput {
   gameplayKey?: string;
   horrorAudioKey?: string;
   imageModel?: string;
+  artStyleId?: string;
+  motionMode?: MotionMode;
   ttsModel?: string;
   ttsVoice?: string;
   ttsFormat?: "mp3" | "pcm";
@@ -123,6 +153,7 @@ export interface ImageModelOption {
   priceLabel: string;
   priceNote: string;
   recommendedTier: "cheap" | "value" | "premium";
+  supportsReferenceArt?: boolean;
 }
 
 export interface ReelDefaults {
@@ -220,6 +251,11 @@ export async function listHorrorAudio(): Promise<HorrorAudioOption[]> {
 
 export async function listImageModels(): Promise<ImageModelOption[]> {
   return request<ImageModelOption[]>("/image-models");
+}
+
+export async function listArtStyles(niche?: string): Promise<ArtStyleOption[]> {
+  const q = niche ? `?niche=${encodeURIComponent(niche)}` : "";
+  return request<ArtStyleOption[]>(`/art-styles${q}`);
 }
 
 export async function listTtsVoices(): Promise<TtsVoiceOption[]> {
