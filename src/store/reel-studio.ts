@@ -4,6 +4,7 @@ import {
   deleteReel,
   getReel,
   getReview,
+  listArtStyles,
   listGameplay,
   listHorrorAudio,
   listImageModels,
@@ -16,6 +17,7 @@ import {
   revoiceReel,
   updateReview,
   useFrameAsThumbnail,
+  type ArtStyleOption,
   type CreateReelInput,
   type GameplayClip,
   type HorrorAudioOption,
@@ -36,12 +38,14 @@ interface ReelStudioState {
   gameplayClips: GameplayClip[];
   horrorAudios: HorrorAudioOption[];
   imageModels: ImageModelOption[];
+  artStyles: ArtStyleOption[];
   ttsVoices: TtsVoiceOption[];
   revoicing: boolean;
   load: () => Promise<void>;
   loadGameplay: () => Promise<void>;
   loadHorrorAudio: () => Promise<void>;
   loadImageModels: () => Promise<void>;
+  loadArtStyles: () => Promise<void>;
   loadTtsVoices: () => Promise<void>;
   select: (id: string) => Promise<void>;
   create: (input: CreateReelInput) => Promise<boolean>;
@@ -64,6 +68,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   gameplayClips: [],
   horrorAudios: [],
   imageModels: [],
+  artStyles: [],
   ttsVoices: [],
   revoicing: false,
 
@@ -91,6 +96,15 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       set({ imageModels });
     } catch {
       // non-fatal — create form falls back to tier defaults
+    }
+  },
+
+  async loadArtStyles() {
+    try {
+      const artStyles = await listArtStyles();
+      set({ artStyles });
+    } catch {
+      // non-fatal — create form falls back to the niche's default style pool
     }
   },
 
