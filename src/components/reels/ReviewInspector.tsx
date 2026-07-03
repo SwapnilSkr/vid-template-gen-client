@@ -1,4 +1,4 @@
-import { CheckCircle2, Clapperboard, ExternalLink, Image, Loader2, ReceiptText, RefreshCw, Send, Trash2 } from "lucide-react";
+import { CheckCircle2, Clapperboard, ExternalLink, Image, Loader2, Plus, ReceiptText, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Reel, ReelReview } from "@/api/reels";
 import { Button } from "@/components/ui/button";
@@ -27,14 +27,59 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const approveReview = useReelStudio((state) => state.approveReview);
   const publish = useReelStudio((state) => state.publish);
   const deleteSelected = useReelStudio((state) => state.deleteSelected);
+  const youtubeChannels = useReelStudio((state) => state.youtubeChannels);
+  const loadYouTubeChannels = useReelStudio((state) => state.loadYouTubeChannels);
+  const connectYouTubeChannel = useReelStudio((state) => state.connectYouTubeChannel);
+  const removeYouTubeChannel = useReelStudio((state) => state.removeYouTubeChannel);
 
   const [draft, setDraft] = useState<ReelReview | undefined>(review);
   const [frameSeconds, setFrameSeconds] = useState("1");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [showChannelConnect, setShowChannelConnect] = useState(false);
+  const [newChannelLabel, setNewChannelLabel] = useState("");
+  const [newChannelKey, setNewChannelKey] = useState("");
+  const [newChannelPrivacy, setNewChannelPrivacy] = useState<"private" | "unlisted" | "public">("public");
+  const [newChannelNiches, setNewChannelNiches] = useState("");
   const tagsText = useMemo(() => draft?.tags.join(", ") ?? "", [draft?.tags]);
 
   useEffect(() => {
     setDraft(review);
   }, [review]);
+
+  useEffect(() => {
+    const defaultChannel =
+      reel?.youtube?.channelId ??
+      youtubeChannels.find((channel) => channel.isDefault)?.id ??
+      youtubeChannels[0]?.id ??
+      "";
+    setSelectedChannelId(defaultChannel);
+  }, [reel?.youtube?.channelId, youtubeChannels]);
+
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type === "youtube-channel-connected") {
+        void loadYouTubeChannels();
+        setShowChannelConnect(false);
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [loadYouTubeChannels]);
+
+  async function connectChannel() {
+    const authUrl = await connectYouTubeChannel({
+      label: newChannelLabel.trim(),
+      channelKey: newChannelKey.trim() || undefined,
+      privacyStatus: newChannelPrivacy,
+      niches: newChannelNiches
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    });
+    if (authUrl) {
+      window.open(authUrl, "youtube-connect", "width=720,height=820");
+    }
+  }
 
   const completed = reel?.status === "completed";
   const canReview = completed && Boolean(draft);
@@ -232,12 +277,109 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Button>
       </div>
 
+      <Label>
+        YouTube Channel
+        <Select
+          disabled={!completed || publishInFlight || youtubeChannels.length === 0}
+          value={selectedChannelId}
+          onChange={(event) => setSelectedChannelId(event.target.value)}
+        >
+          {youtubeChannels.length === 0 ? (
+            <option value="">Default server channel</option>
+          ) : (
+            youtubeChannels.map((channel) => (
+              <option key={channel.id} value={channel.id}>
+                {channel.label} ({channel.privacyStatus})
+              </option>
+            ))
+          )}
+        </Select>
+      </Label>
+
+      <div className="grid gap-2 rounded-lg border border-border bg-muted/25 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-extrabold text-foreground">Channel Accounts</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setShowChannelConnect((current) => !current)}
+            title={showChannelConnect ? "Close add channel" : "Add YouTube channel"}
+          >
+            {showChannelConnect ? <X size={16} /> : <Plus size={16} />}
+          </Button>
+        </div>
+
+        {showChannelConnect ? (
+          <div className="grid gap-2">
+            <Input
+              value={newChannelLabel}
+              placeholder="Channel label"
+              onChange={(event) => setNewChannelLabel(event.target.value)}
+            />
+            <Input
+              value={newChannelKey}
+              placeholder="Internal key, optional"
+              onChange={(event) => setNewChannelKey(event.target.value)}
+            />
+            <Select
+              value={newChannelPrivacy}
+              onChange={(event) =>
+                setNewChannelPrivacy(event.target.value as "private" | "unlisted" | "public")
+              }
+            >
+              <option value="public">Public</option>
+              <option value="unlisted">Unlisted</option>
+              <option value="private">Private</option>
+            </Select>
+            <Input
+              value={newChannelNiches}
+              placeholder="Niches, comma-separated"
+              onChange={(event) => setNewChannelNiches(event.target.value)}
+            />
+            <Button
+              type="button"
+              variant="default"
+              disabled={loading || !newChannelLabel.trim()}
+              onClick={() => void connectChannel()}
+            >
+              <ExternalLink size={16} />
+              Connect with Google
+            </Button>
+          </div>
+        ) : null}
+
+        {youtubeChannels.filter((channel) => channel.source === "database").length > 0 ? (
+          <div className="grid gap-1">
+            {youtubeChannels
+              .filter((channel) => channel.source === "database")
+              .map((channel) => (
+                <div key={channel.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate font-semibold text-muted-foreground">
+                    {channel.label}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    title="Remove channel"
+                    disabled={loading}
+                    onClick={() => void removeYouTubeChannel(channel.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              ))}
+          </div>
+        ) : null}
+      </div>
+
       <Button
         type="button"
         variant="default"
         className="w-full"
         disabled={!completed || publishInFlight || loading}
-        onClick={() => void publish()}
+        onClick={() => void publish(selectedChannelId || undefined)}
       >
         {publishInFlight ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />}
         {publishButtonLabel}
@@ -255,6 +397,9 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           <div className="font-bold text-foreground">
             YouTube: {reel.youtube.status === "pending" ? "Queued" : reel.youtube.status}
           </div>
+          {reel.youtube.channelLabel || reel.youtube.channelId ? (
+            <div>Channel: {reel.youtube.channelLabel ?? reel.youtube.channelId}</div>
+          ) : null}
           {reel.youtube.error ? <div>{reel.youtube.error}</div> : null}
           {reel.youtube.thumbnailStatus ? (
             <div>
