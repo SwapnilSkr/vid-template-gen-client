@@ -46,6 +46,44 @@ export interface TrendGenreSummary {
   bestPostingTime?: { dayOfWeek: number; hourUtc: number };
 }
 
+export interface TrendScoutResult {
+  niche: string;
+  genre: string;
+  found: number;
+  upserted: number;
+  error?: string;
+}
+
+export interface TrendScoutRun {
+  results: TrendScoutResult[];
+  digestsRefreshed: number;
+  failed?: TrendScoutResult[];
+}
+
+export interface HorrorReferenceScoutRun {
+  scanned: number;
+  upserted: number;
+  skipped: number;
+  errors: { sourceUrl: string; error: string }[];
+}
+
+export interface HorrorReference {
+  _id?: string;
+  title: string;
+  author?: string;
+  sourceUrl: string;
+  license: "public_domain" | "unknown";
+  status: "candidate" | "approved" | "rejected" | "archived";
+  subjects: string[];
+  genreTags: string[];
+  downloads?: number;
+  excerpt: string;
+  promptBrief: string;
+  qualityScore: number;
+  usedInReelIds?: string[];
+  lastScrapedAt?: string;
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -79,6 +117,17 @@ export async function getTrendSummary(period: "week" | "month", niche = "reddit"
   return request<TrendGenreSummary[]>(`/trends/summary?period=${period}&niche=${encodeURIComponent(niche)}`);
 }
 
-export async function triggerTrendScout(window: "week" | "month", niche = "reddit"): Promise<{ digestsRefreshed: number }> {
+export async function triggerTrendScout(window: "week" | "month", niche = "reddit"): Promise<TrendScoutRun> {
   return request(`/trends/scout`, { method: "POST", body: JSON.stringify({ window, niche }) });
+}
+
+export async function triggerHorrorReferenceScout(limit = 20): Promise<HorrorReferenceScoutRun> {
+  return request(`/trends/horror-references/scout`, {
+    method: "POST",
+    body: JSON.stringify({ limit }),
+  });
+}
+
+export async function listHorrorReferences(limit = 12): Promise<HorrorReference[]> {
+  return request<HorrorReference[]>(`/trends/horror-references?limit=${limit}`);
 }

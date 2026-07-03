@@ -54,6 +54,7 @@ export interface Reel {
   progress: number;
   outputUrl?: string;
   subtitlesUrl?: string;
+  thumbnailMode?: "frame" | "ai";
   costUsd?: number;
   costBreakdown?: ReelCostBreakdown;
   error?: string;
@@ -79,7 +80,10 @@ export interface Reel {
   artStyleId?: string;
   motionMode?: MotionMode;
   storyBible?: StoryBible;
+  redditStory?: RedditStoryPayload;
+  horrorReference?: HorrorReferencePayload;
   voiceOverride?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
+  narrationVoice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
 }
 
@@ -97,6 +101,30 @@ export interface StoryBible {
   soundCues?: string[];
   artDirection: string;
   finalTwist: string;
+}
+
+export interface RedditStoryPayload {
+  title: string;
+  body: string;
+  source?: "llm" | "hybrid" | "verbatim";
+  genre?: string;
+  subreddit?: string;
+  author?: string;
+  upvotes?: number;
+  comments?: number;
+  ageHours?: number;
+  seedTitle?: string;
+  seedUrl?: string;
+  partNumber?: number;
+  partCount?: number;
+}
+
+export interface HorrorReferencePayload {
+  referenceId?: string;
+  title: string;
+  author?: string;
+  sourceUrl: string;
+  license?: "public_domain" | "unknown";
 }
 
 export interface ArtStyleOption {
@@ -120,6 +148,7 @@ export interface CreateReelInput {
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;
+  thumbnailMode?: "frame" | "ai";
   imageModel?: string;
   artStyleId?: string;
   motionMode?: MotionMode;
