@@ -256,6 +256,15 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
             YouTube: {reel.youtube.status === "pending" ? "Queued" : reel.youtube.status}
           </div>
           {reel.youtube.error ? <div>{reel.youtube.error}</div> : null}
+          {reel.youtube.thumbnailStatus ? (
+            <div>
+              Thumbnail:{" "}
+              {reel.youtube.thumbnailStatus === "uploaded"
+                ? "uploaded"
+                : reel.youtube.thumbnailStatus}
+            </div>
+          ) : null}
+          {reel.youtube.thumbnailError ? <div>{reel.youtube.thumbnailError}</div> : null}
           {reel.youtube.publishedAt ? (
             <div>Published {new Date(reel.youtube.publishedAt).toLocaleString()}</div>
           ) : null}

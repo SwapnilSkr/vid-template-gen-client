@@ -63,6 +63,8 @@ export interface Reel {
     videoId?: string;
     url?: string;
     error?: string;
+    thumbnailStatus?: "pending" | "uploaded" | "missing" | "failed";
+    thumbnailError?: string;
     publishedAt?: string;
   };
   partNumber?: number;
