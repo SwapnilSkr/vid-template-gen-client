@@ -37,9 +37,9 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [showChannelConnect, setShowChannelConnect] = useState(false);
   const [newChannelLabel, setNewChannelLabel] = useState("");
-  const [newChannelKey, setNewChannelKey] = useState("");
   const [newChannelPrivacy, setNewChannelPrivacy] = useState<"private" | "unlisted" | "public">("public");
-  const [newChannelNiches, setNewChannelNiches] = useState("");
+  const [newChannelPreset, setNewChannelPreset] = useState<"reddit" | "horror" | "both">("reddit");
+  const [channelConnectMessage, setChannelConnectMessage] = useState("");
   const tagsText = useMemo(() => draft?.tags.join(", ") ?? "", [draft?.tags]);
 
   useEffect(() => {
@@ -58,8 +58,16 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "youtube-channel-connected") {
-        void loadYouTubeChannels();
-        setShowChannelConnect(false);
+        if (event.data.success) {
+          void loadYouTubeChannels();
+          setShowChannelConnect(false);
+          setChannelConnectMessage(event.data.message ?? "YouTube channel connected.");
+        } else {
+          setChannelConnectMessage(
+            event.data.message ??
+              "Google did not grant access. Start again and approve the requested YouTube permissions."
+          );
+        }
       }
     }
     window.addEventListener("message", handleMessage);
@@ -67,14 +75,17 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   }, [loadYouTubeChannels]);
 
   async function connectChannel() {
+    setChannelConnectMessage("");
+    const niches =
+      newChannelPreset === "reddit"
+        ? ["reddit", "reddit_stories", "aita"]
+        : newChannelPreset === "horror"
+          ? ["horror", "horror_comic", "analog_horror"]
+          : ["reddit", "reddit_stories", "aita", "horror", "horror_comic", "analog_horror"];
     const authUrl = await connectYouTubeChannel({
       label: newChannelLabel.trim(),
-      channelKey: newChannelKey.trim() || undefined,
       privacyStatus: newChannelPrivacy,
-      niches: newChannelNiches
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
+      niches,
     });
     if (authUrl) {
       window.open(authUrl, "youtube-connect", "width=720,height=820");
@@ -302,11 +313,11 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           <Button
             type="button"
             variant="outline"
-            size="icon"
             onClick={() => setShowChannelConnect((current) => !current)}
             title={showChannelConnect ? "Close add channel" : "Add YouTube channel"}
           >
             {showChannelConnect ? <X size={16} /> : <Plus size={16} />}
+            {showChannelConnect ? "Close" : "Add Channel"}
           </Button>
         </div>
 
@@ -317,11 +328,14 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
               placeholder="Channel label"
               onChange={(event) => setNewChannelLabel(event.target.value)}
             />
-            <Input
-              value={newChannelKey}
-              placeholder="Internal key, optional"
-              onChange={(event) => setNewChannelKey(event.target.value)}
-            />
+            <Select
+              value={newChannelPreset}
+              onChange={(event) => setNewChannelPreset(event.target.value as "reddit" | "horror" | "both")}
+            >
+              <option value="reddit">Reddit stories channel</option>
+              <option value="horror">Horror channel</option>
+              <option value="both">Use for both</option>
+            </Select>
             <Select
               value={newChannelPrivacy}
               onChange={(event) =>
@@ -332,11 +346,6 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
               <option value="unlisted">Unlisted</option>
               <option value="private">Private</option>
             </Select>
-            <Input
-              value={newChannelNiches}
-              placeholder="Niches, comma-separated"
-              onChange={(event) => setNewChannelNiches(event.target.value)}
-            />
             <Button
               type="button"
               variant="default"
@@ -346,6 +355,13 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
               <ExternalLink size={16} />
               Connect with Google
             </Button>
+            {channelConnectMessage ? (
+              <p className="text-xs font-semibold text-warning">{channelConnectMessage}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Pick the Google account that owns the channel, then approve YouTube upload and channel read access.
+              </p>
+            )}
           </div>
         ) : null}
 
