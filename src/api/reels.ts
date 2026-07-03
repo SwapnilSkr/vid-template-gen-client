@@ -154,6 +154,10 @@ export interface ImageModelOption {
   priceNote: string;
   recommendedTier: "cheap" | "value" | "premium";
   supportsReferenceArt?: boolean;
+  healthy?: boolean;
+  pricingType?: "flat" | "variable";
+  perImageUsd?: number;
+  probeCostUsd?: number;
 }
 
 export interface ReelDefaults {
