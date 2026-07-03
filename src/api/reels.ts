@@ -74,6 +74,7 @@ export interface Reel {
   createdAt?: string;
   gameplayKey?: string;
   horrorAudioKey?: string;
+  outroChannelId?: string;
   imageModelOverride?: string;
   artStyleId?: string;
   motionMode?: MotionMode;
@@ -118,6 +119,7 @@ export interface CreateReelInput {
   parts?: "off" | "auto" | number;
   gameplayKey?: string;
   horrorAudioKey?: string;
+  outroChannelId?: string;
   imageModel?: string;
   artStyleId?: string;
   motionMode?: MotionMode;

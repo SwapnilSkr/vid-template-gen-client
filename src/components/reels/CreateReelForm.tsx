@@ -1,6 +1,6 @@
-import { Film, Loader2, RefreshCw, Shuffle, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
-import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption } from "@/api/reels";
+import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,47 @@ function imageModelCostSummary(option: ImageModelOption | undefined, sceneCount:
   return `${option.priceLabel}. Variable/token-priced model: final image cost can increase with prompt length or reference art.${probe} ${option.priceNote}`;
 }
 
+function channelName(channel: YouTubeChannelOption): string {
+  return channel.googleChannelTitle || channel.label;
+}
+
+function channelHandle(channel: YouTubeChannelOption): string {
+  return channel.googleChannelHandle
+    ? channel.googleChannelHandle.replace(/^@?/, "@")
+    : channel.googleChannelId
+      ? `ID ${channel.googleChannelId}`
+      : channel.source === "env"
+        ? "Server default"
+        : "Connected account";
+}
+
+function channelPurpose(channel: YouTubeChannelOption): string {
+  const niches = channel.niches ?? [];
+  if (niches.some((niche) => niche.startsWith("horror"))) return "Horror";
+  if (niches.some((niche) => niche.startsWith("reddit") || niche === "aita")) return "Reddit";
+  return channel.isDefault ? "Default" : "General";
+}
+
+function pickSuggestedOutroChannel(
+  channels: YouTubeChannelOption[],
+  niche: string,
+  genre?: string
+): YouTubeChannelOption | undefined {
+  const wanted = niche.startsWith("horror")
+    ? ["horror", "horror_comic", genre ?? ""]
+    : niche === "reddit"
+      ? ["reddit", "reddit_stories", "aita"]
+      : [];
+  const normalized = wanted.filter(Boolean);
+  return (
+    channels.find((channel) =>
+      (channel.niches ?? []).some((tag) => normalized.includes(tag.toLowerCase()))
+    ) ??
+    channels.find((channel) => channel.isDefault) ??
+    channels[0]
+  );
+}
+
 export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const create = useReelStudio((state) => state.create);
   const loading = useReelStudio((state) => state.loading);
@@ -54,10 +95,12 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const horrorAudios = useReelStudio((state) => state.horrorAudios);
   const imageModels = useReelStudio((state) => state.imageModels);
   const artStyles = useReelStudio((state) => state.artStyles);
+  const youtubeChannels = useReelStudio((state) => state.youtubeChannels);
   const loadGameplay = useReelStudio((state) => state.loadGameplay);
   const loadHorrorAudio = useReelStudio((state) => state.loadHorrorAudio);
   const loadImageModels = useReelStudio((state) => state.loadImageModels);
   const loadArtStyles = useReelStudio((state) => state.loadArtStyles);
+  const loadYouTubeChannels = useReelStudio((state) => state.loadYouTubeChannels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
   const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
@@ -68,7 +111,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     void loadHorrorAudio();
     void loadImageModels();
     void loadArtStyles();
-  }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles]);
+    void loadYouTubeChannels();
+  }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles, loadYouTubeChannels]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +130,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
 
   const selectedClip = gameplayClips.find((clip) => clip.key === form.gameplayKey);
   const selectedHorrorAudio = horrorAudios.find((audio) => audio.key === form.horrorAudioKey);
+  const selectedOutroChannel = youtubeChannels.find((channel) => channel.id === form.outroChannelId);
   const selectedImageModel = imageModels.find((option) => option.model === form.imageModel);
   const selectedVoice = useReelStudio((state) =>
     state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
@@ -100,6 +145,18 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     form.artStyleId && selectedImageModel && selectedImageModel.supportsReferenceArt === false
   );
   const motionMode = form.motionMode ?? "parallax";
+  const suggestedOutroChannel = useMemo(
+    () => pickSuggestedOutroChannel(youtubeChannels, form.niche, form.genre),
+    [form.genre, form.niche, youtubeChannels]
+  );
+
+  useEffect(() => {
+    if (form.outroChannelId || !suggestedOutroChannel) return;
+    setForm((current) => ({
+      ...current,
+      outroChannelId: current.outroChannelId || suggestedOutroChannel.id,
+    }));
+  }, [form.outroChannelId, suggestedOutroChannel]);
 
   return (
     <form
@@ -114,6 +171,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           gameplayKey: form.gameplayKey || undefined,
           imageModel: form.imageModel || undefined,
           horrorAudioKey: form.horrorAudioKey || undefined,
+          outroChannelId: form.outroChannelId || undefined,
         });
         if (ok) onCreated?.();
       }}
@@ -140,7 +198,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             onChange={(event) => {
               const niche = event.target.value;
               const genres = NICHE_GENRES[niche] ?? [];
-              setForm({ ...form, niche, genre: genres[0] });
+              setForm({ ...form, niche, genre: genres[0], outroChannelId: undefined });
             }}
           >
             {NICHES.map((niche) => (
@@ -195,6 +253,73 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             <option value="4">4</option>
           </Select>
         </Label>
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-border bg-muted/25 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+            <Youtube size={17} />
+            Brand / Outro Channel
+          </span>
+          <span className="text-xs font-bold text-muted-foreground">
+            Recorded into this video
+          </span>
+        </div>
+        <Label>
+          Channel used in the outro
+          <Select
+            value={form.outroChannelId ?? ""}
+            onChange={(event) => setForm({ ...form, outroChannelId: event.target.value || undefined })}
+          >
+            <option value="">Auto by niche</option>
+            {youtubeChannels.map((channel) => (
+              <option key={channel.id} value={channel.id}>
+                {channelName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
+              </option>
+            ))}
+          </Select>
+        </Label>
+
+        {selectedOutroChannel ? (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-background/70 p-2.5">
+            {selectedOutroChannel.logoUrl ? (
+              <img
+                className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
+                src={selectedOutroChannel.logoUrl}
+                alt=""
+              />
+            ) : (
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+                <UserCircle size={24} />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-extrabold text-foreground">
+                {channelName(selectedOutroChannel)}
+              </div>
+              <div className="truncate text-xs font-semibold text-muted-foreground">
+                {channelHandle(selectedOutroChannel)}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  {channelPurpose(selectedOutroChannel)}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  {selectedOutroChannel.privacyStatus}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            No channel is selected. The renderer will fall back to the niche default name unless you connect a
+            YouTube channel first.
+          </p>
+        )}
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+          This controls the channel name, logo, and spoken outro burned into the generated video. The publish
+          destination will default to this same channel later, but can still be changed before upload.
+        </p>
       </div>
 
       <Label>
