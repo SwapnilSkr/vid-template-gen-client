@@ -229,7 +229,10 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     const id = get().selectedId;
     if (!id) return;
     const saved = await updateReview(id, review);
-    set({ draftReview: saved });
+    set((state) => ({
+      draftReview: saved,
+      reels: state.reels.map((item) => (reelId(item) === id ? { ...item, review: saved } : item)),
+    }));
   },
 
   async regenerateThumbnail(review) {
@@ -277,7 +280,10 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     const id = get().selectedId;
     if (!id || !review) return;
     const saved = await updateReview(id, { ...review, status: "approved" });
-    set({ draftReview: saved });
+    set((state) => ({
+      draftReview: saved,
+      reels: state.reels.map((item) => (reelId(item) === id ? { ...item, review: saved } : item)),
+    }));
   },
 
   async publish(channelId) {
