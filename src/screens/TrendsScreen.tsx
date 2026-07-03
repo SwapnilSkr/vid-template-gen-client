@@ -1,7 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Loader2, RefreshCw, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getTrendSummary, triggerTrendScout, type TrendGenreSummary } from "@/api/trends";
+import {
+  getTrendSummary,
+  listHorrorReferences,
+  type HorrorReference,
+  triggerHorrorReferenceScout,
+  triggerTrendScout,
+  type TrendGenreSummary,
+} from "@/api/trends";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { PanelTitle, panelClassName } from "@/components/ui/panel";
@@ -27,15 +34,24 @@ export function TrendsScreen() {
   const [niche, setNiche] = useState<string>("reddit");
   const [period, setPeriod] = useState<"week" | "month">("week");
   const [summary, setSummary] = useState<TrendGenreSummary[]>([]);
+  const [horrorReferences, setHorrorReferences] = useState<HorrorReference[]>([]);
   const [loading, setLoading] = useState(false);
   const [scouting, setScouting] = useState(false);
+  const [scrapingStories, setScrapingStories] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [scoutMessage, setScoutMessage] = useState<string | undefined>();
+  const isHorror = niche.startsWith("horror");
 
   async function load() {
     setLoading(true);
     setError(undefined);
     try {
       setSummary(await getTrendSummary(period, niche));
+      if (niche.startsWith("horror")) {
+        setHorrorReferences(await listHorrorReferences(8));
+      } else {
+        setHorrorReferences([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load trend summary");
     } finally {
@@ -51,13 +67,38 @@ export function TrendsScreen() {
   async function runScout() {
     setScouting(true);
     setError(undefined);
+    setScoutMessage(undefined);
     try {
-      await triggerTrendScout(period, niche);
+      const result = await triggerTrendScout(period, niche);
+      const totalUpserted = result.results.reduce((sum, item) => sum + item.upserted, 0);
+      const failed = result.failed ?? result.results.filter((item) => item.error);
+      setScoutMessage(
+        failed.length
+          ? `Scout saved ${totalUpserted} samples and refreshed ${result.digestsRefreshed} digests. ${failed.length} target${failed.length === 1 ? "" : "s"} failed; see server logs for full API errors.`
+          : `Scout saved ${totalUpserted} samples and refreshed ${result.digestsRefreshed} digests.`
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run trend scout");
     } finally {
       setScouting(false);
+    }
+  }
+
+  async function runHorrorReferenceScout() {
+    setScrapingStories(true);
+    setError(undefined);
+    setScoutMessage(undefined);
+    try {
+      const result = await triggerHorrorReferenceScout(20);
+      setScoutMessage(
+        `Horror story scrape scanned ${result.scanned} public-domain references and saved ${result.upserted}. ${result.skipped} skipped${result.errors.length ? `, ${result.errors.length} errors` : ""}.`
+      );
+      setHorrorReferences(await listHorrorReferences(8));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to scrape horror story references");
+    } finally {
+      setScrapingStories(false);
     }
   }
 
@@ -101,12 +142,28 @@ export function TrendsScreen() {
             {scouting ? <Loader2 className="animate-spin" size={16} /> : <TrendingUp size={16} />}
             Run Scout
           </Button>
+          {isHorror ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void runHorrorReferenceScout()}
+              disabled={scrapingStories}
+            >
+              {scrapingStories ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+              Scrape Stories
+            </Button>
+          ) : null}
         </div>
       </header>
 
       {error ? (
         <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs leading-relaxed text-destructive">
           {error}
+        </div>
+      ) : null}
+      {scoutMessage ? (
+        <div className="mb-3 rounded-lg border border-border bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          {scoutMessage}
         </div>
       ) : null}
 
@@ -119,6 +176,8 @@ export function TrendsScreen() {
           </p>
         </div>
       ) : null}
+
+      {isHorror ? <HorrorReferenceLibrary refs={horrorReferences} loading={loading || scrapingStories} /> : null}
 
       <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         {summary.map((genre) => (
@@ -184,6 +243,62 @@ function GenreCard({ genre }: { genre: TrendGenreSummary }) {
         View all {genre.sampleSize} samples
         <ChevronRight size={14} />
       </Link>
+    </div>
+  );
+}
+
+function HorrorReferenceLibrary({ refs, loading }: { refs: HorrorReference[]; loading: boolean }) {
+  return (
+    <div className={cn(panelClassName, "mb-3 grid gap-3 p-3.5")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <PanelTitle>Horror Story References</PanelTitle>
+          <p className="m-0 mt-1 text-xs leading-relaxed text-muted-foreground">
+            Public-domain references used by the AI horror story-bible pass. These guide atmosphere and structure, not verbatim narration.
+          </p>
+        </div>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">
+          {loading ? "Loading" : `${refs.length} shown`}
+        </span>
+      </div>
+
+      {!refs.length ? (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2.5 text-xs font-semibold text-muted-foreground">
+          No scraped references yet. Use Scrape Stories to seed the horror planner.
+        </div>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {refs.map((ref) => (
+            <a
+              key={ref._id ?? ref.sourceUrl}
+              href={ref.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="grid min-h-40 gap-2 rounded-md border border-border bg-background/70 p-3 text-xs no-underline hover:bg-accent"
+            >
+              <div className="min-w-0">
+                <div className="line-clamp-2 font-extrabold leading-snug text-foreground">{ref.title}</div>
+                <div className="mt-1 truncate font-semibold text-muted-foreground">{ref.author ?? "Unknown author"}</div>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <span className="rounded-full bg-muted px-2 py-0.5 font-bold text-muted-foreground">
+                  score {ref.qualityScore}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 font-bold text-muted-foreground">
+                  used {ref.usedInReelIds?.length ?? 0}
+                </span>
+                <span className="rounded-full bg-success/15 px-2 py-0.5 font-bold text-success-foreground">
+                  {ref.license.replace("_", " ")}
+                </span>
+              </div>
+              <div className="line-clamp-2 leading-snug text-muted-foreground">
+                {ref.genreTags.slice(0, 4).join(" · ") || "classic horror"}
+              </div>
+              <div className="line-clamp-3 leading-snug text-muted-foreground">{ref.excerpt}</div>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
