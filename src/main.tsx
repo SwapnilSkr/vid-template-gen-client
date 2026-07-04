@@ -7,6 +7,9 @@ import { ReviewScreen } from "@/screens/ReviewScreen";
 import { TrendsScreen } from "@/screens/TrendsScreen";
 import { GenreDetailScreen } from "@/screens/GenreDetailScreen";
 import { CreateReelScreen } from "@/screens/CreateReelScreen";
+import { YtSearchScreen } from "@/screens/YtSearchScreen";
+import { YtImportDetailScreen } from "@/screens/YtImportDetailScreen";
+import { getYtImport } from "@/api/yt-imports";
 import "@/styles.css";
 
 const rootRoute = createRootRoute({
@@ -42,7 +45,27 @@ export const createReelRoute = createRoute({
   component: CreateReelScreen,
 });
 
-const routeTree = rootRoute.addChildren([reviewRoute, trendsRoute, trendsGenreRoute, createReelRoute]);
+export const ytSearchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/youtube",
+  component: YtSearchScreen,
+});
+
+export const ytImportDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/youtube/$importId",
+  loader: ({ params }) => getYtImport(params.importId),
+  component: YtImportDetailScreen,
+});
+
+const routeTree = rootRoute.addChildren([
+  reviewRoute,
+  trendsRoute,
+  trendsGenreRoute,
+  createReelRoute,
+  ytSearchRoute,
+  ytImportDetailRoute,
+]);
 
 const router = createRouter({
   routeTree,

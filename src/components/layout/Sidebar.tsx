@@ -9,6 +9,7 @@ import {
   Play,
   Send,
   TrendingUp,
+  Youtube,
 } from "lucide-react";
 import type { Reel } from "@/api/reels";
 import { cn } from "@/lib/utils";
@@ -53,7 +54,7 @@ const queueNav: { name: string; icon: typeof Home; filter: QueueFilter }[] = [
 
 /** Library sections without a backing screen yet — shown but disabled instead
  * of a dead "#" link, so it's honest about what's actually built. */
-const comingSoonLibraryNav = ["Templates", "Assets", "Voices", "Captions"] as const;
+const comingSoonLibraryNav = ["Templates", "Assets", "Voices"] as const;
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -133,6 +134,14 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       })}
 
       <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase text-muted-foreground">Library</div>
+      <Link
+        to="/youtube"
+        onClick={onNavigate}
+        className={navLinkClass(pathname.startsWith("/youtube"))}
+      >
+        <Youtube size={17} />
+        <span>YouTube Import</span>
+      </Link>
       <Link
         to="/"
         search={{ status: undefined }}
