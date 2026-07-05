@@ -45,18 +45,27 @@ export function TrendsScreen() {
   async function load() {
     setLoading(true);
     setError(undefined);
-    try {
-      setSummary(await getTrendSummary(period, niche));
-      if (niche.startsWith("horror")) {
-        setHorrorReferences(await listHorrorReferences(8));
-      } else {
-        setHorrorReferences([]);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load trend summary");
-    } finally {
-      setLoading(false);
-    }
+    const wantsReferences = niche.startsWith("horror");
+    // Fetch the trend summary and the horror references INDEPENDENTLY — horror
+    // often has no YouTube trend data (or no API key), and a summary failure
+    // must not suppress the scraped references (previously they shared one try
+    // block, so references never loaded when the summary threw).
+    const [summaryResult, referencesResult] = await Promise.allSettled([
+      getTrendSummary(period, niche),
+      wantsReferences ? listHorrorReferences(8) : Promise.resolve([]),
+    ]);
+
+    setSummary(summaryResult.status === "fulfilled" ? summaryResult.value : []);
+    setHorrorReferences(referencesResult.status === "fulfilled" ? referencesResult.value : []);
+
+    const failure =
+      summaryResult.status === "rejected"
+        ? summaryResult.reason
+        : referencesResult.status === "rejected"
+          ? referencesResult.reason
+          : undefined;
+    setError(failure instanceof Error ? failure.message : failure ? "Failed to load trend data" : undefined);
+    setLoading(false);
   }
 
   useEffect(() => {

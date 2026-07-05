@@ -31,7 +31,7 @@ export function RecentReelsList({ selectedId, reels: reelsProp, title }: RecentR
         <div className="hidden min-h-10 grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] items-center gap-2.5 border-b border-border/60 bg-muted px-3.5 py-2 text-[11px] font-extrabold text-muted-foreground md:grid">
           <span>Title</span>
           <span>Genre</span>
-          <span>Source</span>
+          <span>Mode</span>
           <span>Status</span>
           <span>Actions</span>
         </div>
@@ -65,7 +65,13 @@ export function RecentReelsList({ selectedId, reels: reelsProp, title }: RecentR
                 className="min-w-0 border-0 bg-transparent p-0 text-left text-xs font-semibold text-foreground"
                 onClick={() => void select(id)}
               >
-                <span className="block truncate">{reel.storySource ?? reel.source ?? "auto"}</span>
+                <span className="block truncate">
+                  {(reel.partCount ?? 1) > 1
+                    ? `Part ${reel.partNumber ?? 1}/${reel.partCount}`
+                    : reel.niche.startsWith("horror")
+                      ? "Standalone"
+                      : reel.storySource ?? reel.source ?? "auto"}
+                </span>
               </button>
               <button
                 type="button"

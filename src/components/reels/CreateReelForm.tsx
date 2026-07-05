@@ -1,15 +1,21 @@
 import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
+import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { panelClassName } from "@/components/ui/panel";
 import { MOTION_MODES, NICHE_GENRES, NICHES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 import { useReelStudio } from "@/store/reel-studio";
 import { formatLabel, parsePartsValue } from "@/utils/reel";
+import { EditEffectsControls } from "./EditEffectsControls";
 import { VoicePickerList } from "./VoicePickerList";
+
+/** The Lurker house look — the out-of-box art style for horror reels. Mirrors
+ *  the lead entry in server/src/config/art-styles.ts. */
+const DEFAULT_HORROR_ART_STYLE_ID = "classic_horror_comic";
 
 const defaultForm: CreateReelInput = {
   niche: "reddit",
@@ -106,6 +112,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
   const [resolvedDefaults, setResolvedDefaults] = useState<ReelDefaults | undefined>();
+  const [horrorReferences, setHorrorReferences] = useState<HorrorReference[]>([]);
+  const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
+  const isHorrorNiche = form.niche.startsWith("horror");
 
   useEffect(() => {
     void loadGameplay();
@@ -114,6 +123,29 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     void loadArtStyles();
     void loadYouTubeChannels();
   }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles, loadYouTubeChannels]);
+
+  useEffect(() => {
+    if (!isHorrorNiche) return;
+    let cancelled = false;
+    void listHorrorReferences(20)
+      .then((references) => {
+        if (!cancelled) setHorrorReferences(references);
+      })
+      .catch(() => {
+        if (!cancelled) setHorrorReferences([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHorrorNiche]);
+
+  // Seed the house look for horror: default the art style to the Lurker look
+  // (classic_horror_comic). Voice/captions/motion/audio-FX are seeded silently
+  // server-side from the default recipe and stay editable in the Studio.
+  useEffect(() => {
+    if (!form.niche.startsWith("horror") || form.artStyleId) return;
+    setForm((current) => ({ ...current, artStyleId: DEFAULT_HORROR_ART_STYLE_ID }));
+  }, [form.niche, form.artStyleId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,11 +165,10 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const selectedHorrorAudio = horrorAudios.find((audio) => audio.key === form.horrorAudioKey);
   const selectedOutroChannel = youtubeChannels.find((channel) => channel.id === form.outroChannelId);
   const selectedImageModel = imageModels.find((option) => option.model === form.imageModel);
+  const selectedHorrorReference = horrorReferences.find((reference) => reference._id === form.horrorReferenceId);
   const selectedVoice = useReelStudio((state) =>
     state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
   );
-  const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
-  const isHorrorNiche = form.niche.startsWith("horror");
   const genreOptions = NICHE_GENRES[form.niche] ?? [];
   const estimatedSceneCount = form.niche.startsWith("horror") ? 9 : 5;
   const horrorArtStyles = artStyles.filter((style) => style.niches.includes("horror"));
@@ -145,7 +176,10 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const refArtModelWarning = Boolean(
     form.artStyleId && selectedImageModel && selectedImageModel.supportsReferenceArt === false
   );
-  const motionMode = form.motionMode ?? "parallax";
+  // Horror's house default is Ken Burns (mirrors the server default recipe);
+  // other niches fall back to parallax.
+  const motionMode = form.motionMode ?? (isHorrorNiche ? "ken_burns" : "parallax");
+
   const suggestedOutroChannel = useMemo(
     () => pickSuggestedOutroChannel(youtubeChannels, form.niche, form.genre),
     [form.genre, form.niche, youtubeChannels]
@@ -192,7 +226,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_minmax(145px,0.8fr)_minmax(120px,0.6fr)_minmax(90px,0.45fr)]">
+      <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(130px,1fr))]">
         <Label>
           Niche
           <Select
@@ -220,17 +254,19 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             ))}
           </Select>
         </Label>
-        <Label>
-          Source
-          <Select
-            value={form.source}
-            onChange={(event) => setForm({ ...form, source: event.target.value as CreateReelInput["source"] })}
-          >
-            <option value="hybrid">hybrid</option>
-            <option value="llm">llm</option>
-            <option value="verbatim">verbatim</option>
-          </Select>
-        </Label>
+        {isGameplayNiche ? (
+          <Label>
+            Source
+            <Select
+              value={form.source}
+              onChange={(event) => setForm({ ...form, source: event.target.value as CreateReelInput["source"] })}
+            >
+              <option value="hybrid">hybrid</option>
+              <option value="llm">llm</option>
+              <option value="verbatim">verbatim</option>
+            </Select>
+          </Label>
+        ) : null}
         <Label>
           Tier
           <Select
@@ -242,19 +278,26 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             <option value="premium">premium</option>
           </Select>
         </Label>
+        {(isGameplayNiche || isHorrorNiche) ? (
         <Label>
-          Parts
+          {isHorrorNiche ? "Series" : "Parts"}
           <Select
             value={String(form.parts)}
             onChange={(event) => setForm({ ...form, parts: parsePartsValue(event.target.value) })}
           >
-            <option value="off">1</option>
-            <option value="auto">auto</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
+            <option value="off">{isHorrorNiche ? "Standalone" : "1"}</option>
+            <option value="auto">{isHorrorNiche ? "Auto series" : "auto"}</option>
+            <option value="2">{isHorrorNiche ? "2 episodes" : "2"}</option>
+            <option value="3">{isHorrorNiche ? "3 episodes" : "3"}</option>
+            <option value="4">{isHorrorNiche ? "4 episodes" : "4"}</option>
           </Select>
+          {isHorrorNiche ? (
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              Series creates separate reels grouped into one story arc; pasted stories are split into episodes.
+            </span>
+          ) : null}
         </Label>
+        ) : null}
       </div>
 
       <div className="grid gap-2 rounded-lg border border-border bg-muted/25 p-3">
@@ -431,6 +474,78 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </Label>
       )}
 
+      {isHorrorNiche && (
+        <div className="grid gap-2.5 rounded-lg border border-border bg-muted/30 p-3">
+          <div className="grid gap-1">
+            <strong className="text-[13px] text-foreground">How this reel is made</strong>
+            <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+              Every horror reel starts from the house style — deep dramatic narrator, one-word ALL-CAPS
+              captions, and cinematic Ken Burns motion. Your direction and reference seed the script; everything
+              is editable per-scene in the Studio before image or voice spend.
+            </p>
+          </div>
+          <label className="flex items-start gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={(form.pipelineMode ?? "review") === "review"}
+              onChange={(event) =>
+                setForm({ ...form, pipelineMode: event.target.checked ? "review" : "auto" })
+              }
+            />
+            <span>
+              Review &amp; edit the plan before generating
+              <span className="block text-muted-foreground">
+                Pauses after the cheap script/scene plan so you can edit script, art, voice, and captions in the
+                Studio before any image/voice spend.
+              </span>
+            </span>
+          </label>
+          <Label className="text-xs">
+            Reference story (optional)
+            <Select
+              value={form.horrorReferenceId ?? ""}
+              onChange={(event) => setForm({ ...form, horrorReferenceId: event.target.value || undefined })}
+            >
+              <option value="">Auto-pick a public-domain reference</option>
+              {horrorReferences.map((reference) => (
+                <option key={reference._id ?? reference.sourceUrl} value={reference._id ?? ""}>
+                  {reference.title}
+                  {reference.author ? ` - ${reference.author}` : ""}
+                  {reference.license ? ` - ${reference.license.replace(/_/g, " ")}` : ""}
+                </option>
+              ))}
+            </Select>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              Used as inspiration for atmosphere, dread mechanics, and escalation shape; not copied.
+            </span>
+          </Label>
+          {selectedHorrorReference ? (
+            <div className="grid gap-1 rounded-md border border-border bg-background/70 p-2.5 text-xs">
+              <div className="font-extrabold text-foreground">
+                {selectedHorrorReference.title}
+                {selectedHorrorReference.author ? ` - ${selectedHorrorReference.author}` : ""}
+              </div>
+              <p className="m-0 leading-relaxed text-muted-foreground">
+                {selectedHorrorReference.promptBrief || selectedHorrorReference.excerpt}
+              </p>
+            </div>
+          ) : null}
+          <Label className="text-xs">
+            Direction or story draft (optional)
+            <Textarea
+              rows={4}
+              value={form.providedScript ?? ""}
+              placeholder="e.g. An urban legend who preys on people on rainy nights. Or paste a full draft; long drafts are adapted closely and can be split into series episodes."
+              onChange={(event) => setForm({ ...form, providedScript: event.target.value || undefined })}
+            />
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              Short notes guide the AI writer. Long drafts are treated as source material. You can edit the generated script in Studio before assets are produced.
+            </span>
+          </Label>
+        </div>
+      )}
+
       {!isGameplayNiche && (
         <Label>
           Image Model
@@ -542,6 +657,17 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               {MOTION_MODES.find((mode) => mode.value === motionMode)?.hint}
             </p>
           </Label>
+
+          <div className="grid gap-2">
+            <span className="text-xs font-bold text-foreground/80">Editing Effects</span>
+            <EditEffectsControls
+              value={form.editEffects}
+              onChange={(editEffects) => setForm({ ...form, editEffects })}
+            />
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+              Cinematic finish applied over the whole reel — all free to toggle and re-render later in the Studio.
+            </p>
+          </div>
         </div>
       )}
 
