@@ -9,8 +9,17 @@ import {
   type YoutubeSearchResult,
 } from "@/api/yt-imports";
 import { Button } from "@/components/ui/button";
+import {
+  ConfirmDialog,
+  type ConfirmDialogAction,
+} from "@/components/ui/confirm-dialog";
 import { Input, Select } from "@/components/ui/input";
-import { Panel, PanelHeader, PanelTitle, panelClassName } from "@/components/ui/panel";
+import {
+  Panel,
+  PanelHeader,
+  PanelTitle,
+  panelClassName,
+} from "@/components/ui/panel";
 import {
   FrameRangeControls,
   parseFrameRange,
@@ -23,7 +32,13 @@ import { cn } from "@/lib/utils";
 
 export function YtSearchScreen() {
   const navigate = useNavigate();
-  const { imports, loading: loadingImports, error, refresh, setError } = useYtImportsPoll();
+  const {
+    imports,
+    loading: loadingImports,
+    error,
+    refresh,
+    setError,
+  } = useYtImportsPoll();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<YoutubeSearchResult[]>([]);
@@ -34,7 +49,13 @@ export function YtSearchScreen() {
   const [storage, setStorage] = useState<YtImportStorage>("local");
   const [downloadCaptions, setDownloadCaptions] = useState(true);
   const [extractFramesOnDownload, setExtractFramesOnDownload] = useState(false);
-  const [frameRange, setFrameRange] = useState<FrameRangeValues>({ startSec: "0", endSec: "2" });
+  const [frameRange, setFrameRange] = useState<FrameRangeValues>({
+    startSec: "0",
+    endSec: "2",
+  });
+  const [confirmAction, setConfirmAction] = useState<
+    ConfirmDialogAction | undefined
+  >();
 
   const runSearch = useCallback(
     (event: React.FormEvent) => {
@@ -51,7 +72,7 @@ export function YtSearchScreen() {
         }
       });
     },
-    [query, setError]
+    [query, setError],
   );
 
   const startDownload = useCallback(
@@ -74,7 +95,10 @@ export function YtSearchScreen() {
 
           const created = await createYtImport(body);
           void refresh();
-          void navigate({ to: "/youtube/$importId", params: { importId: created._id } });
+          void navigate({
+            to: "/youtube/$importId",
+            params: { importId: created._id },
+          });
         } catch (err) {
           setError(err instanceof Error ? err.message : "Download failed");
         } finally {
@@ -90,25 +114,36 @@ export function YtSearchScreen() {
       refresh,
       navigate,
       setError,
-    ]
+    ],
   );
 
   const removeImport = useCallback(
     (id: string) => {
-      if (!confirm("Delete this import and all its assets?")) return;
-      void deleteYtImport(id).then(refresh).catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Delete failed");
+      setConfirmAction({
+        title: "Delete YouTube import?",
+        body: "Delete this import and all downloaded/extracted assets.",
+        confirmLabel: "Delete import",
+        variant: "destructive",
+        onConfirm: () =>
+          deleteYtImport(id)
+            .then(refresh)
+            .catch((err: unknown) => {
+              setError(err instanceof Error ? err.message : "Delete failed");
+            }),
       });
     },
-    [refresh, setError]
+    [refresh, setError],
   );
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 lg:p-6">
       <header className="rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
-        <h1 className="text-2xl font-extrabold text-foreground">YouTube Import</h1>
+        <h1 className="text-2xl font-extrabold text-foreground">
+          YouTube Import
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Search YouTube, download videos locally or to S3, and inspect frames with captions.
+          Search YouTube, download videos locally or to S3, and inspect frames
+          with captions.
         </p>
       </header>
 
@@ -122,15 +157,26 @@ export function YtSearchScreen() {
         <PanelHeader>
           <PanelTitle>Search</PanelTitle>
         </PanelHeader>
-        <form onSubmit={runSearch} className="flex flex-col gap-3 p-3.5 sm:flex-row">
+        <form
+          onSubmit={runSearch}
+          className="flex flex-col gap-3 p-3.5 sm:flex-row"
+        >
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search keywords…"
             className="flex-1"
           />
-          <Button type="submit" variant="default" disabled={searchPending || !query.trim()}>
-            {searchPending ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+          <Button
+            type="submit"
+            variant="default"
+            disabled={searchPending || !query.trim()}
+          >
+            {searchPending ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Search size={16} />
+            )}
             Search
           </Button>
         </form>
@@ -138,9 +184,16 @@ export function YtSearchScreen() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-extrabold uppercase text-muted-foreground">Results</h2>
+          <h2 className="text-sm font-extrabold uppercase text-muted-foreground">
+            Results
+          </h2>
           {results.length === 0 ? (
-            <div className={cn(panelClassName, "p-6 text-center text-sm text-muted-foreground")}>
+            <div
+              className={cn(
+                panelClassName,
+                "p-6 text-center text-sm text-muted-foreground",
+              )}
+            >
               Search for a video to get started.
             </div>
           ) : (
@@ -161,7 +214,9 @@ export function YtSearchScreen() {
               <PanelTitle>Download options</PanelTitle>
             </PanelHeader>
             <div className="flex flex-col gap-3 p-3.5">
-              <label className="text-xs font-bold uppercase text-muted-foreground">Storage</label>
+              <label className="text-xs font-bold uppercase text-muted-foreground">
+                Storage
+              </label>
               <Select
                 value={storage}
                 onChange={(e) => setStorage(e.target.value as YtImportStorage)}
@@ -186,15 +241,21 @@ export function YtSearchScreen() {
                 Extract frames after download
               </label>
               {extractFramesOnDownload ? (
-                <FrameRangeControls values={frameRange} onChange={setFrameRange} />
+                <FrameRangeControls
+                  values={frameRange}
+                  onChange={setFrameRange}
+                />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  You can extract frames later on the import detail page with any time range.
+                  You can extract frames later on the import detail page with
+                  any time range.
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
                 S3 uploads use keys like{" "}
-                <code className="rounded bg-muted px-1">yt-imports/VIDEO_ID_title-slug/</code>
+                <code className="rounded bg-muted px-1">
+                  yt-imports/VIDEO_ID_title-slug/
+                </code>
               </p>
             </div>
           </Panel>
@@ -209,16 +270,27 @@ export function YtSearchScreen() {
                   <Loader2 className="animate-spin" size={20} />
                 </div>
               ) : imports.length === 0 ? (
-                <p className="px-2 py-4 text-sm text-muted-foreground">No downloads yet.</p>
+                <p className="px-2 py-4 text-sm text-muted-foreground">
+                  No downloads yet.
+                </p>
               ) : (
                 imports.map((item) => (
-                  <YtImportListItem key={item._id} item={item} onDelete={removeImport} />
+                  <YtImportListItem
+                    key={item._id}
+                    item={item}
+                    onDelete={removeImport}
+                  />
                 ))
               )}
             </div>
           </Panel>
         </aside>
       </div>
+      <ConfirmDialog
+        action={confirmAction}
+        busy={loadingImports}
+        onClose={() => setConfirmAction(undefined)}
+      />
     </div>
   );
 }

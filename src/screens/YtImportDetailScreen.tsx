@@ -9,7 +9,16 @@ import {
   resolveMediaUrl,
 } from "@/api/yt-imports";
 import { Button } from "@/components/ui/button";
-import { Panel, PanelHeader, PanelTitle, panelClassName } from "@/components/ui/panel";
+import {
+  ConfirmDialog,
+  type ConfirmDialogAction,
+} from "@/components/ui/confirm-dialog";
+import {
+  Panel,
+  PanelHeader,
+  PanelTitle,
+  panelClassName,
+} from "@/components/ui/panel";
 import {
   FrameRangeControls,
   parseFrameRange,
@@ -40,8 +49,15 @@ function frameRangeFromItem(item: {
 export function YtImportDetailScreen() {
   const { importId } = route.useParams();
   const initialData = route.useLoaderData();
-  const { item, loading, error, refresh, beginBurstPolling, patchItem, setError } =
-    useYtImportPoll(importId, initialData);
+  const {
+    item,
+    loading,
+    error,
+    refresh,
+    beginBurstPolling,
+    patchItem,
+    setError,
+  } = useYtImportPoll(importId, initialData);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -50,16 +66,22 @@ export function YtImportDetailScreen() {
   const [displayTime, setDisplayTime] = useState(0);
   const [selectedFrame, setSelectedFrame] = useState<number | undefined>();
   const [frameRange, setFrameRange] = useState<FrameRangeValues>(() =>
-    frameRangeFromItem(initialData)
+    frameRangeFromItem(initialData),
   );
+  const [confirmAction, setConfirmAction] = useState<
+    ConfirmDialogAction | undefined
+  >();
   const [extractPending, startExtractTransition] = useTransition();
 
-  const handleTimeUpdate = useThrottledCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
-    const time = event.currentTarget.currentTime;
-    playheadRef.current = time;
-    setSelectedFrame(undefined);
-    setDisplayTime(time);
-  }, 250);
+  const handleTimeUpdate = useThrottledCallback(
+    (event: React.SyntheticEvent<HTMLVideoElement>) => {
+      const time = event.currentTarget.currentTime;
+      playheadRef.current = time;
+      setSelectedFrame(undefined);
+      setDisplayTime(time);
+    },
+    250,
+  );
 
   const activeTime = useMemo(() => {
     if (selectedFrame != null && item?.fps) return selectedFrame / item.fps;
@@ -68,7 +90,7 @@ export function YtImportDetailScreen() {
 
   const caption = useMemo(
     () => findCaptionAt(item?.captions, activeTime),
-    [item?.captions, activeTime]
+    [item?.captions, activeTime],
   );
 
   const handleExtractFrames = useCallback(() => {
@@ -89,14 +111,16 @@ export function YtImportDetailScreen() {
         setFrameRange(frameRangeFromItem({ ...item, ...range }));
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Frame extraction failed");
+        setError(
+          err instanceof Error ? err.message : "Frame extraction failed",
+        );
         await refresh();
       }
     });
   }, [item, frameRange, refresh, beginBurstPolling, patchItem, setError]);
 
   const handleDelete = useCallback(async () => {
-    if (!item || !confirm("Delete this import and all its assets?")) return;
+    if (!item) return;
     try {
       await deleteYtImport(item._id);
       window.location.href = "/youtube";
@@ -114,7 +138,7 @@ export function YtImportDetailScreen() {
       setDisplayTime(atSec);
       if (videoRef.current) videoRef.current.currentTime = atSec;
     },
-    [item?.fps]
+    [item?.fps],
   );
 
   const playAudioAtTime = useCallback(
@@ -123,7 +147,7 @@ export function YtImportDetailScreen() {
       audioRef.current.src = audioClipUrl(item._id, atSec, 3);
       await audioRef.current.play().catch(() => {});
     },
-    [item]
+    [item],
   );
 
   if (loading && !item) {
@@ -136,7 +160,9 @@ export function YtImportDetailScreen() {
 
   if (!item) {
     return (
-      <div className="p-6 text-center text-destructive">{error ?? "Import not found"}</div>
+      <div className="p-6 text-center text-destructive">
+        {error ?? "Import not found"}
+      </div>
     );
   }
 
@@ -146,7 +172,8 @@ export function YtImportDetailScreen() {
   const framesBusy = extractPending || processingFrames;
   const frames = item.frameIndices ?? [];
   const hasFrames = importHasVisibleFrames(item);
-  const canViewVideo = Boolean(videoSrc) && item.status !== "failed" && item.status !== "pending";
+  const canViewVideo =
+    Boolean(videoSrc) && item.status !== "failed" && item.status !== "pending";
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 lg:p-6">
@@ -158,7 +185,18 @@ export function YtImportDetailScreen() {
           <ArrowLeft size={16} />
           Back to search
         </Link>
-        <Button variant="destructive" onClick={() => void handleDelete()}>
+        <Button
+          variant="destructive"
+          onClick={() =>
+            setConfirmAction({
+              title: "Delete YouTube import?",
+              body: "Delete this import and all downloaded/extracted assets.",
+              confirmLabel: "Delete import",
+              variant: "destructive",
+              onConfirm: () => handleDelete(),
+            })
+          }
+        >
           <Trash2 size={16} />
           Delete assets
         </Button>
@@ -180,7 +218,9 @@ export function YtImportDetailScreen() {
       {inProgress || processingFrames ? (
         <Panel>
           <PanelHeader>
-            <PanelTitle>{processingFrames ? "Extracting frames" : "Processing"}</PanelTitle>
+            <PanelTitle>
+              {processingFrames ? "Extracting frames" : "Processing"}
+            </PanelTitle>
           </PanelHeader>
           <div className="p-4">
             <div className="mb-2 flex items-center gap-2 text-sm">
@@ -193,7 +233,9 @@ export function YtImportDetailScreen() {
                 style={{ width: `${item.progress}%` }}
               />
             </div>
-            {item.error ? <p className="mt-2 text-sm text-destructive">{item.error}</p> : null}
+            {item.error ? (
+              <p className="mt-2 text-sm text-destructive">{item.error}</p>
+            ) : null}
           </div>
         </Panel>
       ) : null}
@@ -203,7 +245,9 @@ export function YtImportDetailScreen() {
           <Panel>
             <PanelHeader>
               <PanelTitle>Video</PanelTitle>
-              <span className="text-xs text-muted-foreground">{formatTime(displayTime)}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatTime(displayTime)}
+              </span>
             </PanelHeader>
             <div className="p-3.5">
               <video
@@ -233,7 +277,9 @@ export function YtImportDetailScreen() {
                 {caption?.text ? (
                   caption.text
                 ) : (
-                  <span className="text-muted-foreground">No caption at this timestamp.</span>
+                  <span className="text-muted-foreground">
+                    No caption at this timestamp.
+                  </span>
                 )}
               </div>
               <audio ref={audioRef} className="hidden" />
@@ -249,10 +295,12 @@ export function YtImportDetailScreen() {
                     <p className="text-xs text-muted-foreground">
                       {item.frameCount.toLocaleString()} frames
                       {item.fps ? ` @ ${item.fps.toFixed(2)} fps` : ""}
-                      {item.frameRangeStartSec != null && item.frameRangeEndSec != null
+                      {item.frameRangeStartSec != null &&
+                      item.frameRangeEndSec != null
                         ? ` · ${item.frameRangeStartSec}s–${item.frameRangeEndSec}s`
                         : ""}
-                      {item.frameIndicesTotal && item.frameIndicesTotal > frames.length
+                      {item.frameIndicesTotal &&
+                      item.frameIndicesTotal > frames.length
                         ? ` — showing first ${frames.length}`
                         : ""}
                     </p>
@@ -292,8 +340,9 @@ export function YtImportDetailScreen() {
                 ) : (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      Scrub the video to inspect captions, then choose a time range and extract
-                      frames. You can do this anytime after the video finishes downloading.
+                      Scrub the video to inspect captions, then choose a time
+                      range and extract frames. You can do this anytime after
+                      the video finishes downloading.
                     </p>
                     <FrameRangeControls
                       values={frameRange}
@@ -302,7 +351,11 @@ export function YtImportDetailScreen() {
                       playheadSec={displayTime}
                       disabled={framesBusy}
                     />
-                    <Button variant="default" disabled={framesBusy} onClick={handleExtractFrames}>
+                    <Button
+                      variant="default"
+                      disabled={framesBusy}
+                      onClick={handleExtractFrames}
+                    >
                       {framesBusy ? (
                         <Loader2 className="animate-spin" size={16} />
                       ) : (
@@ -325,7 +378,9 @@ export function YtImportDetailScreen() {
                 <Button
                   variant="ghost"
                   className="min-h-8"
-                  onClick={() => void playAudioAtTime(selectedFrame / item.fps!)}
+                  onClick={() =>
+                    void playAudioAtTime(selectedFrame / item.fps!)
+                  }
                 >
                   <Play size={16} />
                   Play audio
@@ -353,6 +408,11 @@ export function YtImportDetailScreen() {
           Download failed: {item.error ?? "Unknown error"}
         </div>
       ) : null}
+      <ConfirmDialog
+        action={confirmAction}
+        busy={loading}
+        onClose={() => setConfirmAction(undefined)}
+      />
     </div>
   );
 }
