@@ -53,6 +53,8 @@ import {
 } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { EditEffectsControls } from "@/components/reels/EditEffectsControls";
+import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
+import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,7 +75,9 @@ const ACTIVE: Reel["status"][] = [
 ];
 
 // Mirror of server DEFAULT_CAPTION_STYLE (reel-render buildPortraitKaraoke).
-const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & { animation: "none" | "pop" } = {
+const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
+  animation: "none" | "pop";
+} = {
   fontName: "Arial",
   fontSize: 64,
   primaryColor: "#FFFFFF",
@@ -91,7 +95,10 @@ const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & { animation:
   animation: "none",
 };
 
-const VOICE_POST_PROFILES: { value: NonNullable<Reel["audioPost"]>["voiceProfile"]; label: string }[] = [
+const VOICE_POST_PROFILES: {
+  value: NonNullable<Reel["audioPost"]>["voiceProfile"];
+  label: string;
+}[] = [
   { value: "horror", label: "Dark narrator - low, compressed, room echo" },
   { value: "whisper", label: "Whisper room - close, breathy, uneasy" },
   { value: "phone", label: "Phone recording - narrow, distorted call" },
@@ -102,7 +109,11 @@ const VOICE_POST_PROFILES: { value: NonNullable<Reel["audioPost"]>["voiceProfile
 
 type InspectorTab = "source" | "look" | "effects" | "captions" | "export";
 
-const INSPECTOR_TABS: { id: InspectorTab; label: string; icon: React.ReactNode }[] = [
+const INSPECTOR_TABS: {
+  id: InspectorTab;
+  label: string;
+  icon: React.ReactNode;
+}[] = [
   { id: "source", label: "Source", icon: <Layers size={15} /> },
   { id: "look", label: "Look", icon: <Palette size={15} /> },
   { id: "effects", label: "Effects", icon: <SlidersHorizontal size={15} /> },
@@ -126,7 +137,9 @@ export function StudioScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | undefined>();
+  const [confirmAction, setConfirmAction] = useState<
+    ConfirmAction | undefined
+  >();
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("source");
 
@@ -180,7 +193,9 @@ export function StudioScreen() {
     };
     const onPageHide = () => {
       if (!reelKey) return;
-      const url = apiUrl(`/reels/${encodeURIComponent(reelKey)}/edit-draft/discard`);
+      const url = apiUrl(
+        `/reels/${encodeURIComponent(reelKey)}/edit-draft/discard`,
+      );
       if (navigator.sendBeacon) {
         navigator.sendBeacon(url);
         return;
@@ -226,7 +241,11 @@ export function StudioScreen() {
     return (
       <section className="px-4 py-6">
         <p className="text-sm text-destructive">{error ?? "Reel not found."}</p>
-        <Link to="/" search={{ status: undefined }} className="text-sm text-primary">
+        <Link
+          to="/"
+          search={{ status: undefined }}
+          className="text-sm text-primary"
+        >
           ← Back to reels
         </Link>
       </section>
@@ -243,8 +262,8 @@ export function StudioScreen() {
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
 
   return (
-    <section className="studio-workspace w-full min-w-0 overflow-x-clip bg-[#101216] px-3 py-3 text-slate-100 sm:px-4 lg:px-5">
-      <header className="sticky top-2 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-[#171a20]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
+    <section className="studio-workspace w-full min-w-0 overflow-x-clip bg-[#101216] px-3 pb-5 text-slate-100 sm:px-4 lg:px-5">
+      <header className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border border-t-0 border-slate-800 bg-[#171a20]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/"
@@ -260,7 +279,8 @@ export function StudioScreen() {
               <span className="truncate">{reel.title || "Untitled reel"}</span>
             </h1>
             <p className="mt-0.5 text-xs text-slate-400">
-              {reel.niche} · {reel.genre ?? "no genre"} · <StatusBadge status={reel.status} /> · {reel.progress}%
+              {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
+              <ReelStatusChip status={reel.status} className="min-w-[82px]" /> · {reel.progress}%
             </p>
           </div>
         </div>
@@ -270,8 +290,17 @@ export function StudioScreen() {
               Unsaved draft
             </span>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => void refresh()} disabled={busy} className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]">
-            <RefreshCw size={15} className={isGenerating ? "animate-spin" : undefined} />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void refresh()}
+            disabled={busy}
+            className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+          >
+            <RefreshCw
+              size={15}
+              className={isGenerating ? "animate-spin" : undefined}
+            />
             Refresh
           </Button>
         </div>
@@ -290,7 +319,10 @@ export function StudioScreen() {
         busy={busy}
         onApprove={() =>
           setConfirmAction({
-            title: reel.partCount && reel.partCount > 1 ? `Generate part ${reel.partNumber ?? 1}?` : "Generate reel?",
+            title:
+              reel.partCount && reel.partCount > 1
+                ? `Generate part ${reel.partNumber ?? 1}?`
+                : "Generate reel?",
             body: "This starts the paid produce run for the reviewed plan.",
             details: [
               "Generates missing scene images with OpenRouter.",
@@ -303,8 +335,8 @@ export function StudioScreen() {
         }
       />
 
-      <div className="grid min-h-[calc(100vh-132px)] min-w-0 gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(320px,380px)]">
-        <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-3 xl:max-h-[calc(100vh-24px)]">
+      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(320px,380px)]">
+        <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)]">
           <ProjectPanel
             reel={reel}
             seriesReels={seriesReels}
@@ -315,7 +347,7 @@ export function StudioScreen() {
           />
         </aside>
 
-        <main className="grid min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden">
+        <main className="grid min-w-0 content-start gap-3">
           <ProgramMonitor reel={reel} previewUrl={previewUrl} />
           <TimelinePanel
             reel={reel}
@@ -324,7 +356,11 @@ export function StudioScreen() {
             onSelectScene={setSelectedSceneIndex}
             busy={busy}
             disabled={isGenerating}
-            onAddScene={() => void run(() => addScene(id, { narration: "New scene narration." }))}
+            onAddScene={() =>
+              void run(() =>
+                addScene(id, { narration: "New scene narration." }),
+              )
+            }
           />
           {selectedScene ? (
             <SceneCard
@@ -344,7 +380,7 @@ export function StudioScreen() {
           )}
         </main>
 
-        <div className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-3 xl:max-h-[calc(100vh-24px)]">
+        <div className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)] xl:overflow-y-auto xl:pr-1">
           <InspectorPanel
             tab={inspectorTab}
             onTabChange={setInspectorTab}
@@ -353,16 +389,16 @@ export function StudioScreen() {
             run={run}
             requestConfirm={setConfirmAction}
           />
+          <VoiceVariantsPanel reel={reel} reelId={id} onRefresh={refresh} />
         </div>
       </div>
-      <ConfirmModal action={confirmAction} busy={busy} onClose={() => setConfirmAction(undefined)} />
+      <ConfirmModal
+        action={confirmAction}
+        busy={busy}
+        onClose={() => setConfirmAction(undefined)}
+      />
     </section>
   );
-}
-
-function StatusBadge({ status }: { status: Reel["status"] }) {
-  const label = status === "plan_review" ? "awaiting review" : status.replace(/_/g, " ");
-  return <span className="font-semibold text-cyan-200">{label}</span>;
 }
 
 function EditorPanel({
@@ -379,7 +415,12 @@ function EditorPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("min-w-0 rounded-lg border border-slate-800 bg-[#171a20] shadow-[0_18px_50px_rgba(0,0,0,0.18)]", className)}>
+    <section
+      className={cn(
+        "min-w-0 rounded-lg border border-slate-800 bg-[#171a20] shadow-[0_18px_50px_rgba(0,0,0,0.18)]",
+        className,
+      )}
+    >
       <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
         <strong className="inline-flex min-w-0 items-center gap-2 text-[13px] uppercase tracking-[0.08em] text-slate-300">
           {icon}
@@ -408,9 +449,17 @@ function ProjectPanel({
   onSelectScene: (index: number) => void;
 }) {
   return (
-    <EditorPanel title="Project" icon={<Layers size={15} />} className="overflow-hidden">
-      <div className="grid max-h-[calc(100vh-96px)] min-w-0 gap-3 overflow-y-auto overflow-x-hidden p-3">
-        <ReelContextBar reel={reel} seriesReels={seriesReels} currentId={currentId} />
+    <EditorPanel
+      title="Project"
+      icon={<Layers size={15} />}
+      className="overflow-hidden xl:max-h-[calc(100vh-83px)]"
+    >
+      <div className="grid min-w-0 gap-3 overflow-x-hidden p-3 xl:max-h-[calc(100vh-138px)] xl:overflow-y-auto">
+        <ReelContextBar
+          reel={reel}
+          seriesReels={seriesReels}
+          currentId={currentId}
+        />
         <div className="grid gap-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold text-slate-200">Scene bin</span>
@@ -426,15 +475,18 @@ function ProjectPanel({
                   "grid grid-cols-[42px_1fr] items-center gap-2 rounded-md border p-1.5 text-left transition-colors",
                   selectedSceneIndex === scene.index
                     ? "border-cyan-400/70 bg-cyan-400/10"
-                    : "border-slate-800 bg-[#111419] hover:border-slate-600 hover:bg-[#1d222b]"
+                    : "border-slate-800 bg-[#111419] hover:border-slate-600 hover:bg-[#1d222b]",
                 )}
               >
                 <SceneThumb reel={reel} scene={scene} className="w-[42px]" />
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-bold text-slate-100">
-                    {String(scene.index + 1).padStart(2, "0")} · {scene.narration || "Untitled beat"}
+                    {String(scene.index + 1).padStart(2, "0")} ·{" "}
+                    {scene.narration || "Untitled beat"}
                   </span>
-                  <span className="block truncate text-[11px] text-slate-500">{scene.motion.type}</span>
+                  <span className="block truncate text-[11px] text-slate-500">
+                    {scene.motion.type}
+                  </span>
                 </span>
               </button>
             ))}
@@ -445,10 +497,18 @@ function ProjectPanel({
   );
 }
 
-function ProgramMonitor({ reel, previewUrl }: { reel: Reel; previewUrl?: string }) {
+function ProgramMonitor({
+  reel,
+  previewUrl,
+}: {
+  reel: Reel;
+  previewUrl?: string;
+}) {
   return (
     <EditorPanel
-      title={reel.editDraft ? "Program monitor · local draft" : "Program monitor"}
+      title={
+        reel.editDraft ? "Program monitor · local draft" : "Program monitor"
+      }
       icon={<Play size={15} />}
       actions={
         <span className="rounded-full border border-slate-700 bg-[#101216] px-2 py-1 text-[11px] font-bold text-slate-400">
@@ -466,11 +526,11 @@ function ProgramMonitor({ reel, previewUrl }: { reel: Reel; previewUrl?: string 
               key={previewUrl}
               src={previewUrl}
               controls
-              className="relative aspect-[9/16] max-h-[58vh] w-full rounded-lg border border-slate-800 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)]"
+              className="relative aspect-[9/16] max-h-[50vh] w-full rounded-lg border border-slate-800 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)] xl:max-h-[46vh]"
             />
           </div>
         ) : (
-          <div className="grid aspect-[9/16] max-h-[58vh] w-full max-w-[360px] place-items-center rounded-lg border border-slate-800 bg-black text-sm text-slate-500">
+          <div className="grid aspect-[9/16] max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-slate-800 bg-black text-sm text-slate-500 xl:max-h-[46vh]">
             No preview yet
           </div>
         )}
@@ -479,12 +539,31 @@ function ProgramMonitor({ reel, previewUrl }: { reel: Reel; previewUrl?: string 
   );
 }
 
-function SceneThumb({ reel, scene, className }: { reel: Reel; scene: Scene; className?: string }) {
-  const draftAsset = reel.editDraft?.sceneAssets.find((item) => item.index === scene.index);
+function SceneThumb({
+  reel,
+  scene,
+  className,
+}: {
+  reel: Reel;
+  scene: Scene;
+  className?: string;
+}) {
+  const draftAsset = reel.editDraft?.sceneAssets.find(
+    (item) => item.index === scene.index,
+  );
   const imageUrl = mediaUrl(draftAsset?.assetUrl) ?? scene.assetUrl;
   return (
-    <span className={cn("grid aspect-[9/16] place-items-center overflow-hidden rounded border border-slate-700 bg-[#0b0d10] text-slate-500", className)}>
-      {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover" /> : <ImageIcon size={16} />}
+    <span
+      className={cn(
+        "grid aspect-[9/16] place-items-center overflow-hidden rounded border border-slate-700 bg-[#0b0d10] text-slate-500",
+        className,
+      )}
+    >
+      {imageUrl ? (
+        <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <ImageIcon size={16} />
+      )}
     </span>
   );
 }
@@ -525,53 +604,61 @@ function TimelinePanel({
     >
       <div className="grid min-w-0 gap-2 p-3">
         <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Video</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+            Video
+          </span>
           <div className="min-w-0 overflow-x-auto pb-1">
             <div className="flex w-max gap-1.5">
-            {scenes.map((scene) => (
-              <button
-                key={scene.index}
-                type="button"
-                onClick={() => onSelectScene(scene.index)}
-                className={cn(
-                  "relative grid min-w-[132px] grid-cols-[34px_1fr] items-center gap-2 rounded-md border px-2 py-1.5 text-left",
-                  selectedSceneIndex === scene.index
-                    ? "border-cyan-400 bg-cyan-400/10"
-                    : "border-slate-800 bg-[#111419] hover:border-slate-600"
-                )}
-              >
-                <SceneThumb reel={reel} scene={scene} className="w-[34px]" />
-                <span className="min-w-0">
-                  <span className="block truncate text-[11px] font-bold text-slate-200">Scene {scene.index + 1}</span>
-                  <span className="block text-[10px] text-slate-500">{Math.max(scene.duration || 0, 0).toFixed(1)}s</span>
-                </span>
-              </button>
-            ))}
+              {scenes.map((scene) => (
+                <button
+                  key={scene.index}
+                  type="button"
+                  onClick={() => onSelectScene(scene.index)}
+                  className={cn(
+                    "relative grid min-w-[132px] grid-cols-[34px_1fr] items-center gap-2 rounded-md border px-2 py-1.5 text-left",
+                    selectedSceneIndex === scene.index
+                      ? "border-cyan-400 bg-cyan-400/10"
+                      : "border-slate-800 bg-[#111419] hover:border-slate-600",
+                  )}
+                >
+                  <SceneThumb reel={reel} scene={scene} className="w-[34px]" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11px] font-bold text-slate-200">
+                      Scene {scene.index + 1}
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      {Math.max(scene.duration || 0, 0).toFixed(1)}s
+                    </span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
         <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Audio</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+            Audio
+          </span>
           <div className="min-w-0 overflow-x-auto pb-1">
             <div className="flex w-max gap-1.5">
-            {scenes.map((scene) => (
-              <button
-                key={scene.index}
-                type="button"
-                onClick={() => onSelectScene(scene.index)}
-                className={cn(
-                  "flex min-w-[132px] items-center gap-2 rounded-md border px-2 py-2 text-left",
-                  selectedSceneIndex === scene.index
-                    ? "border-emerald-400/70 bg-emerald-400/10"
-                    : "border-slate-800 bg-[#111419] hover:border-slate-600"
-                )}
-              >
-                <Volume2 size={14} className="text-emerald-300" />
-                <span className="truncate text-[11px] font-bold text-slate-300">
-                  Narration {scene.index + 1}
-                </span>
-              </button>
-            ))}
+              {scenes.map((scene) => (
+                <button
+                  key={scene.index}
+                  type="button"
+                  onClick={() => onSelectScene(scene.index)}
+                  className={cn(
+                    "flex min-w-[132px] items-center gap-2 rounded-md border px-2 py-2 text-left",
+                    selectedSceneIndex === scene.index
+                      ? "border-emerald-400/70 bg-emerald-400/10"
+                      : "border-slate-800 bg-[#111419] hover:border-slate-600",
+                  )}
+                >
+                  <Volume2 size={14} className="text-emerald-300" />
+                  <span className="truncate text-[11px] font-bold text-slate-300">
+                    Narration {scene.index + 1}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -596,7 +683,11 @@ function InspectorPanel({
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   return (
-    <EditorPanel title="Inspector" icon={<Settings2 size={15} />} className="overflow-hidden">
+    <EditorPanel
+      title="Inspector"
+      icon={<Settings2 size={15} />}
+      className="overflow-hidden xl:max-h-[calc(100vh-83px)]"
+    >
       <div className="flex min-w-0 flex-wrap gap-1 border-b border-slate-800 bg-[#111419] p-2">
         {INSPECTOR_TABS.map((item) => (
           <button
@@ -607,7 +698,7 @@ function InspectorPanel({
               "inline-flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-bold transition-colors",
               tab === item.id
                 ? "bg-cyan-400 text-slate-950"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
             )}
           >
             {item.icon}
@@ -615,12 +706,32 @@ function InspectorPanel({
           </button>
         ))}
       </div>
-      <div className="max-h-[calc(100vh-142px)] min-w-0 overflow-y-auto overflow-x-hidden p-3">
-        {tab === "source" ? <StoryPanel reel={reel} busy={busy} run={run} /> : null}
-        {tab === "look" ? <PresetsPanel reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} /> : null}
-        {tab === "effects" ? <EffectsPanel reel={reel} busy={busy} run={run} /> : null}
-        {tab === "captions" ? <CaptionEditor reel={reel} busy={busy} run={run} /> : null}
-        {tab === "export" ? <RegeneratePanel reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} /> : null}
+      <div className="min-w-0 overflow-x-hidden p-3 xl:max-h-[calc(100vh-174px)] xl:overflow-y-auto">
+        {tab === "source" ? (
+          <StoryPanel reel={reel} busy={busy} run={run} />
+        ) : null}
+        {tab === "look" ? (
+          <PresetsPanel
+            reel={reel}
+            busy={busy}
+            run={run}
+            requestConfirm={requestConfirm}
+          />
+        ) : null}
+        {tab === "effects" ? (
+          <EffectsPanel reel={reel} busy={busy} run={run} />
+        ) : null}
+        {tab === "captions" ? (
+          <CaptionEditor reel={reel} busy={busy} run={run} />
+        ) : null}
+        {tab === "export" ? (
+          <RegeneratePanel
+            reel={reel}
+            busy={busy}
+            run={run}
+            requestConfirm={requestConfirm}
+          />
+        ) : null}
       </div>
     </EditorPanel>
   );
@@ -642,7 +753,8 @@ function EditDraftBanner({
       <div>
         <div className="font-semibold">Unsaved editor draft</div>
         <div className="text-xs">
-          Preview assets are local only. Save uploads the draft to S3; discard deletes the local draft files.
+          Preview assets are local only. Save uploads the draft to S3; discard
+          deletes the local draft files.
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -688,9 +800,18 @@ function ConfirmModal({
         <div className="flex items-start justify-between gap-3">
           <div className="grid gap-1">
             <strong className="text-base text-white">{action.title}</strong>
-            <p className="m-0 text-sm leading-relaxed text-slate-400">{action.body}</p>
+            <p className="m-0 text-sm leading-relaxed text-slate-400">
+              {action.body}
+            </p>
           </div>
-          <Button type="button" size="icon" variant="ghost" disabled={busy} onClick={onClose} className="text-slate-300 hover:bg-slate-800">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            disabled={busy}
+            onClick={onClose}
+            className="text-slate-300 hover:bg-slate-800"
+          >
             <X size={16} />
           </Button>
         </div>
@@ -705,12 +826,19 @@ function ConfirmModal({
           </div>
         ) : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button
             type="button"
-            variant={action.variant === "destructive" ? "destructive" : "default"}
+            variant={
+              action.variant === "destructive" ? "destructive" : "default"
+            }
             disabled={busy}
             onClick={() => void confirm()}
           >
@@ -727,13 +855,6 @@ function reelKey(reel: Reel): string {
   return reel._id ?? reel.id ?? "";
 }
 
-function statusTone(status: Reel["status"]): string {
-  if (status === "completed") return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
-  if (status === "failed") return "border-red-400/30 bg-red-400/10 text-red-200";
-  if (status === "plan_review") return "border-amber-400/40 bg-amber-400/10 text-amber-200";
-  return "border-slate-700 bg-slate-800 text-slate-300";
-}
-
 function ReelContextBar({
   reel,
   seriesReels,
@@ -748,7 +869,9 @@ function ReelContextBar({
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-800 bg-[#111419] px-3 py-2 text-xs">
         <span className="font-extrabold text-slate-100">Standalone reel</span>
-        <span className="text-slate-500">Scenes, voice, captions, and render settings apply only to this reel.</span>
+        <span className="text-slate-500">
+          Scenes, voice, captions, and render settings apply only to this reel.
+        </span>
       </div>
     );
   }
@@ -767,8 +890,8 @@ function ReelContextBar({
           Edit and generate each part independently.
         </span>
       </div>
-          <div className="grid min-w-0 gap-1.5">
-            {parts.map((part) => {
+      <div className="grid min-w-0 gap-1.5">
+        {parts.map((part) => {
           const id = reelKey(part);
           const active = id === currentId;
           return (
@@ -778,16 +901,22 @@ function ReelContextBar({
               params={{ id }}
               className={cn(
                 "grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left text-xs no-underline",
-                active ? "border-cyan-400/70 bg-cyan-400/10" : "border-slate-800 bg-[#171a20] hover:bg-[#20242c]"
+                active
+                  ? "border-cyan-400/70 bg-cyan-400/10"
+                  : "border-slate-800 bg-[#171a20] hover:bg-[#20242c]",
               )}
             >
               <span className="font-extrabold text-slate-100">
                 Part {part.partNumber ?? 1}
               </span>
-              <span className="truncate text-slate-500">{part.title || part.topic || "Untitled"}</span>
-              <span className={cn("w-fit rounded-full border px-2 py-0.5 text-[10px] font-bold", statusTone(part.status))}>
-                {part.status === "plan_review" ? "review" : part.status}
+              <span className="truncate text-slate-500">
+                {part.title || part.topic || "Untitled"}
               </span>
+              <ReelStatusChip
+                size="sm"
+                status={part.status}
+                label={part.status === "plan_review" ? "review" : undefined}
+              />
             </Link>
           );
         })}
@@ -815,10 +944,21 @@ function GateBanner({
             ? `Part ${reel.partNumber ?? 1} plan ready — review & edit this episode below.`
             : "Plan ready — review & edit the script, art, voice, and captions below."}
         </span>
-        <span className="text-slate-400">No images/voice have been generated yet (no spend).</span>
+        <span className="text-slate-400">
+          No images/voice have been generated yet (no spend).
+        </span>
       </div>
-      <Button type="button" variant="default" disabled={busy} onClick={onApprove}>
-        {busy ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+      <Button
+        type="button"
+        variant="default"
+        disabled={busy}
+        onClick={onApprove}
+      >
+        {busy ? (
+          <Loader2 className="animate-spin" size={16} />
+        ) : (
+          <CheckCircle2 size={16} />
+        )}
         Generate reel
       </Button>
     </div>
@@ -860,7 +1000,9 @@ function StoryPanel({
             {reel.horrorReference.title} <ExternalLink size={12} />
           </a>
           <span className="ml-1 text-slate-500">
-            {reel.horrorReference.author ? `· ${reel.horrorReference.author}` : ""}{" "}
+            {reel.horrorReference.author
+              ? `· ${reel.horrorReference.author}`
+              : ""}{" "}
             {reel.horrorReference.license ?? ""}
           </span>
         </div>
@@ -882,7 +1024,11 @@ function StoryPanel({
           disabled={busy}
           value={reel.horrorReferenceId ?? ""}
           onChange={(e) =>
-            void run(() => replanReel(reel._id ?? reel.id ?? "", { horrorReferenceId: e.target.value }))
+            void run(() =>
+              replanReel(reel._id ?? reel.id ?? "", {
+                horrorReferenceId: e.target.value,
+              }),
+            )
           }
         >
           <option value="">Auto / none</option>
@@ -911,7 +1057,11 @@ function StoryPanel({
         className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
         disabled={busy || !script.trim()}
         onClick={() =>
-          void run(() => replanReel(reel._id ?? reel.id ?? "", { providedScript: script.trim() }))
+          void run(() =>
+            replanReel(reel._id ?? reel.id ?? "", {
+              providedScript: script.trim(),
+            }),
+          )
         }
       >
         <RefreshCw size={15} /> Re-plan from my story
@@ -941,7 +1091,8 @@ function SceneCard({
 }) {
   const [narration, setNarration] = useState(scene.narration);
   const [visualPrompt, setVisualPrompt] = useState(scene.visualPrompt);
-  const dirty = narration !== scene.narration || visualPrompt !== scene.visualPrompt;
+  const dirty =
+    narration !== scene.narration || visualPrompt !== scene.visualPrompt;
 
   useEffect(() => {
     setNarration(scene.narration);
@@ -949,7 +1100,9 @@ function SceneCard({
   }, [scene.narration, scene.visualPrompt]);
 
   const disableAll = busy || disabled;
-  const draftAsset = reel.editDraft?.sceneAssets.find((item) => item.index === scene.index);
+  const draftAsset = reel.editDraft?.sceneAssets.find(
+    (item) => item.index === scene.index,
+  );
   const imageUrl = mediaUrl(draftAsset?.assetUrl) ?? scene.assetUrl;
   const audioUrl = mediaUrl(draftAsset?.audioUrl) ?? scene.audioUrl;
 
@@ -958,7 +1111,11 @@ function SceneCard({
       <div className="grid gap-1.5">
         <div className="grid aspect-[9/16] w-full place-items-center overflow-hidden rounded-md border border-slate-700 bg-[#0b0d10] text-slate-500">
           {imageUrl ? (
-            <img src={imageUrl} alt={`Scene ${scene.index + 1}`} className="h-full w-full object-cover" />
+            <img
+              src={imageUrl}
+              alt={`Scene ${scene.index + 1}`}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <ImageIcon size={20} />
           )}
@@ -1003,8 +1160,11 @@ function SceneCard({
             onChange={(e) =>
               void run(() =>
                 updateScene(reelId, scene.index, {
-                  motion: { ...scene.motion, type: e.target.value as Scene["motion"]["type"] },
-                })
+                  motion: {
+                    ...scene.motion,
+                    type: e.target.value as Scene["motion"]["type"],
+                  },
+                }),
               )
             }
           >
@@ -1018,7 +1178,11 @@ function SceneCard({
             size="default"
             variant={dirty ? "default" : "outline"}
             disabled={disableAll || !dirty}
-            onClick={() => void run(() => updateScene(reelId, scene.index, { narration, visualPrompt }))}
+            onClick={() =>
+              void run(() =>
+                updateScene(reelId, scene.index, { narration, visualPrompt }),
+              )
+            }
           >
             {dirty ? "Save" : "Saved"}
           </Button>
@@ -1040,7 +1204,8 @@ function SceneCard({
                   "Re-burns captions/render output so the preview reflects the new image.",
                 ],
                 confirmLabel: "Regenerate image",
-                onConfirm: () => run(() => regenerateScene(reelId, scene.index, ["image"])),
+                onConfirm: () =>
+                  run(() => regenerateScene(reelId, scene.index, ["image"])),
               })
             }
           >
@@ -1064,7 +1229,8 @@ function SceneCard({
                   "Caption timing is rebuilt from the new audio duration.",
                 ],
                 confirmLabel: "Regenerate audio",
-                onConfirm: () => run(() => regenerateScene(reelId, scene.index, ["audio"])),
+                onConfirm: () =>
+                  run(() => regenerateScene(reelId, scene.index, ["audio"])),
               })
             }
           >
@@ -1113,12 +1279,19 @@ function PresetsPanel({
   const reelKey = reel._id ?? reel.id ?? "";
 
   useEffect(() => {
-    void listArtStyles("horror").then(setArtStyles).catch(() => undefined);
-    void listImageModels().then(setImageModels).catch(() => undefined);
-    void listTtsVoices().then(setVoices).catch(() => undefined);
+    void listArtStyles("horror")
+      .then(setArtStyles)
+      .catch(() => undefined);
+    void listImageModels()
+      .then(setImageModels)
+      .catch(() => undefined);
+    void listTtsVoices()
+      .then(setVoices)
+      .catch(() => undefined);
   }, []);
 
-  const currentVoice = reel.voiceOverride?.voice ?? reel.narrationVoice?.voice ?? "";
+  const currentVoice =
+    reel.voiceOverride?.voice ?? reel.narrationVoice?.voice ?? "";
 
   return (
     <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
@@ -1140,7 +1313,8 @@ function PresetsPanel({
                 "Narration audio is kept.",
               ],
               confirmLabel: "Change style",
-              onConfirm: () => run(() => updateReelSettings(reelKey, { artStyleId })),
+              onConfirm: () =>
+                run(() => updateReelSettings(reelKey, { artStyleId })),
             });
           }}
         >
@@ -1159,7 +1333,11 @@ function PresetsPanel({
           disabled={busy}
           value={reel.motionMode ?? "ken_burns"}
           onChange={(e) =>
-            void run(() => updateReelSettings(reelKey, { motionMode: e.target.value as Reel["motionMode"] }))
+            void run(() =>
+              updateReelSettings(reelKey, {
+                motionMode: e.target.value as Reel["motionMode"],
+              }),
+            )
           }
         >
           {MOTION_MODES.map((m) => (
@@ -1186,7 +1364,8 @@ function PresetsPanel({
                 "Narration audio is kept.",
               ],
               confirmLabel: "Change model",
-              onConfirm: () => run(() => updateReelSettings(reelKey, { imageModel })),
+              onConfirm: () =>
+                run(() => updateReelSettings(reelKey, { imageModel })),
             });
           }}
         >
@@ -1217,7 +1396,11 @@ function PresetsPanel({
               ],
               confirmLabel: "Change voice",
               onConfirm: () =>
-                run(() => updateReelSettings(reelKey, { voice: { model: v.model, voice: v.voice, format: v.format } })),
+                run(() =>
+                  updateReelSettings(reelKey, {
+                    voice: { model: v.model, voice: v.voice, format: v.format },
+                  }),
+                ),
             });
           }}
         >
@@ -1236,7 +1419,9 @@ function PresetsPanel({
           disabled={busy}
           value={reel.audioPost?.voiceProfile ?? "horror"}
           onChange={(e) => {
-            const voiceProfile = e.target.value as NonNullable<Reel["audioPost"]>["voiceProfile"];
+            const voiceProfile = e.target.value as NonNullable<
+              Reel["audioPost"]
+            >["voiceProfile"];
             requestConfirm({
               title: "Change voice post-processing?",
               body: "Voice FX are baked into the scene narration MP3s, so existing narration audio must be regenerated.",
@@ -1249,11 +1434,11 @@ function PresetsPanel({
               onConfirm: () =>
                 run(() =>
                   updateReelSettings(reelKey, {
-                audioPost: {
-                  ...reel.audioPost,
+                    audioPost: {
+                      ...reel.audioPost,
                       voiceProfile,
-                },
-              })
+                    },
+                  }),
                 ),
             });
           }}
@@ -1266,7 +1451,8 @@ function PresetsPanel({
         </Select>
       </Label>
       <p className="text-[11px] text-slate-500">
-        Changing art/image model clears stills; changing voice or voice FX clears narration. Re-render below to apply.
+        Changing art/image model clears stills; changing voice or voice FX
+        clears narration. Re-render below to apply.
       </p>
     </div>
   );
@@ -1359,7 +1545,8 @@ function EffectsPanel({
         <RefreshCw size={15} /> Apply &amp; re-render (free)
       </Button>
       <p className="text-[11px] text-slate-500">
-        A cinematic finish over the whole reel. Render-only — reuses every asset, no generation spend.
+        A cinematic finish over the whole reel. Render-only — reuses every
+        asset, no generation spend.
       </p>
     </div>
   );
@@ -1377,15 +1564,19 @@ function CaptionEditor({
   run: (a: () => Promise<Reel>) => Promise<void>;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
-  const initial = useMemo<Required<Omit<CaptionStyle, "animation">> & { animation: "none" | "pop" }>(
+  const initial = useMemo<
+    Required<Omit<CaptionStyle, "animation">> & { animation: "none" | "pop" }
+  >(
     () => ({ ...CAPTION_DEFAULTS, ...(reel.captionStyle ?? {}) }),
-    [reel.captionStyle]
+    [reel.captionStyle],
   );
   const [style, setStyle] = useState(initial);
   useEffect(() => setStyle(initial), [initial]);
   const [fonts, setFonts] = useState<FontOption[]>([]);
   useEffect(() => {
-    void listFonts().then(setFonts).catch(() => setFonts([]));
+    void listFonts()
+      .then(setFonts)
+      .catch(() => setFonts([]));
   }, []);
   const previewRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -1395,27 +1586,30 @@ function CaptionEditor({
     setStyle((s) => ({ ...s, [k]: v }));
 
   // Map drag Y → marginV (distance from the alignment's vertical anchor edge).
-  const onPointerMove = useCallback(
-    (clientY: number) => {
-      const el = previewRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const scaleY = 1920 / rect.height;
-      const yInPreview = Math.min(Math.max(clientY - rect.top, 0), rect.height);
-      setStyle((s) => {
-        const band = Math.floor((s.alignment - 1) / 3); // 0 bottom, 1 middle, 2 top
-        let marginV: number;
-        if (band === 2) marginV = yInPreview * scaleY; // top anchor
-        else if (band === 0) marginV = (rect.height - yInPreview) * scaleY; // bottom anchor
-        else marginV = Math.abs(rect.height / 2 - yInPreview) * scaleY; // middle offset
-        return { ...s, marginV: Math.round(Math.min(Math.max(marginV, 0), 1900)) };
-      });
-    },
-    []
-  );
+  const onPointerMove = useCallback((clientY: number) => {
+    const el = previewRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const scaleY = 1920 / rect.height;
+    const yInPreview = Math.min(Math.max(clientY - rect.top, 0), rect.height);
+    setStyle((s) => {
+      const band = Math.floor((s.alignment - 1) / 3); // 0 bottom, 1 middle, 2 top
+      let marginV: number;
+      if (band === 2)
+        marginV = yInPreview * scaleY; // top anchor
+      else if (band === 0)
+        marginV = (rect.height - yInPreview) * scaleY; // bottom anchor
+      else marginV = Math.abs(rect.height / 2 - yInPreview) * scaleY; // middle offset
+      return {
+        ...s,
+        marginV: Math.round(Math.min(Math.max(marginV, 0), 1900)),
+      };
+    });
+  }, []);
 
   useEffect(() => {
-    const move = (e: PointerEvent) => draggingRef.current && onPointerMove(e.clientY);
+    const move = (e: PointerEvent) =>
+      draggingRef.current && onPointerMove(e.clientY);
     const up = () => (draggingRef.current = false);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -1446,7 +1640,13 @@ function CaptionEditor({
         ref={previewRef}
         className="relative mx-auto aspect-[9/16] w-40 select-none overflow-hidden rounded-md border border-slate-700 bg-black"
         style={
-          bg ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined
+          bg
+            ? {
+                backgroundImage: `url(${bg})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
         }
       >
         <div
@@ -1470,12 +1670,18 @@ function CaptionEditor({
           </span>
         </div>
       </div>
-      <p className="text-center text-[11px] text-slate-500">Drag the word to reposition</p>
+      <p className="text-center text-[11px] text-slate-500">
+        Drag the word to reposition
+      </p>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <Label className="gap-1 text-slate-300">
           Font
-          <Select value={style.fontName} disabled={busy} onChange={(e) => set("fontName", e.target.value)}>
+          <Select
+            value={style.fontName}
+            disabled={busy}
+            onChange={(e) => set("fontName", e.target.value)}
+          >
             {fonts.every((f) => f.family !== style.fontName) ? (
               <option value={style.fontName}>{style.fontName} (system)</option>
             ) : null}
@@ -1503,7 +1709,9 @@ function CaptionEditor({
             max={12}
             value={style.chunkSize}
             disabled={busy}
-            onChange={(e) => set("chunkSize", Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) =>
+              set("chunkSize", Math.max(1, Number(e.target.value) || 1))
+            }
           />
         </Label>
         <Label className="gap-1 text-slate-300">
@@ -1580,11 +1788,14 @@ function CaptionEditor({
             await updateCaptions(reelKey, style);
             // Render-only re-burn if the reel already has a video (free for
             // parallax/ken_burns); otherwise the captions apply on next produce.
-            return reel.outputUrl ? regenerateReel(reelKey, "render_only") : getReel(reelKey);
+            return reel.outputUrl
+              ? regenerateReel(reelKey, "render_only")
+              : getReel(reelKey);
           })
         }
       >
-        <RefreshCw size={15} /> Apply captions {reel.outputUrl ? "& re-render" : ""}
+        <RefreshCw size={15} /> Apply captions{" "}
+        {reel.outputUrl ? "& re-render" : ""}
       </Button>
     </div>
   );

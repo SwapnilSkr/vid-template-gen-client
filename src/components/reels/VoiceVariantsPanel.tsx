@@ -1,92 +1,163 @@
 import { CheckCircle2, Loader2, Mic, Play, Plus, X } from "lucide-react";
 import { useState } from "react";
-import type { Reel, RevoiceVariantInput, TtsVoiceOption } from "@/api/reels";
+import {
+  promoteVoiceVariant,
+  revoiceReel,
+  type Reel,
+  type RevoiceVariantInput,
+  type TtsVoiceOption,
+} from "@/api/reels";
 import { Button } from "@/components/ui/button";
-import { PanelTitle, panelClassName } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
-import { useReelStudio } from "@/store/reel-studio";
 import { VoicePickerList } from "./VoicePickerList";
 
 interface VoiceVariantsPanelProps {
-  reel?: Reel;
+  reel: Reel;
+  reelId: string;
+  onRefresh: () => void | Promise<void>;
 }
 
 /** Compare re-narrated voice takes (different OpenRouter TTS model/voice, same
  * story + gameplay clip) and promote the best one to the reel's output. */
-export function VoiceVariantsPanel({ reel }: VoiceVariantsPanelProps) {
-  const revoice = useReelStudio((state) => state.revoice);
-  const promoteVariant = useReelStudio((state) => state.promoteVariant);
-  const revoicing = useReelStudio((state) => state.revoicing);
-  const loading = useReelStudio((state) => state.loading);
-
+export function VoiceVariantsPanel({
+  reel,
+  reelId,
+  onRefresh,
+}: VoiceVariantsPanelProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
   const [queued, setQueued] = useState<RevoiceVariantInput[]>([]);
 
-  const eligible = reel?.status === "completed" && reel.strategy === "gameplay_overlay";
+  const eligible =
+    reel.status === "completed" && reel.strategy === "gameplay_overlay";
   if (!eligible) return null;
 
-  const variants = reel?.voiceVariants ?? [];
+  const variants = reel.voiceVariants ?? [];
+
+  async function generateQueuedVariants() {
+    setError(undefined);
+    setBusy(true);
+    try {
+      await revoiceReel(reelId, queued);
+      await onRefresh();
+      setQueued([]);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to queue voice variants",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function promoteVariant(variantId: string) {
+    setError(undefined);
+    setBusy(true);
+    try {
+      await promoteVoiceVariant(reelId, variantId);
+      await onRefresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to promote voice variant",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function isQueued(option: TtsVoiceOption) {
-    return queued.some((q) => q.model === option.model && q.voice === option.voice);
+    return queued.some(
+      (q) => q.model === option.model && q.voice === option.voice,
+    );
   }
 
   function toggleQueued(option: TtsVoiceOption) {
     setQueued((current) => {
-      if (current.some((q) => q.model === option.model && q.voice === option.voice)) {
-        return current.filter((q) => !(q.model === option.model && q.voice === option.voice));
+      if (
+        current.some(
+          (q) => q.model === option.model && q.voice === option.voice,
+        )
+      ) {
+        return current.filter(
+          (q) => !(q.model === option.model && q.voice === option.voice),
+        );
       }
       if (current.length >= 5) return current;
-      return [...current, { model: option.model, voice: option.voice, format: option.format, label: option.label }];
+      return [
+        ...current,
+        {
+          model: option.model,
+          voice: option.voice,
+          format: option.format,
+          label: option.label,
+        },
+      ];
     });
   }
 
   return (
-    <div className={cn(panelClassName, "grid gap-3 p-4")}>
+    <section
+      className={cn(
+        "grid gap-3 rounded-lg border border-slate-800 bg-[#171a20] p-4",
+        "shadow-[0_18px_50px_rgba(0,0,0,0.18)]",
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
-        <PanelTitle>
-          <span className="inline-flex items-center gap-1.5">
-            <Mic size={15} /> Voice Variants
-          </span>
-        </PanelTitle>
-        <span className="text-xs text-muted-foreground">Re-narrate with a different model/voice</span>
+        <strong className="inline-flex items-center gap-1.5 text-[13px] uppercase tracking-[0.08em] text-slate-300">
+          <Mic size={15} className="text-cyan-300" /> Voice Variants
+        </strong>
+        <span className="text-xs text-slate-500">
+          Whole-reel alternate takes
+        </span>
       </div>
+
+      <p className="m-0 text-xs leading-relaxed text-slate-500">
+        Re-narrate the full video with up to five voices, compare previews, then
+        promote the take you want. Per-scene audio changes use the Audio button
+        on each scene card.
+      </p>
 
       {variants.length ? (
         <div className="grid gap-2">
           {variants.map((variant) => (
             <div
               key={variant.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-[#111419] px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-bold text-foreground">
-                  {variant.label || `${variant.model.split("/").pop()} / ${variant.voice}`}
+                <div className="truncate text-[13px] font-bold text-slate-100">
+                  {variant.label ||
+                    `${variant.model.split("/").pop()} / ${variant.voice}`}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-slate-500">
                   {variant.status === "pending" && "Rendering…"}
-                  {variant.status === "ready" && (reel?.outputUrl === variant.videoUrl ? "Active" : "Ready")}
+                  {variant.status === "ready" &&
+                    (reel.outputUrl === variant.videoUrl ? "Active" : "Ready")}
                   {variant.status === "failed" && (variant.error || "Failed")}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {variant.status === "pending" ? <Loader2 className="animate-spin" size={16} /> : null}
+                {variant.status === "pending" ? (
+                  <Loader2 className="animate-spin text-cyan-300" size={16} />
+                ) : null}
                 {variant.status === "ready" && variant.videoUrl ? (
                   <a
                     href={variant.videoUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="grid size-8 place-items-center rounded-md border border-border text-foreground hover:bg-accent"
+                    className="grid size-8 place-items-center rounded-md border border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
                     aria-label="Preview voice variant"
                   >
                     <Play size={14} />
                   </a>
                 ) : null}
-                {variant.status === "ready" && reel?.outputUrl !== variant.videoUrl ? (
+                {variant.status === "ready" &&
+                reel.outputUrl !== variant.videoUrl ? (
                   <Button
                     type="button"
                     variant="default"
                     size="icon"
-                    disabled={loading}
+                    disabled={busy}
                     onClick={() => void promoteVariant(variant.id)}
                     aria-label="Use this voice"
                   >
@@ -98,11 +169,16 @@ export function VoiceVariantsPanel({ reel }: VoiceVariantsPanelProps) {
           ))}
         </div>
       ) : (
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-          No voice variants yet. Preview and pick up to 5 voices below, generate, then promote the take you
-          like best — the gameplay clip and story stay the same, only the narration changes.
+        <p className="m-0 text-xs leading-relaxed text-slate-500">
+          No voice variants yet. Preview and pick up to 5 voices below,
+          generate, then promote the take you like best — the gameplay clip and
+          story stay the same, only the narration changes.
         </p>
       )}
+
+      {error ? (
+        <p className="m-0 text-xs font-semibold text-destructive">{error}</p>
+      ) : null}
 
       <div className="grid gap-2">
         <VoicePickerList
@@ -118,14 +194,20 @@ export function VoiceVariantsPanel({ reel }: VoiceVariantsPanelProps) {
             {queued.map((q) => (
               <span
                 key={`${q.model}-${q.voice}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-[#20242c] px-2.5 py-1 text-xs font-bold text-slate-100"
               >
                 {q.label}
                 <button
                   type="button"
-                  onClick={() => setQueued((current) => current.filter((c) => !(c.model === q.model && c.voice === q.voice)))}
+                  onClick={() =>
+                    setQueued((current) =>
+                      current.filter(
+                        (c) => !(c.model === q.model && c.voice === q.voice),
+                      ),
+                    )
+                  }
                   aria-label={`Remove ${q.label}`}
-                  className="cursor-pointer text-muted-foreground hover:text-foreground"
+                  className="cursor-pointer text-slate-500 hover:text-slate-100"
                 >
                   <X size={12} />
                 </button>
@@ -137,16 +219,17 @@ export function VoiceVariantsPanel({ reel }: VoiceVariantsPanelProps) {
         <Button
           type="button"
           variant="default"
-          disabled={!queued.length || revoicing}
-          onClick={async () => {
-            await revoice(queued);
-            setQueued([]);
-          }}
+          disabled={!queued.length || busy}
+          onClick={() => void generateQueuedVariants()}
         >
-          {revoicing ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+          {busy ? (
+            <Loader2 className="animate-spin" size={16} />
+          ) : (
+            <Plus size={16} />
+          )}
           Generate {queued.length || ""} Variant{queued.length === 1 ? "" : "s"}
         </Button>
       </div>
-    </div>
+    </section>
   );
 }
