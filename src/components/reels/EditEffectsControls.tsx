@@ -1,8 +1,8 @@
-import { CloudRain, Film, Scan, Sparkles } from "lucide-react";
+import { CloudRain, Film, Focus, Scan, Sparkles, Tv, Waves, Zap } from "lucide-react";
 import type { EditEffects } from "@/api/reels";
 import { cn } from "@/lib/utils";
 
-/** Co-creatable cinematic edit FX (rain / film grain / vignette / letterbox).
+/** Co-creatable cinematic edit FX (rain / grade / analog texture / letterbox).
  *  A controlled block used identically on the create form and in the Studio.
  *  All effects are render-only, so applying them is a free re-render. */
 export function EditEffectsControls({
@@ -39,6 +39,54 @@ export function EditEffectsControls({
           />
         ) : null}
       </Toggle>
+
+      <Slider
+        icon={<Focus size={15} />}
+        label="Cold desaturation"
+        hint="0 = off"
+        min={0}
+        max={1}
+        step={0.05}
+        value={fx.desaturate ?? 0}
+        disabled={disabled}
+        onChange={(v) => patch({ desaturate: v })}
+      />
+
+      <Slider
+        icon={<Zap size={15} />}
+        label="Light flicker"
+        hint="0 = off"
+        min={0}
+        max={1}
+        step={0.05}
+        value={fx.flicker ?? 0}
+        disabled={disabled}
+        onChange={(v) => patch({ flicker: v })}
+      />
+
+      <Slider
+        icon={<Waves size={15} />}
+        label="Chromatic bleed"
+        hint="0 = off"
+        min={0}
+        max={1}
+        step={0.05}
+        value={fx.chromatic ?? 0}
+        disabled={disabled}
+        onChange={(v) => patch({ chromatic: v })}
+      />
+
+      <Slider
+        icon={<Tv size={15} />}
+        label="Analog scanlines"
+        hint="0 = off"
+        min={0}
+        max={1}
+        step={0.05}
+        value={fx.scanlines ?? 0}
+        disabled={disabled}
+        onChange={(v) => patch({ scanlines: v })}
+      />
 
       <Slider
         icon={<Film size={15} />}

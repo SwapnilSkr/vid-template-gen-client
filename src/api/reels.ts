@@ -49,7 +49,7 @@ export interface CaptionStyle {
 }
 
 export interface AudioPost {
-  voiceProfile?: "horror" | "none";
+  voiceProfile?: "none" | "horror" | "whisper" | "phone" | "tape" | "distant";
   bedVolume?: number;
 }
 
@@ -60,6 +60,10 @@ export interface EditEffects {
   grain?: number; // 0-1.5
   vignette?: number; // 0-1
   letterbox?: boolean;
+  desaturate?: number; // 0-1
+  flicker?: number; // 0-1
+  chromatic?: number; // 0-1
+  scanlines?: number; // 0-1
 }
 
 export interface StylePreset {

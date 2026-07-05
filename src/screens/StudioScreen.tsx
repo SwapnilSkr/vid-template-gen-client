@@ -76,6 +76,15 @@ const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & { animation:
   animation: "none",
 };
 
+const VOICE_POST_PROFILES: { value: NonNullable<Reel["audioPost"]>["voiceProfile"]; label: string }[] = [
+  { value: "horror", label: "Dark narrator - low, compressed, room echo" },
+  { value: "whisper", label: "Whisper room - close, breathy, uneasy" },
+  { value: "phone", label: "Phone recording - narrow, distorted call" },
+  { value: "tape", label: "Analog tape - degraded recorder, slight wobble" },
+  { value: "distant", label: "Distant basement - muffled, far-room echo" },
+  { value: "none", label: "Clean - no voice FX" },
+];
+
 export function StudioScreen() {
   const { id } = route.useParams();
   const [reel, setReel] = useState<Reel | undefined>();
@@ -684,17 +693,23 @@ function PresetsPanel({
           onChange={(e) =>
             void run(() =>
               updateReelSettings(reelKey, {
-                audioPost: { ...reel.audioPost, voiceProfile: e.target.value as "horror" | "none" },
+                audioPost: {
+                  ...reel.audioPost,
+                  voiceProfile: e.target.value as NonNullable<Reel["audioPost"]>["voiceProfile"],
+                },
               })
             )
           }
         >
-          <option value="horror">Horror FX</option>
-          <option value="none">Clean (no FX)</option>
+          {VOICE_POST_PROFILES.map((profile) => (
+            <option key={profile.value} value={profile.value}>
+              {profile.label}
+            </option>
+          ))}
         </Select>
       </Label>
       <p className="text-[11px] text-muted-foreground">
-        Changing art/image model clears the stills; a new voice clears the narration. Re-render below to apply.
+        Changing art/image model clears stills; changing voice or voice FX clears narration. Re-render below to apply.
       </p>
     </div>
   );
