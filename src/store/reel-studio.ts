@@ -20,6 +20,8 @@ import {
   startYouTubeChannelConnect,
   updateReview,
   useFrameAsThumbnail,
+  customFrameThumbnail,
+  type CustomThumbnailInput,
   type ArtStyleOption,
   type CreateReelInput,
   type GameplayClip,
@@ -68,6 +70,7 @@ interface ReelStudioState {
   saveReview: (review: ReelReview) => Promise<void>;
   regenerateThumbnail: (review: ReelReview) => Promise<void>;
   useFrameAsThumbnail: (atSeconds: number) => Promise<void>;
+  useCustomThumbnail: (input: CustomThumbnailInput) => Promise<void>;
   approveReview: () => Promise<void>;
   publish: (channelId?: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
@@ -273,6 +276,25 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : "Failed to use frame as thumbnail",
+        loading: false,
+      });
+    }
+  },
+
+  async useCustomThumbnail(input) {
+    const id = get().selectedId;
+    if (!id) return;
+    set({ loading: true, error: undefined });
+    try {
+      const saved = await customFrameThumbnail(id, input);
+      set((state) => ({
+        draftReview: saved,
+        loading: false,
+        reels: state.reels.map((item) => (reelId(item) === id ? { ...item, review: saved } : item)),
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to create custom thumbnail",
         loading: false,
       });
     }

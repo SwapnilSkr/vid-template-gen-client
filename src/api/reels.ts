@@ -3,6 +3,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api
 export type ReelStatus =
   | "pending"
   | "planning"
+  | "plan_review"
   | "generating_assets"
   | "generating_audio"
   | "aligning"
@@ -10,6 +11,69 @@ export type ReelStatus =
   | "uploading"
   | "completed"
   | "failed";
+
+export interface SceneMotion {
+  type: "ken_burns" | "static" | "parallax" | "ai_motion";
+  direction?: "in" | "out";
+  intensity?: number;
+}
+
+export interface Scene {
+  index: number;
+  narration: string;
+  visualPrompt: string;
+  assetUrl?: string;
+  audioUrl?: string;
+  motion: SceneMotion;
+  startTime: number;
+  duration: number;
+  isHero: boolean;
+}
+
+export interface CaptionStyle {
+  fontName?: string;
+  fontSize?: number;
+  primaryColor?: string;
+  activeColor?: string;
+  outlineColor?: string;
+  outlineWidth?: number;
+  shadow?: number;
+  alignment?: number;
+  marginV?: number;
+  marginL?: number;
+  marginR?: number;
+  chunkSize?: number;
+  bold?: boolean;
+  uppercase?: boolean;
+  animation?: "none" | "pop";
+}
+
+export interface AudioPost {
+  voiceProfile?: "horror" | "none";
+  bedVolume?: number;
+}
+
+/** Co-creatable cinematic edit effects (render-only). Mirrors server IEditEffects. */
+export interface EditEffects {
+  rain?: boolean;
+  rainIntensity?: number; // 0-1
+  grain?: number; // 0-1.5
+  vignette?: number; // 0-1
+  letterbox?: boolean;
+}
+
+export interface StylePreset {
+  id: string;
+  displayName: string;
+  description: string;
+  niches: string[];
+  artStyleId: string;
+  motionMode: MotionMode;
+  voice: { model: string; voice: string; format: "mp3" | "pcm" };
+  audioPost?: AudioPost;
+  captionStyle: CaptionStyle;
+  sceneCountHint?: number;
+}
 
 export interface ReelReview {
   title?: string;
@@ -70,6 +134,7 @@ export interface Reel {
     thumbnailError?: string;
     publishedAt?: string;
   };
+  seriesId?: string;
   partNumber?: number;
   partCount?: number;
   createdAt?: string;
@@ -78,7 +143,15 @@ export interface Reel {
   outroChannelId?: string;
   imageModelOverride?: string;
   artStyleId?: string;
+  presetId?: string;
   motionMode?: MotionMode;
+  captionStyle?: CaptionStyle;
+  audioPost?: AudioPost;
+  editEffects?: EditEffects;
+  pipelineMode?: "auto" | "review";
+  providedScript?: string;
+  horrorReferenceId?: string;
+  scenes?: Scene[];
   storyBible?: StoryBible;
   redditStory?: RedditStoryPayload;
   horrorReference?: HorrorReferencePayload;
@@ -152,6 +225,11 @@ export interface CreateReelInput {
   imageModel?: string;
   artStyleId?: string;
   motionMode?: MotionMode;
+  editEffects?: EditEffects;
+  presetId?: string;
+  pipelineMode?: "auto" | "review";
+  providedScript?: string;
+  horrorReferenceId?: string;
   ttsModel?: string;
   ttsVoice?: string;
   ttsFormat?: "mp3" | "pcm";
@@ -258,6 +336,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function listReels(): Promise<Reel[]> {
   return request<Reel[]>("/reels?limit=40");
+}
+
+export async function listReelSeries(seriesId: string): Promise<Reel[]> {
+  return request<Reel[]>(`/reels/series/${encodeURIComponent(seriesId)}`);
 }
 
 export async function listYouTubeChannels(): Promise<YouTubeChannelOption[]> {
@@ -386,4 +468,118 @@ export async function useFrameAsThumbnail(id: string, atSeconds: number): Promis
     method: "POST",
     body: JSON.stringify({ atSeconds }),
   });
+}
+
+export interface FontOption {
+  id: string;
+  label: string;
+  family: string;
+  file: string;
+}
+
+export async function listFonts(): Promise<FontOption[]> {
+  return request<FontOption[]>("/fonts");
+}
+
+export interface CustomThumbnailInput {
+  atSeconds: number;
+  text: string;
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
+  outlineColor?: string;
+  outlineWidth?: number;
+  position?: "top" | "middle" | "bottom";
+  uppercase?: boolean;
+}
+
+export async function customFrameThumbnail(
+  id: string,
+  input: CustomThumbnailInput
+): Promise<ReelReview> {
+  return request<ReelReview>(`/reels/${id}/review/thumbnail/custom`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ---- Studio editing (co-creation) ----
+
+export async function listStylePresets(niche?: string): Promise<StylePreset[]> {
+  const q = niche ? `?niche=${encodeURIComponent(niche)}` : "";
+  return request<StylePreset[]>(`/style-presets${q}`);
+}
+
+export async function updateScene(
+  id: string,
+  index: number,
+  patch: { narration?: string; visualPrompt?: string; motion?: SceneMotion }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/scenes/${index}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function regenerateScene(
+  id: string,
+  index: number,
+  regenerate: ("image" | "audio")[]
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/scenes/${index}/regenerate`, {
+    method: "POST",
+    body: JSON.stringify({ regenerate }),
+  });
+}
+
+export async function addScene(
+  id: string,
+  input: { narration: string; visualPrompt?: string; atIndex?: number }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/scenes`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function removeScene(id: string, index: number): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/scenes/${index}`, { method: "DELETE" });
+}
+
+export async function reorderScenes(id: string, order: number[]): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/scenes/reorder`, {
+    method: "POST",
+    body: JSON.stringify({ order }),
+  });
+}
+
+export interface ReelSettingsInput {
+  artStyleId?: string;
+  motionMode?: MotionMode;
+  imageModel?: string;
+  horrorAudioKey?: string;
+  horrorReferenceId?: string;
+  voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
+  audioPost?: AudioPost;
+  editEffects?: EditEffects;
+}
+
+export async function updateReelSettings(id: string, patch: ReelSettingsInput): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/settings`, { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export async function updateCaptions(id: string, patch: CaptionStyle): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/captions`, { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export async function regenerateReel(id: string, mode: "render_only" | "assets"): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
+}
+
+export async function approvePlan(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/approve-plan`, { method: "POST" });
+}
+
+export async function replanReel(
+  id: string,
+  patch: { topic?: string; providedScript?: string; horrorReferenceId?: string }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/replan`, { method: "POST", body: JSON.stringify(patch) });
 }
