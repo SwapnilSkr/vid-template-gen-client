@@ -142,6 +142,7 @@ export interface Reel {
   partNumber?: number;
   partCount?: number;
   createdAt?: string;
+  updatedAt?: string;
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;

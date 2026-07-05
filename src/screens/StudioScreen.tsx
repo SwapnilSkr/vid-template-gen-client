@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Sparkles,
   Wand2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -85,6 +86,15 @@ const VOICE_POST_PROFILES: { value: NonNullable<Reel["audioPost"]>["voiceProfile
   { value: "none", label: "Clean - no voice FX" },
 ];
 
+interface ConfirmAction {
+  title: string;
+  body: string;
+  details?: string[];
+  confirmLabel: string;
+  variant?: "default" | "destructive";
+  onConfirm: () => void | Promise<void>;
+}
+
 export function StudioScreen() {
   const { id } = route.useParams();
   const [reel, setReel] = useState<Reel | undefined>();
@@ -92,6 +102,7 @@ export function StudioScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | undefined>();
 
   const refresh = useCallback(async () => {
     try {
@@ -168,6 +179,9 @@ export function StudioScreen() {
 
   const isGenerating = ACTIVE.includes(reel.status);
   const scenes = reel.scenes ?? [];
+  const previewUrl = reel.outputUrl
+    ? `${reel.outputUrl}${reel.outputUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(reel.updatedAt ?? String(reel.progress))}`
+    : undefined;
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
@@ -200,7 +214,23 @@ export function StudioScreen() {
 
       <ReelContextBar reel={reel} seriesReels={seriesReels} currentId={id} />
 
-      <GateBanner reel={reel} busy={busy} onApprove={() => void run(() => approvePlan(id))} />
+      <GateBanner
+        reel={reel}
+        busy={busy}
+        onApprove={() =>
+          setConfirmAction({
+            title: reel.partCount && reel.partCount > 1 ? `Generate part ${reel.partNumber ?? 1}?` : "Generate reel?",
+            body: "This starts the paid produce run for the reviewed plan.",
+            details: [
+              "Generates missing scene images with OpenRouter.",
+              "Generates missing narration audio with OpenRouter TTS.",
+              "Renders captions, horror mix, edit FX, outro, and preview video after assets are ready.",
+            ],
+            confirmLabel: "Generate",
+            onConfirm: () => run(() => approvePlan(id)),
+          })
+        }
+      />
 
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]">
         <div className="grid min-w-0 gap-3">
@@ -229,30 +259,32 @@ export function StudioScreen() {
                 busy={busy}
                 disabled={isGenerating}
                 run={run}
+                requestConfirm={setConfirmAction}
               />
             ))}
           </div>
         </div>
 
         <div className="grid gap-3 xl:sticky xl:top-4">
-          {reel.outputUrl ? (
+          {previewUrl ? (
             <div className={cn(panelClassName, "grid gap-2 p-3")}>
               <PanelTitle>Preview</PanelTitle>
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <video
-                key={reel.outputUrl}
-                src={reel.outputUrl}
+                key={previewUrl}
+                src={previewUrl}
                 controls
                 className="aspect-[9/16] w-full rounded-lg bg-black"
               />
             </div>
           ) : null}
-          <PresetsPanel reel={reel} busy={busy} run={run} />
+          <PresetsPanel reel={reel} busy={busy} run={run} requestConfirm={setConfirmAction} />
           <EffectsPanel reel={reel} busy={busy} run={run} />
           <CaptionEditor reel={reel} busy={busy} run={run} />
-          <RegeneratePanel reel={reel} busy={busy} run={run} />
+          <RegeneratePanel reel={reel} busy={busy} run={run} requestConfirm={setConfirmAction} />
         </div>
       </div>
+      <ConfirmModal action={confirmAction} busy={busy} onClose={() => setConfirmAction(undefined)} />
     </section>
   );
 }
@@ -260,6 +292,61 @@ export function StudioScreen() {
 function StatusBadge({ status }: { status: Reel["status"] }) {
   const label = status === "plan_review" ? "awaiting review" : status.replace(/_/g, " ");
   return <span className="font-semibold text-foreground">{label}</span>;
+}
+
+function ConfirmModal({
+  action,
+  busy,
+  onClose,
+}: {
+  action?: ConfirmAction;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  if (!action) return null;
+  const confirm = async () => {
+    await action.onConfirm();
+    onClose();
+  };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4">
+      <div className="grid w-full max-w-md gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <strong className="text-base text-foreground">{action.title}</strong>
+            <p className="m-0 text-sm leading-relaxed text-muted-foreground">{action.body}</p>
+          </div>
+          <Button type="button" size="icon" variant="ghost" disabled={busy} onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </div>
+        {action.details?.length ? (
+          <div className="grid gap-1 rounded-md border border-border bg-muted/35 p-2.5 text-xs text-muted-foreground">
+            {action.details.map((detail) => (
+              <div key={detail} className="flex gap-2">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span>{detail}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant={action.variant === "destructive" ? "destructive" : "default"}
+            disabled={busy}
+            onClick={() => void confirm()}
+          >
+            {busy ? <Loader2 className="animate-spin" size={15} /> : null}
+            {action.confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function reelKey(reel: Reel): string {
@@ -465,6 +552,7 @@ function SceneCard({
   busy,
   disabled,
   run,
+  requestConfirm,
 }: {
   reelId: string;
   scene: Scene;
@@ -472,6 +560,7 @@ function SceneCard({
   busy: boolean;
   disabled: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [narration, setNarration] = useState(scene.narration);
   const [visualPrompt, setVisualPrompt] = useState(scene.visualPrompt);
@@ -559,7 +648,20 @@ function SceneCard({
             variant="outline"
             disabled={disableAll}
             title="Regenerate this scene's image"
-            onClick={() => void run(() => regenerateScene(reelId, scene.index, ["image"]))}
+            onClick={() =>
+              requestConfirm({
+                title: `Regenerate image for scene ${scene.index + 1}?`,
+                body: "This makes one new OpenRouter image request, then rebuilds the preview video with existing narration and other scene assets.",
+                details: [
+                  "Costs image generation for this scene only.",
+                  "Keeps every other scene image.",
+                  "Keeps all narration audio.",
+                  "Re-burns captions/render output so the preview reflects the new image.",
+                ],
+                confirmLabel: "Regenerate image",
+                onConfirm: () => run(() => regenerateScene(reelId, scene.index, ["image"])),
+              })
+            }
           >
             <ImageIcon size={13} /> Image
           </Button>
@@ -569,7 +671,20 @@ function SceneCard({
             variant="outline"
             disabled={disableAll}
             title="Regenerate this scene's narration audio"
-            onClick={() => void run(() => regenerateScene(reelId, scene.index, ["audio"]))}
+            onClick={() =>
+              requestConfirm({
+                title: `Regenerate narration for scene ${scene.index + 1}?`,
+                body: "This makes one new OpenRouter TTS request, then rebuilds the preview video with existing images and other scene audio.",
+                details: [
+                  "Costs narration generation for this scene only.",
+                  "Keeps every scene image.",
+                  "Keeps other scenes' narration audio.",
+                  "Caption timing is rebuilt from the new audio duration.",
+                ],
+                confirmLabel: "Regenerate audio",
+                onConfirm: () => run(() => regenerateScene(reelId, scene.index, ["audio"])),
+              })
+            }
           >
             <Play size={13} /> Audio
           </Button>
@@ -580,7 +695,15 @@ function SceneCard({
               variant="ghost"
               className="text-destructive"
               disabled={disableAll}
-              onClick={() => void run(() => removeScene(reelId, scene.index))}
+              onClick={() =>
+                requestConfirm({
+                  title: `Remove scene ${scene.index + 1}?`,
+                  body: "This removes the scene from the reel plan. It does not call OpenRouter by itself.",
+                  confirmLabel: "Remove scene",
+                  variant: "destructive",
+                  onConfirm: () => run(() => removeScene(reelId, scene.index)),
+                })
+              }
             >
               Remove
             </Button>
@@ -595,10 +718,12 @@ function PresetsPanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [artStyles, setArtStyles] = useState<ArtStyleOption[]>([]);
   const [imageModels, setImageModels] = useState<ImageModelOption[]>([]);
@@ -622,7 +747,20 @@ function PresetsPanel({
         <Select
           disabled={busy}
           value={reel.artStyleId ?? ""}
-          onChange={(e) => void run(() => updateReelSettings(reelKey, { artStyleId: e.target.value }))}
+          onChange={(e) => {
+            const artStyleId = e.target.value;
+            requestConfirm({
+              title: "Change art style?",
+              body: "This clears existing scene stills because the current images no longer match the selected style.",
+              details: [
+                "No OpenRouter call happens immediately.",
+                "The next asset produce run regenerates scene images.",
+                "Narration audio is kept.",
+              ],
+              confirmLabel: "Change style",
+              onConfirm: () => run(() => updateReelSettings(reelKey, { artStyleId })),
+            });
+          }}
         >
           <option value="">Auto</option>
           {artStyles.map((s) => (
@@ -655,7 +793,20 @@ function PresetsPanel({
         <Select
           disabled={busy}
           value={reel.imageModelOverride ?? ""}
-          onChange={(e) => void run(() => updateReelSettings(reelKey, { imageModel: e.target.value }))}
+          onChange={(e) => {
+            const imageModel = e.target.value;
+            requestConfirm({
+              title: "Change image model?",
+              body: "This clears existing scene stills so future image generation uses the selected model.",
+              details: [
+                "No OpenRouter call happens immediately.",
+                "The next asset produce run regenerates scene images.",
+                "Narration audio is kept.",
+              ],
+              confirmLabel: "Change model",
+              onConfirm: () => run(() => updateReelSettings(reelKey, { imageModel })),
+            });
+          }}
         >
           <option value="">Niche default</option>
           {imageModels.map((m) => (
@@ -673,7 +824,19 @@ function PresetsPanel({
           value={currentVoice}
           onChange={(e) => {
             const v = voices.find((o) => o.voice === e.target.value);
-            if (v) void run(() => updateReelSettings(reelKey, { voice: { model: v.model, voice: v.voice, format: v.format } }));
+            if (!v) return;
+            requestConfirm({
+              title: "Change narration voice?",
+              body: "This clears existing scene narration audio so the selected voice can be generated.",
+              details: [
+                "No OpenRouter call happens immediately.",
+                "The next asset produce run regenerates narration audio.",
+                "Scene images are kept.",
+              ],
+              confirmLabel: "Change voice",
+              onConfirm: () =>
+                run(() => updateReelSettings(reelKey, { voice: { model: v.model, voice: v.voice, format: v.format } })),
+            });
           }}
         >
           <option value="">Default</option>
@@ -690,16 +853,28 @@ function PresetsPanel({
         <Select
           disabled={busy}
           value={reel.audioPost?.voiceProfile ?? "horror"}
-          onChange={(e) =>
-            void run(() =>
-              updateReelSettings(reelKey, {
+          onChange={(e) => {
+            const voiceProfile = e.target.value as NonNullable<Reel["audioPost"]>["voiceProfile"];
+            requestConfirm({
+              title: "Change voice post-processing?",
+              body: "Voice FX are baked into the scene narration MP3s, so existing narration audio must be regenerated.",
+              details: [
+                "No OpenRouter call happens immediately.",
+                "The next asset produce run regenerates narration audio with the selected treatment.",
+                "Scene images are kept.",
+              ],
+              confirmLabel: "Change voice FX",
+              onConfirm: () =>
+                run(() =>
+                  updateReelSettings(reelKey, {
                 audioPost: {
                   ...reel.audioPost,
-                  voiceProfile: e.target.value as NonNullable<Reel["audioPost"]>["voiceProfile"],
+                      voiceProfile,
                 },
               })
-            )
-          }
+                ),
+            });
+          }}
         >
           {VOICE_POST_PROFILES.map((profile) => (
             <option key={profile.value} value={profile.value}>
@@ -719,10 +894,12 @@ function RegeneratePanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const canRegen = reel.status === "completed" || reel.status === "failed";
@@ -743,11 +920,21 @@ function RegeneratePanel({
         variant="outline"
         className="border-destructive/40 text-destructive"
         disabled={busy}
-        onClick={() => {
-          if (window.confirm("Regenerate ALL images and narration? This costs generation spend.")) {
-            void run(() => regenerateReel(reelKey, "assets"));
-          }
-        }}
+        onClick={() =>
+          requestConfirm({
+            title: "Regenerate all assets?",
+            body: "This clears every scene image and narration clip, then queues a full asset produce run.",
+            details: [
+              "Costs OpenRouter image generation for every scene.",
+              "Costs OpenRouter TTS for every scene.",
+              "Rebuilds and uploads the final preview video after generation.",
+              "Use re-render instead for caption, edit FX, outro, or layout-only changes.",
+            ],
+            confirmLabel: "Regenerate all assets",
+            variant: "destructive",
+            onConfirm: () => run(() => regenerateReel(reelKey, "assets")),
+          })
+        }
       >
         <Wand2 size={15} /> Regenerate all assets ($)
       </Button>
