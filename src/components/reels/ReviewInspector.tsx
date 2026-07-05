@@ -1095,8 +1095,8 @@ function FlowStep({
             </a>
           ) : null}
         </div>
-        <div className="break-words text-xs font-extrabold leading-snug text-foreground">{value}</div>
-        {detail ? <div className="mt-1 break-words text-xs leading-snug text-muted-foreground">{detail}</div> : null}
+        <div className="wrap-break-word text-xs font-extrabold leading-snug text-foreground">{value}</div>
+        {detail ? <div className="mt-1 wrap-break-word text-xs leading-snug text-muted-foreground">{detail}</div> : null}
       </div>
     </div>
   );

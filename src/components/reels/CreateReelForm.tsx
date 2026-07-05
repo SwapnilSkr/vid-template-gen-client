@@ -764,7 +764,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             <div className="grid w-fit gap-1.5">
               <video
                 key={selectedClip.key}
-                className="aspect-[9/16] h-64 rounded-lg border border-border bg-black object-cover"
+                className="aspect-9/16 h-64 rounded-lg border border-border bg-black object-cover"
                 src={selectedClip.url}
                 muted
                 loop
@@ -775,7 +775,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               <span className="max-w-64 truncate text-xs text-muted-foreground">{selectedClip.filename}</span>
             </div>
           ) : (
-            <div className="grid aspect-[9/16] h-64 place-items-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground">
+            <div className="grid aspect-9/16 h-64 place-items-center gap-2 rounded-lg border border-dashed border-border text-muted-foreground">
               <Shuffle size={22} />
               <span className="max-w-40 text-center text-xs leading-relaxed">
                 A random clip from the S3 pool will be picked at render time
