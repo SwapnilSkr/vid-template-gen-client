@@ -596,6 +596,14 @@ export async function updateCaptions(id: string, patch: CaptionStyle): Promise<R
   return request<Reel>(`/reels/${id}/captions`, { method: "PUT", body: JSON.stringify(patch) });
 }
 
+/** Re-render with caption style, upload to S3, and delete the previous output video. */
+export async function applyCaptions(id: string, patch: CaptionStyle): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/captions/apply`, {
+    method: "POST",
+    body: JSON.stringify(patch),
+  });
+}
+
 export async function regenerateReel(id: string, mode: "render_only" | "assets"): Promise<Reel> {
   return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
 }

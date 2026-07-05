@@ -40,6 +40,7 @@ import {
   discardEditDraft,
   saveEditDraft,
   updateCaptions,
+  applyCaptions,
   updateReelSettings,
   updateScene,
   type ArtStyleOption,
@@ -61,6 +62,14 @@ import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
 import { MOTION_MODES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
+import {
+  anchorYFromMarginV,
+  canonicalCaptionStyle,
+  captionPreviewFontSize,
+  captionPreviewPosition,
+  captionStylePayload,
+  marginVFromDragY,
+} from "@/utils/caption-ass";
 
 const route = getRouteApi("/studio/$id");
 
@@ -94,6 +103,11 @@ const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
   uppercase: false,
   animation: "none",
 };
+
+const CAPTION_STYLE_DEFAULTS = {
+  ...CAPTION_DEFAULTS,
+  animation: CAPTION_DEFAULTS.animation,
+} as const;
 
 const VOICE_POST_PROFILES: {
   value: NonNullable<Reel["audioPost"]>["voiceProfile"];
@@ -257,7 +271,7 @@ export function StudioScreen() {
   const hasDraft = Boolean(reel.editDraft);
   const basePreviewUrl = mediaUrl(reel.editDraft?.outputUrl) ?? reel.outputUrl;
   const previewUrl = basePreviewUrl
-    ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(reel.editDraft?.id ?? reel.updatedAt ?? String(reel.progress))}`
+    ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(reel.outputUrl ?? reel.editDraft?.id ?? reel.updatedAt ?? String(reel.progress))}`
     : undefined;
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
 
@@ -526,11 +540,11 @@ function ProgramMonitor({
               key={previewUrl}
               src={previewUrl}
               controls
-              className="relative aspect-[9/16] max-h-[50vh] w-full rounded-lg border border-slate-800 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)] xl:max-h-[46vh]"
+              className="relative aspect-9/16 max-h-[50vh] w-full rounded-lg border border-slate-800 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)] xl:max-h-[46vh]"
             />
           </div>
         ) : (
-          <div className="grid aspect-[9/16] max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-slate-800 bg-black text-sm text-slate-500 xl:max-h-[46vh]">
+          <div className="grid aspect-9/16 max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-slate-800 bg-black text-sm text-slate-500 xl:max-h-[46vh]">
             No preview yet
           </div>
         )}
@@ -555,7 +569,7 @@ function SceneThumb({
   return (
     <span
       className={cn(
-        "grid aspect-[9/16] place-items-center overflow-hidden rounded border border-slate-700 bg-[#0b0d10] text-slate-500",
+        "grid aspect-9/16 place-items-center overflow-hidden rounded border border-slate-700 bg-[#0b0d10] text-slate-500",
         className,
       )}
     >
@@ -753,8 +767,8 @@ function EditDraftBanner({
       <div>
         <div className="font-semibold">Unsaved editor draft</div>
         <div className="text-xs">
-          Preview assets are local only. Save uploads the draft to S3; discard
-          deletes the local draft files.
+          Preview assets are local only. Save uploads to S3 and removes replaced
+          scene assets and the previous output video.
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -1109,7 +1123,7 @@ function SceneCard({
   return (
     <div className="grid min-w-0 gap-3 rounded-lg border border-slate-800 bg-[#171a20] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:grid-cols-[120px_minmax(0,1fr)]">
       <div className="grid gap-1.5">
-        <div className="grid aspect-[9/16] w-full place-items-center overflow-hidden rounded-md border border-slate-700 bg-[#0b0d10] text-slate-500">
+        <div className="grid aspect-9/16 w-full place-items-center overflow-hidden rounded-md border border-slate-700 bg-[#0b0d10] text-slate-500">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -1554,6 +1568,38 @@ function EffectsPanel({
 
 // ---- Live caption editor ----
 
+function normalizeHexColor(value: string | undefined, fallback: string): string {
+  const match = /^#?([0-9a-fA-F]{6})$/.exec((value ?? "").trim());
+  return match ? `#${match[1].toLowerCase()}` : fallback;
+}
+
+function captionPreviewWords(
+  reel: Reel,
+  chunkSize: number,
+  uppercase: boolean,
+): string[] {
+  const raw =
+    reel.scenes?.find((s) => s.narration?.trim())?.narration ??
+    reel.title ??
+    "Sample caption preview";
+  const words = raw.trim().split(/\s+/).filter(Boolean);
+  const chunk = words.slice(0, Math.max(1, chunkSize));
+  return uppercase ? chunk.map((word) => word.toUpperCase()) : chunk;
+}
+
+function captionStyleFromReel(captionStyle: Reel["captionStyle"]) {
+  const next = canonicalCaptionStyle(captionStyle, {
+    ...CAPTION_DEFAULTS,
+    animation: CAPTION_DEFAULTS.animation,
+  });
+  return {
+    ...next,
+    primaryColor: normalizeHexColor(next.primaryColor, CAPTION_DEFAULTS.primaryColor),
+    activeColor: normalizeHexColor(next.activeColor, CAPTION_DEFAULTS.activeColor),
+    outlineColor: normalizeHexColor(next.outlineColor, CAPTION_DEFAULTS.outlineColor),
+  };
+}
+
 function CaptionEditor({
   reel,
   busy,
@@ -1564,14 +1610,19 @@ function CaptionEditor({
   run: (a: () => Promise<Reel>) => Promise<void>;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
-  const initial = useMemo<
-    Required<Omit<CaptionStyle, "animation">> & { animation: "none" | "pop" }
-  >(
-    () => ({ ...CAPTION_DEFAULTS, ...(reel.captionStyle ?? {}) }),
-    [reel.captionStyle],
+  const [style, setStyleState] = useState(() => captionStyleFromReel(reel.captionStyle));
+  const styleDirtyRef = useRef(false);
+  const setStyle = useCallback(
+    (updater: typeof style | ((s: typeof style) => typeof style)) => {
+      styleDirtyRef.current = true;
+      setStyleState(updater);
+    },
+    [],
   );
-  const [style, setStyle] = useState(initial);
-  useEffect(() => setStyle(initial), [initial]);
+  useEffect(() => {
+    if (styleDirtyRef.current) return;
+    setStyleState(captionStyleFromReel(reel.captionStyle));
+  }, [reel.captionStyle]);
   const [fonts, setFonts] = useState<FontOption[]>([]);
   useEffect(() => {
     void listFonts()
@@ -1580,57 +1631,83 @@ function CaptionEditor({
   }, []);
   const previewRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const dragOffsetRef = useRef(0);
+  const marginVAtDragStartRef = useRef(style.marginV);
+  const marginVRef = useRef(style.marginV);
+  const styleRef = useRef(style);
+  marginVRef.current = style.marginV;
+  styleRef.current = style;
+  const [previewHeight, setPreviewHeight] = useState(284);
+
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const sync = () => setPreviewHeight(el.getBoundingClientRect().height);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const bg = reel.scenes?.find((s) => s.assetUrl)?.assetUrl;
   const set = <K extends keyof typeof style>(k: K, v: (typeof style)[K]) =>
     setStyle((s) => ({ ...s, [k]: v }));
 
-  // Map drag Y → marginV (distance from the alignment's vertical anchor edge).
-  const onPointerMove = useCallback((clientY: number) => {
-    const el = previewRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const scaleY = 1920 / rect.height;
-    const yInPreview = Math.min(Math.max(clientY - rect.top, 0), rect.height);
-    setStyle((s) => {
-      const band = Math.floor((s.alignment - 1) / 3); // 0 bottom, 1 middle, 2 top
-      let marginV: number;
-      if (band === 2)
-        marginV = yInPreview * scaleY; // top anchor
-      else if (band === 0)
-        marginV = (rect.height - yInPreview) * scaleY; // bottom anchor
-      else marginV = Math.abs(rect.height / 2 - yInPreview) * scaleY; // middle offset
-      return {
+  const onPointerMove = useCallback(
+    (clientY: number) => {
+      const el = previewRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const anchorY =
+        clientY - rect.top - dragOffsetRef.current;
+      setStyle((s) => ({
         ...s,
-        marginV: Math.round(Math.min(Math.max(marginV, 0), 1900)),
-      };
-    });
-  }, []);
+        marginV: marginVFromDragY(anchorY, rect.height),
+      }));
+    },
+    [],
+  );
 
   useEffect(() => {
     const move = (e: PointerEvent) =>
       draggingRef.current && onPointerMove(e.clientY);
-    const up = () => (draggingRef.current = false);
+    const up = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      if (marginVRef.current === marginVAtDragStartRef.current) return;
+      void updateCaptions(
+        reelKey,
+        captionStylePayload(styleRef.current, CAPTION_STYLE_DEFAULTS),
+      ).catch(() => {});
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [onPointerMove]);
+  }, [onPointerMove, reelKey]);
 
-  // CSS position for the caption box mirroring ASS alignment + marginV.
-  const band = Math.floor((style.alignment - 1) / 3); // 0 bottom,1 middle,2 top
-  const captionPos: React.CSSProperties =
-    band === 2
-      ? { top: `${(style.marginV / 1920) * 100}%` }
-      : band === 0
-        ? { bottom: `${(style.marginV / 1920) * 100}%` }
-        : { top: `calc(50% - ${(style.marginV / 1920) * 100}%)` };
+  const captionPos = captionPreviewPosition(
+    style.marginV,
+    style.marginL,
+    style.marginR,
+  );
 
-  const word = (reel.title || "SAMPLE").split(/\s+/)[0] ?? "SAMPLE";
-  const previewText = style.uppercase ? word.toUpperCase() : word;
+  const previewWords = captionPreviewWords(reel, style.chunkSize, style.uppercase);
+  const activeWordIndex =
+    style.chunkSize >= 2 ? Math.min(1, Math.max(previewWords.length - 1, 0)) : -1;
   const outlinePx = Math.max(1, Math.round(style.outlineWidth / 2));
+  const previewFontPx = captionPreviewFontSize(style.fontSize, previewHeight);
+  const wordStyle = {
+    fontFamily: style.fontName,
+    fontSize: `${previewFontPx}px`,
+    fontWeight: style.bold ? 800 : 500,
+    WebkitTextStroke: `${outlinePx}px ${style.outlineColor}`,
+    paintOrder: "stroke fill" as const,
+    lineHeight: 1,
+    textShadow: "0 1px 4px rgba(0,0,0,0.65)",
+  };
 
   return (
     <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
@@ -1638,7 +1715,7 @@ function CaptionEditor({
 
       <div
         ref={previewRef}
-        className="relative mx-auto aspect-[9/16] w-40 select-none overflow-hidden rounded-md border border-slate-700 bg-black"
+        className="relative mx-auto aspect-9/16 w-40 select-none overflow-hidden rounded-md border border-slate-700 bg-black"
         style={
           bg
             ? {
@@ -1650,28 +1727,36 @@ function CaptionEditor({
         }
       >
         <div
-          className="absolute left-0 right-0 flex cursor-grab justify-center px-1 active:cursor-grabbing"
+          className="absolute z-10 flex cursor-grab flex-wrap justify-center gap-x-1 active:cursor-grabbing"
           style={captionPos}
-          onPointerDown={() => (draggingRef.current = true)}
+          onPointerDown={(e) => {
+            draggingRef.current = true;
+            marginVAtDragStartRef.current = style.marginV;
+            const el = previewRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const anchorY = anchorYFromMarginV(style.marginV, rect.height);
+            dragOffsetRef.current = e.clientY - rect.top - anchorY;
+          }}
         >
-          <span
-            style={{
-              fontFamily: style.fontName,
-              fontSize: `${(style.fontSize / 1080) * 160}px`,
-              fontWeight: style.bold ? 800 : 500,
-              color: style.primaryColor,
-              WebkitTextStroke: `${outlinePx}px ${style.outlineColor}`,
-              paintOrder: "stroke fill",
-              lineHeight: 1,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {previewText}
-          </span>
+          {previewWords.map((word, index) => (
+            <span
+              key={`${word}-${index}`}
+              style={{
+                ...wordStyle,
+                color:
+                  index === activeWordIndex ? style.activeColor : style.primaryColor,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {word}
+            </span>
+          ))}
         </div>
       </div>
       <p className="text-center text-[11px] text-slate-500">
-        Drag the word to reposition
+        Drag vertically to position — saved automatically
+        {style.chunkSize >= 2 ? " · second word previews highlight colour" : null}
       </p>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1715,35 +1800,32 @@ function CaptionEditor({
           />
         </Label>
         <Label className="gap-1 text-slate-300">
-          Position
-          <Select
-            value={String(style.alignment)}
-            disabled={busy}
-            onChange={(e) => set("alignment", Number(e.target.value))}
-          >
-            <option value="2">Bottom</option>
-            <option value="5">Middle</option>
-            <option value="8">Top</option>
-          </Select>
-        </Label>
-        <Label className="gap-1 text-slate-300">
           Text color
           <input
             type="color"
             className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
             value={style.primaryColor}
             disabled={busy}
-            onChange={(e) => set("primaryColor", e.target.value)}
+            onChange={(e) =>
+              set("primaryColor", normalizeHexColor(e.target.value, style.primaryColor))
+            }
           />
         </Label>
         <Label className="gap-1 text-slate-300">
           Highlight color
+          {style.chunkSize <= 1 ? (
+            <span className="text-[10px] font-normal text-slate-500">
+              Used when words/chunk &gt; 1
+            </span>
+          ) : null}
           <input
             type="color"
             className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
             value={style.activeColor}
             disabled={busy}
-            onChange={(e) => set("activeColor", e.target.value)}
+            onChange={(e) =>
+              set("activeColor", normalizeHexColor(e.target.value, style.activeColor))
+            }
           />
         </Label>
         <Label className="gap-1 text-slate-300">
@@ -1753,7 +1835,9 @@ function CaptionEditor({
             className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
             value={style.outlineColor}
             disabled={busy}
-            onChange={(e) => set("outlineColor", e.target.value)}
+            onChange={(e) =>
+              set("outlineColor", normalizeHexColor(e.target.value, style.outlineColor))
+            }
           />
         </Label>
         <Label className="gap-1 text-slate-300">
@@ -1785,17 +1869,19 @@ function CaptionEditor({
         disabled={busy}
         onClick={() =>
           void run(async () => {
-            await updateCaptions(reelKey, style);
-            // Render-only re-burn if the reel already has a video (free for
-            // parallax/ken_burns); otherwise the captions apply on next produce.
-            return reel.outputUrl
-              ? regenerateReel(reelKey, "render_only")
-              : getReel(reelKey);
+            const burnStyle = captionStylePayload(style, CAPTION_STYLE_DEFAULTS);
+            if (!reel.outputUrl) {
+              await updateCaptions(reelKey, burnStyle);
+              styleDirtyRef.current = false;
+              return getReel(reelKey);
+            }
+            const next = await applyCaptions(reelKey, burnStyle);
+            styleDirtyRef.current = false;
+            return next;
           })
         }
       >
-        <RefreshCw size={15} /> Apply captions{" "}
-        {reel.outputUrl ? "& re-render" : ""}
+        <RefreshCw size={15} /> Apply captions{reel.outputUrl ? " & re-render" : ""}
       </Button>
     </div>
   );
