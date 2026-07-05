@@ -6,6 +6,7 @@ import {
   FileText,
   GitBranch,
   Image,
+  Palette,
   Loader2,
   Plus,
   ReceiptText,
@@ -20,14 +21,15 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { Reel, ReelReview } from "@/api/reels";
-import { Button } from "@/components/ui/button";
+import { listFonts, listArtStyles, type FontOption, type Reel, type ReelReview, type ArtStyleOption } from "@/api/reels";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PanelTitle, panelClassName } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
+import { Link } from "@tanstack/react-router";
 import { useReelStudio } from "@/store/reel-studio";
-import { reelTopStatus } from "@/utils/reel";
+import { reelId, reelTopStatus } from "@/utils/reel";
 
 interface ReviewInspectorProps {
   reel?: Reel;
@@ -44,6 +46,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const saveReview = useReelStudio((state) => state.saveReview);
   const regenerateThumbnail = useReelStudio((state) => state.regenerateThumbnail);
   const useFrameAsThumbnail = useReelStudio((state) => state.useFrameAsThumbnail);
+  const useCustomThumbnail = useReelStudio((state) => state.useCustomThumbnail);
   const approveReview = useReelStudio((state) => state.approveReview);
   const publish = useReelStudio((state) => state.publish);
   const deleteSelected = useReelStudio((state) => state.deleteSelected);
@@ -56,6 +59,14 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   const [draft, setDraft] = useState<ReelReview | undefined>(review);
   const [frameSeconds, setFrameSeconds] = useState("1");
   const [pendingFrameSeconds, setPendingFrameSeconds] = useState<number | undefined>();
+  const [fonts, setFonts] = useState<FontOption[]>([]);
+  const [customText, setCustomText] = useState("");
+  const [customFont, setCustomFont] = useState("");
+  const [customSize, setCustomSize] = useState(120);
+  const [customColor, setCustomColor] = useState("#FFFFFF");
+  const [customOutline, setCustomOutline] = useState("#000000");
+  const [customPos, setCustomPos] = useState<"top" | "middle" | "bottom">("bottom");
+  const [customCaps, setCustomCaps] = useState(true);
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [showChannelConnect, setShowChannelConnect] = useState(false);
   const [newChannelLabel, setNewChannelLabel] = useState("");
@@ -72,6 +83,34 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   useEffect(() => {
     if (!hasUnsavedReviewEdits) setDraft(review);
   }, [hasUnsavedReviewEdits, review]);
+
+  useEffect(() => {
+    void listFonts()
+      .then((list) => {
+        setFonts(list);
+        setCustomFont((current) => current || list[0]?.family || "");
+      })
+      .catch(() => setFonts([]));
+  }, []);
+
+  useEffect(() => {
+    if (draft?.title && !customText) setCustomText(draft.title);
+  }, [draft?.title, customText]);
+
+  async function createCustomTextThumbnail() {
+    const atSeconds = pendingFrameSeconds ?? previewTimeSeconds;
+    await useCustomThumbnail({
+      atSeconds,
+      text: customText.trim(),
+      fontFamily: customFont || undefined,
+      fontSize: customSize,
+      color: customColor,
+      outlineColor: customOutline,
+      position: customPos,
+      uppercase: customCaps,
+    });
+    setPendingFrameSeconds(undefined);
+  }
 
   useEffect(() => {
     const defaultChannel =
@@ -233,7 +272,23 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </span>
       </div>
 
+      {reel ? (
+        <Link
+          to="/studio/$id"
+          params={{ id: reelId(reel) }}
+          className={cn(
+            buttonClassName("outline"),
+            reel.status === "plan_review" && "border-warning/50 text-warning"
+          )}
+        >
+          <Sparkles size={16} />
+          {reel.status === "plan_review" ? "Review plan in Studio" : "Open in Studio"}
+        </Link>
+      ) : null}
+
       <StoryFlowPanel reel={reel} />
+
+      <StyleLookPanel reel={reel} />
 
       <Label>
         Title
@@ -357,6 +412,102 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
           Generate AI Thumbnail
         </Button>
+
+        <div className="grid gap-2 rounded-md border border-border bg-muted/35 p-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-extrabold text-foreground">
+            <FileText size={14} /> Custom text thumbnail (your font)
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            Uses the selected frame ({(pendingFrameSeconds ?? previewTimeSeconds).toFixed(1)}s) with your caption
+            burned across it — a manual variant to the AI thumbnail.
+          </span>
+          <Input
+            value={customText}
+            disabled={!completed}
+            maxLength={120}
+            placeholder="Thumbnail caption text"
+            onChange={(event) => setCustomText(event.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <Label className="gap-0 text-xs">
+              Font
+              <Select
+                value={customFont}
+                disabled={!completed}
+                onChange={(event) => setCustomFont(event.target.value)}
+              >
+                {fonts.map((font) => (
+                  <option key={font.id} value={font.family}>
+                    {font.label}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+            <Label className="gap-0 text-xs">
+              Position
+              <Select
+                value={customPos}
+                disabled={!completed}
+                onChange={(event) => setCustomPos(event.target.value as "top" | "middle" | "bottom")}
+              >
+                <option value="bottom">Bottom</option>
+                <option value="middle">Middle</option>
+                <option value="top">Top</option>
+              </Select>
+            </Label>
+            <Label className="gap-0 text-xs">
+              Size
+              <Input
+                type="number"
+                min={20}
+                max={400}
+                value={customSize}
+                disabled={!completed}
+                onChange={(event) => setCustomSize(Number(event.target.value) || 120)}
+              />
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Label className="gap-0 text-xs">
+                Text
+                <input
+                  type="color"
+                  className="h-9 w-full rounded border border-border bg-background"
+                  value={customColor}
+                  disabled={!completed}
+                  onChange={(event) => setCustomColor(event.target.value)}
+                />
+              </Label>
+              <Label className="gap-0 text-xs">
+                Outline
+                <input
+                  type="color"
+                  className="h-9 w-full rounded border border-border bg-background"
+                  value={customOutline}
+                  disabled={!completed}
+                  onChange={(event) => setCustomOutline(event.target.value)}
+                />
+              </Label>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={customCaps}
+              disabled={!completed}
+              onChange={(event) => setCustomCaps(event.target.checked)}
+            />
+            ALL CAPS
+          </label>
+          <Button
+            type="button"
+            variant="default"
+            disabled={!canReview || loading || !customText.trim()}
+            onClick={() => void createCustomTextThumbnail()}
+          >
+            {loading ? <Loader2 className="animate-spin" size={16} /> : <FileText size={16} />}
+            Create text thumbnail
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
@@ -687,6 +838,56 @@ function thumbnailPublishMessage(error: string): string {
     return "This YouTube channel cannot set custom thumbnails yet. Enable custom thumbnails/advanced features in YouTube Studio, then reconnect or retry publish.";
   }
   return error;
+}
+
+function StyleLookPanel({ reel }: { reel?: Reel }) {
+  const [artStyles, setArtStyles] = useState<ArtStyleOption[]>([]);
+
+  const isHorror = Boolean(reel && (reel.niche.startsWith("horror") || reel.artStyleId));
+
+  useEffect(() => {
+    if (!isHorror) return;
+    void listArtStyles("horror").then(setArtStyles).catch(() => setArtStyles([]));
+  }, [isHorror]);
+
+  if (!reel || !isHorror) return null;
+
+  const artStyle = artStyles.find((s) => s.id === reel.artStyleId);
+  const motionLabel = reel.motionMode?.replace(/_/g, " ") ?? "not set";
+
+  return (
+    <div className="grid gap-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+      <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
+        <Palette size={16} />
+        Style &amp; Look
+      </div>
+      <div className="grid gap-1.5 text-xs">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-extrabold text-muted-foreground">Art style</span>
+          <span className="font-extrabold text-foreground">
+            {artStyle?.displayName ?? reel.artStyleId ?? "Auto (rotate)"}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-extrabold text-muted-foreground">Motion</span>
+          <span className="font-bold capitalize text-foreground">{motionLabel}</span>
+        </div>
+        {reel.captionStyle?.fontName ? (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="font-extrabold text-muted-foreground">Caption font</span>
+            <span className="font-bold text-foreground">{reel.captionStyle.fontName}</span>
+          </div>
+        ) : null}
+      </div>
+      {artStyle?.thumbnailUrl ? (
+        <img
+          src={artStyle.thumbnailUrl}
+          alt={artStyle.displayName}
+          className="aspect-square w-20 rounded-md border border-border object-cover"
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function StoryFlowPanel({ reel }: { reel?: Reel }) {
