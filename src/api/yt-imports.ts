@@ -27,6 +27,12 @@ export interface YtImportCaptionCue {
   text: string;
 }
 
+export interface YtImportFrameDelivery {
+  mode: "api" | "cdn";
+  /** CDN base through `frames/` — append frame_000001.jpg. Only set for S3. */
+  cdnFramesPrefix?: string;
+}
+
 export interface YtImport {
   _id: string;
   assetId: string;
@@ -53,6 +59,7 @@ export interface YtImport {
   framesExtracted: boolean;
   frameIndices?: number[];
   frameIndicesTotal?: number;
+  frameDelivery?: YtImportFrameDelivery;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +141,14 @@ export function audioClipUrl(id: string, atSec: number, durationSec = 3): string
   return `${API_BASE}/yt-imports/${id}/audio-clip?at=${atSec}&duration=${durationSec}`;
 }
 
+export function frameUrlForImport(item: Pick<YtImport, "_id" | "frameDelivery">, frameIndex: number): string {
+  if (item.frameDelivery?.mode === "cdn" && item.frameDelivery.cdnFramesPrefix) {
+    return `${item.frameDelivery.cdnFramesPrefix}frame_${String(frameIndex).padStart(6, "0")}.jpg`;
+  }
+  return `${API_BASE}/yt-imports/${item._id}/frames/${frameIndex}`;
+}
+
+/** @deprecated Prefer frameUrlForImport(item, index) for storage-aware URLs. */
 export function frameUrl(id: string, frameIndex: number): string {
   return `${API_BASE}/yt-imports/${id}/frames/${frameIndex}`;
 }

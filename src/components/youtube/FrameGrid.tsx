@@ -1,21 +1,21 @@
 import { memo } from "react";
-import { frameUrl } from "@/api/yt-imports";
+import { frameUrlForImport, type YtImport } from "@/api/yt-imports";
 import { cn } from "@/lib/utils";
 
 interface FrameGridProps {
-  importId: string;
+  item: Pick<YtImport, "_id" | "frameDelivery">;
   frames: number[];
   selectedFrame?: number;
   onSelectFrame: (index: number) => void;
 }
 
 const FrameCell = memo(function FrameCell({
-  importId,
+  item,
   index,
   selected,
   onSelect,
 }: {
-  importId: string;
+  item: Pick<YtImport, "_id" | "frameDelivery">;
   index: number;
   selected: boolean;
   onSelect: (index: number) => void;
@@ -25,12 +25,12 @@ const FrameCell = memo(function FrameCell({
       type="button"
       onClick={() => onSelect(index)}
       className={cn(
-        "overflow-hidden rounded border border-border/60 bg-muted transition ring-primary [content-visibility:auto]",
+        "min-h-[52px] overflow-hidden rounded border border-border/60 bg-muted transition ring-primary",
         selected && "ring-2"
       )}
     >
       <img
-        src={frameUrl(importId, index)}
+        src={frameUrlForImport(item, index)}
         alt={`Frame ${index}`}
         className="aspect-video w-full object-cover"
         loading="lazy"
@@ -41,17 +41,25 @@ const FrameCell = memo(function FrameCell({
 });
 
 export const FrameGrid = memo(function FrameGrid({
-  importId,
+  item,
   frames,
   selectedFrame,
   onSelectFrame,
 }: FrameGridProps) {
+  if (frames.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Frame files are still syncing — this refreshes automatically.
+      </p>
+    );
+  }
+
   return (
-    <div className="grid max-h-[360px] grid-cols-4 gap-2 overflow-auto sm:grid-cols-6 contain-strict">
+    <div className="grid max-h-[360px] grid-cols-4 gap-2 overflow-auto sm:grid-cols-6">
       {frames.map((idx) => (
         <FrameCell
           key={idx}
-          importId={importId}
+          item={item}
           index={idx}
           selected={selectedFrame === idx}
           onSelect={onSelectFrame}

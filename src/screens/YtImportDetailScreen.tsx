@@ -5,7 +5,7 @@ import {
   audioClipUrl,
   deleteYtImport,
   extractFrames,
-  frameUrl,
+  frameUrlForImport,
   resolveMediaUrl,
 } from "@/api/yt-imports";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { formatTime } from "@/components/youtube/format";
 import { useThrottledCallback } from "@/hooks/use-throttled-callback";
 import { useYtImportPoll } from "@/hooks/use-yt-import-poll";
 import { findCaptionAt } from "@/utils/captions";
+import { importHasVisibleFrames } from "@/utils/yt-import";
 import { cn } from "@/lib/utils";
 
 const route = getRouteApi("/youtube/$importId");
@@ -39,7 +40,8 @@ function frameRangeFromItem(item: {
 export function YtImportDetailScreen() {
   const { importId } = route.useParams();
   const initialData = route.useLoaderData();
-  const { item, loading, error, refresh, setError } = useYtImportPoll(importId, initialData);
+  const { item, loading, error, refresh, beginBurstPolling, patchItem, setError } =
+    useYtImportPoll(importId, initialData);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -75,14 +77,23 @@ export function YtImportDetailScreen() {
       setError(undefined);
       try {
         const range = parseFrameRange(frameRange, item.durationSec);
+        patchItem({
+          status: "extracting_frames",
+          progress: 75,
+          framesExtracted: false,
+          frameIndices: [],
+          frameCount: 0,
+        });
+        beginBurstPolling();
         await extractFrames(item._id, range);
         setFrameRange(frameRangeFromItem({ ...item, ...range }));
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Frame extraction failed");
+        await refresh();
       }
     });
-  }, [item, frameRange, refresh, setError]);
+  }, [item, frameRange, refresh, beginBurstPolling, patchItem, setError]);
 
   const handleDelete = useCallback(async () => {
     if (!item || !confirm("Delete this import and all its assets?")) return;
@@ -134,6 +145,7 @@ export function YtImportDetailScreen() {
   const processingFrames = item.status === "extracting_frames";
   const framesBusy = extractPending || processingFrames;
   const frames = item.frameIndices ?? [];
+  const hasFrames = importHasVisibleFrames(item);
   const canViewVideo = Boolean(videoSrc) && item.status !== "failed" && item.status !== "pending";
 
   return (
@@ -232,7 +244,7 @@ export function YtImportDetailScreen() {
                 <PanelTitle>Frames</PanelTitle>
               </PanelHeader>
               <div className="flex flex-col gap-3 p-3.5">
-                {item.framesExtracted ? (
+                {hasFrames ? (
                   <>
                     <p className="text-xs text-muted-foreground">
                       {item.frameCount.toLocaleString()} frames
@@ -245,7 +257,7 @@ export function YtImportDetailScreen() {
                         : ""}
                     </p>
                     <FrameGrid
-                      importId={item._id}
+                      item={item}
                       frames={frames}
                       selectedFrame={selectedFrame}
                       onSelectFrame={handleSelectFrame}
@@ -321,7 +333,7 @@ export function YtImportDetailScreen() {
               </PanelHeader>
               <div className="flex flex-col gap-3 p-3.5 sm:flex-row">
                 <img
-                  src={frameUrl(item._id, selectedFrame)}
+                  src={frameUrlForImport(item, selectedFrame)}
                   alt={`Selected frame ${selectedFrame}`}
                   className="max-h-64 rounded-md border border-border object-contain"
                   loading="lazy"
