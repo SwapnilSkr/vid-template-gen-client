@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
+const SERVER_BASE = API_BASE.replace(/\/api\/?$/, "");
 
 export type ReelStatus =
   | "pending"
@@ -107,6 +108,16 @@ export interface ReelCostBreakdown {
   generatedAt?: string;
 }
 
+export interface ReelEditDraft {
+  id: string;
+  kind: "scene_regen" | "render_only";
+  status: "ready";
+  sceneAssets: { index: number; assetUrl?: string; audioUrl?: string }[];
+  outputUrl?: string;
+  subtitlesUrl?: string;
+  createdAt?: string;
+}
+
 export interface Reel {
   _id?: string;
   id?: string;
@@ -163,6 +174,7 @@ export interface Reel {
   voiceOverride?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   narrationVoice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
+  editDraft?: ReelEditDraft;
 }
 
 export type YouTubePublishStatus = NonNullable<Reel["youtube"]>;
@@ -376,6 +388,16 @@ export async function getReel(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/status`);
 }
 
+export function mediaUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${SERVER_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 export async function getReview(id: string): Promise<ReelReview> {
   return request<ReelReview>(`/reels/${id}/review`);
 }
@@ -576,6 +598,14 @@ export async function updateCaptions(id: string, patch: CaptionStyle): Promise<R
 
 export async function regenerateReel(id: string, mode: "render_only" | "assets"): Promise<Reel> {
   return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
+}
+
+export async function saveEditDraft(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/edit-draft/save`, { method: "POST" });
+}
+
+export async function discardEditDraft(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/edit-draft/discard`, { method: "POST" });
 }
 
 export async function approvePlan(id: string): Promise<Reel> {
