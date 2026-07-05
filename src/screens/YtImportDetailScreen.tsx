@@ -149,7 +149,7 @@ export function YtImportDetailScreen() {
   const canViewVideo = Boolean(videoSrc) && item.status !== "failed" && item.status !== "pending";
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 lg:p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           to="/youtube"
@@ -170,7 +170,7 @@ export function YtImportDetailScreen() {
         </div>
       ) : null}
 
-      <header>
+      <header className="rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
         <h1 className="text-xl font-extrabold text-foreground">{item.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {item.channelTitle} · {item.assetId} · {item.storage.toUpperCase()}

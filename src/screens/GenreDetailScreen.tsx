@@ -27,7 +27,7 @@ export function GenreDetailScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-3.5 grid gap-2">
+      <header className="mb-4 grid gap-2 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
         <Link
           to="/trends"
           className="inline-flex w-fit items-center gap-1.5 text-[13px] font-bold text-muted-foreground no-underline hover:text-foreground"

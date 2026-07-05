@@ -13,7 +13,7 @@ export function CreateReelScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-3.5 grid gap-2">
+      <header className="mb-4 grid gap-2 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
         <Link
           to="/"
           search={{ status: undefined }}
@@ -34,7 +34,7 @@ export function CreateReelScreen() {
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <CreateReelForm onCreated={() => void navigate({ to: "/", search: { status: undefined } })} />
       </div>
     </section>

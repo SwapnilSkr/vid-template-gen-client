@@ -195,7 +195,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
 
   return (
     <form
-      className={cn(panelClassName, "mb-2.5 grid gap-3 p-4")}
+      className={cn(panelClassName, "mb-2.5 grid gap-4 p-4")}
       onSubmit={async (event) => {
         event.preventDefault();
         const isComicHorror = form.niche === "horror" && form.genre === "2d_comic_horror";
@@ -300,7 +300,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         ) : null}
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-border bg-muted/25 p-3">
+      <div className="grid gap-2 rounded-lg border border-border bg-black/15 p-3">
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
             <Youtube size={17} />
@@ -326,7 +326,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </Label>
 
         {selectedOutroChannel ? (
-          <div className="flex items-center gap-3 rounded-md border border-border bg-background/70 p-2.5">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-card/70 p-2.5">
             {selectedOutroChannel.logoUrl ? (
               <img
                 className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
@@ -356,7 +356,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             </div>
           </div>
         ) : (
-          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             No channel is selected. The renderer will fall back to the niche default name unless you connect a
             YouTube channel first.
           </p>
@@ -399,7 +399,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </div>
 
         {topicMode === "auto" ? (
-          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {isGameplayNiche
               ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty. You don't need to type anything; this is the default for high-volume posting."
               : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns. You don't need to type anything."}
@@ -458,7 +458,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               </option>
             ))}
           </Select>
-          <div className="rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <div className="rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {selectedHorrorAudio ? (
               <div className="grid gap-2">
                 <div>
@@ -475,7 +475,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       )}
 
       {isHorrorNiche && (
-        <div className="grid gap-2.5 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
           <div className="grid gap-1">
             <strong className="text-[13px] text-foreground">How this reel is made</strong>
             <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
@@ -521,7 +521,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             </span>
           </Label>
           {selectedHorrorReference ? (
-            <div className="grid gap-1 rounded-md border border-border bg-background/70 p-2.5 text-xs">
+            <div className="grid gap-1 rounded-md border border-border bg-card/70 p-2.5 text-xs">
               <div className="font-extrabold text-foreground">
                 {selectedHorrorReference.title}
                 {selectedHorrorReference.author ? ` - ${selectedHorrorReference.author}` : ""}
@@ -561,7 +561,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               </option>
             ))}
           </Select>
-          <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {imageModelCostSummary(selectedImageModel, estimatedSceneCount)}
           </p>
           {refArtModelWarning ? (
@@ -583,7 +583,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           <option value="frame">Choose video frame later (no AI image cost)</option>
           <option value="ai">Generate AI thumbnail during render</option>
         </Select>
-        <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+        <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
           Frame mode only generates AI title, description, tags, and prompt. It does not create or upload a thumbnail until you save a selected frame in review.
         </p>
       </Label>
@@ -653,7 +653,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
                 </option>
               ))}
             </Select>
-            <p className="m-0 rounded-md bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
               {MOTION_MODES.find((mode) => mode.value === motionMode)?.hint}
             </p>
           </Label>

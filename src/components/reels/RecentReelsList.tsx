@@ -28,7 +28,7 @@ export function RecentReelsList({ selectedId, reels: reelsProp, title }: RecentR
       </PanelHeader>
 
       <div className="grid">
-        <div className="hidden min-h-10 grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] items-center gap-2.5 border-b border-border/60 bg-muted px-3.5 py-2 text-[11px] font-extrabold text-muted-foreground md:grid">
+        <div className="hidden min-h-10 grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] items-center gap-2.5 border-b border-border/70 bg-black/15 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground md:grid">
           <span>Title</span>
           <span>Genre</span>
           <span>Mode</span>
@@ -42,8 +42,8 @@ export function RecentReelsList({ selectedId, reels: reelsProp, title }: RecentR
             <div
               key={id}
               className={cn(
-                "grid min-h-10 w-full grid-cols-1 items-center gap-1 border-0 border-b border-border/60 bg-card px-3.5 py-2 text-left text-xs font-semibold md:grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] md:gap-2.5",
-                selectedId === id && "bg-primary/5"
+                "data-table-row grid min-h-11 w-full grid-cols-1 items-center gap-1 border-0 border-b border-border/60 bg-card px-3.5 py-2 text-left text-xs font-semibold transition-colors md:grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] md:gap-2.5",
+                selectedId === id && "bg-primary/10"
               )}
             >
               <button
@@ -80,7 +80,7 @@ export function RecentReelsList({ selectedId, reels: reelsProp, title }: RecentR
               >
                 <em
                   className={cn(
-                    "inline-flex rounded-full bg-warning px-2 py-1 text-[11px] not-italic text-warning-foreground",
+                    "inline-flex rounded-full border border-warning/30 bg-warning/15 px-2 py-1 text-[11px] font-bold not-italic text-warning",
                     reel.status === "completed" && "bg-success/20 text-success-foreground",
                     reel.status === "failed" && "bg-destructive/15 text-destructive"
                   )}

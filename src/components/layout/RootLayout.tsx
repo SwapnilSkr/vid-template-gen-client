@@ -7,8 +7,8 @@ export function RootLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-background lg:grid-cols-[214px_1fr]">
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-2.5 border-b border-border bg-sidebar px-3 py-2.5 lg:hidden">
+    <div className="app-surface grid min-h-screen grid-cols-1 bg-background lg:grid-cols-[232px_minmax(0,1fr)]">
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-2.5 border-b border-border bg-sidebar/95 px-3 py-2.5 backdrop-blur lg:hidden">
         <span className="flex items-center gap-2 text-sm font-extrabold text-foreground">
           <Play className="text-primary" size={18} />
           ReelForge

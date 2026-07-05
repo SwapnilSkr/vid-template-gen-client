@@ -52,7 +52,7 @@ export function ReviewScreen() {
   const failedCount = reels.filter((reel) => reel.status === "failed").length;
 
   return (
-    <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
+    <section className="min-w-0 overflow-x-clip px-4 py-4 sm:px-5 lg:px-6">
       <PageHeader downloadUrl={selected?.outputUrl} />
 
       {error ? (
@@ -83,7 +83,7 @@ export function ReviewScreen() {
         </div>
       ) : null}
 
-      <div className="grid items-start gap-2.5 xl:grid-cols-[minmax(520px,1fr)_minmax(360px,430px)]">
+      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,430px)]">
         <div className="grid min-w-0 gap-2.5">
           <VideoPreview reel={selected} />
           <GenerationTimeline reel={selected} />
@@ -94,7 +94,9 @@ export function ReviewScreen() {
             title={activeFilter ? activeFilter.label : undefined}
           />
         </div>
-        <ReviewInspector reel={selected} review={review} selectedId={selectedId} />
+        <div className="min-w-0 overflow-hidden">
+          <ReviewInspector reel={selected} review={review} selectedId={selectedId} />
+        </div>
       </div>
     </section>
   );

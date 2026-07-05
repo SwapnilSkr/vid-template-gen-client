@@ -19,7 +19,7 @@ export function PanelHeader({
   return (
     <div
       ref={ref}
-      className={cn("flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3", className)}
+      className={cn("flex items-center justify-between gap-3 border-b border-border/70 bg-black/10 px-3.5 py-3", className)}
       {...props}
     />
   );

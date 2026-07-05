@@ -68,14 +68,14 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
 
   const navLinkClass = (isActive: boolean) =>
     cn(
-      "grid min-h-9 grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground no-underline",
-      isActive && "bg-sidebar-accent text-sidebar-accent-foreground shadow-[var(--shadow-sidebar-active)]"
+      "grid min-h-9 grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-bold text-sidebar-foreground/85 no-underline transition-colors hover:border-border hover:bg-card/70 hover:text-foreground",
+      isActive && "border-primary/55 bg-primary text-sidebar-accent-foreground shadow-[var(--shadow-sidebar-active)] hover:bg-primary hover:text-sidebar-accent-foreground"
     );
 
   return (
     <nav
       className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 overflow-auto border-r border-border bg-sidebar px-2 py-4 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-40 w-64 overflow-auto border-r border-border bg-sidebar px-2.5 py-4 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0",
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >
@@ -83,22 +83,24 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         to="/"
         search={{ status: undefined }}
         onClick={onNavigate}
-        className="mb-3 flex min-h-12 items-center gap-2.5 border-b border-border/60 px-2.5 pb-4 no-underline"
+        className="mb-4 flex min-h-14 items-center gap-2.5 rounded-lg border border-border bg-card/50 px-3 py-3 no-underline"
       >
-        <Play className="text-primary" size={22} />
-        <div>
+        <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
+          <Play size={19} />
+        </span>
+        <div className="min-w-0">
           <strong className="block text-base leading-tight text-foreground">ReelForge</strong>
-          <span className="block text-xs text-muted-foreground">Shorts / Reddit Reels</span>
+          <span className="block truncate text-xs text-muted-foreground">Shorts production console</span>
         </div>
       </Link>
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase text-muted-foreground">Insights</div>
+      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Insights</div>
       <Link to="/trends" onClick={onNavigate} className={navLinkClass(pathname === "/trends")}>
         <TrendingUp size={17} />
         <span>Trend Scout</span>
       </Link>
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase text-muted-foreground">Queue</div>
+      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Queue</div>
       <Link
         to="/"
         search={{ status: undefined }}
@@ -123,8 +125,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
             <span>{name}</span>
             <em
               className={cn(
-                "min-w-6 rounded-full bg-muted px-2 py-0.5 text-center text-xs not-italic text-muted-foreground",
-                isActive && "bg-white/20 text-white"
+                "min-w-6 rounded-full border border-border bg-muted px-2 py-0.5 text-center text-xs not-italic text-muted-foreground",
+                isActive && "border-black/10 bg-black/15 text-primary-foreground"
               )}
             >
               {count}
@@ -133,7 +135,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         );
       })}
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase text-muted-foreground">Library</div>
+      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Library</div>
       <Link
         to="/youtube"
         onClick={onNavigate}
@@ -155,7 +157,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         <div
           key={item}
           aria-disabled="true"
-          className="grid min-h-9 cursor-not-allowed grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground/60"
+          className="grid min-h-9 cursor-not-allowed grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-bold text-muted-foreground/55"
         >
           <ListVideo size={17} />
           <span>{item}</span>

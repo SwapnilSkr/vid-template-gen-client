@@ -113,7 +113,7 @@ export function TrendsScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-3.5 grid min-h-12 gap-3 sm:flex sm:items-start sm:justify-between">
+      <header className="mb-4 grid min-h-12 gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)] sm:flex sm:items-start sm:justify-between">
         <div>
           <h1 className="m-0 flex items-center gap-2 text-2xl leading-tight tracking-normal text-foreground">
             <TrendingUp size={22} className="text-primary" /> Trend Scout
@@ -283,7 +283,7 @@ function HorrorReferenceLibrary({ refs, loading }: { refs: HorrorReference[]; lo
               href={ref.sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="grid min-h-40 gap-2 rounded-md border border-border bg-background/70 p-3 text-xs no-underline hover:bg-accent"
+              className="grid min-h-40 gap-2 rounded-md border border-border bg-card/70 p-3 text-xs no-underline hover:bg-accent"
             >
               <div className="min-w-0">
                 <div className="line-clamp-2 font-extrabold leading-snug text-foreground">{ref.title}</div>

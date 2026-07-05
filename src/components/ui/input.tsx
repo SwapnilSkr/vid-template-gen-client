@@ -9,7 +9,7 @@ export function Input({ className, ref, ...props }: InputProps) {
     <input
       ref={ref}
       className={cn(
-        "min-h-[38px] w-full rounded-md border border-input bg-card px-2.5 py-2 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground",
+        "min-h-[38px] w-full rounded-md border border-input bg-background/45 px-2.5 py-2 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/20 disabled:bg-muted disabled:text-muted-foreground",
         className
       )}
       {...props}
@@ -26,7 +26,7 @@ export function Textarea({ className, ref, ...props }: TextareaProps) {
     <textarea
       ref={ref}
       className={cn(
-        "w-full resize-y rounded-md border border-input bg-card p-2.5 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground",
+        "w-full resize-y rounded-md border border-input bg-background/45 p-2.5 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/20 disabled:bg-muted disabled:text-muted-foreground",
         className
       )}
       {...props}
@@ -43,7 +43,7 @@ export function Select({ className, ref, ...props }: SelectProps) {
     <select
       ref={ref}
       className={cn(
-        "min-h-[38px] w-full rounded-md border border-input bg-card px-2.5 py-2 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground",
+        "min-h-[38px] w-full rounded-md border border-input bg-background/45 px-2.5 py-2 text-[13px] font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-ring/20 disabled:bg-muted disabled:text-muted-foreground",
         className
       )}
       {...props}

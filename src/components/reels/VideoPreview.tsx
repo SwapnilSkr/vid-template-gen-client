@@ -36,8 +36,8 @@ export function VideoPreview({ reel }: VideoPreviewProps) {
         </div>
       </PanelHeader>
 
-      <div className="m-3.5 flex min-h-60 items-center justify-center rounded-md bg-foreground p-4 md:min-h-[310px]">
-        <div className="aspect-9/16 h-[min(520px,70vh)] w-auto max-w-full overflow-hidden rounded-md bg-black">
+      <div className="m-3.5 flex min-h-60 items-center justify-center rounded-md border border-border bg-black/45 p-4 md:min-h-[310px]">
+        <div className="aspect-9/16 h-[min(520px,70vh)] w-auto max-w-full overflow-hidden rounded-md border border-border bg-black">
           {reel?.outputUrl ? (
             <video
               className="h-full w-full object-contain"
@@ -50,9 +50,9 @@ export function VideoPreview({ reel }: VideoPreviewProps) {
               onTimeUpdate={(event) => setPreviewTimeSeconds(event.currentTarget.currentTime)}
             />
           ) : (
-            <div className="grid h-full place-items-center gap-2 px-4 text-center text-secondary-foreground">
+            <div className="grid h-full place-items-center gap-2 px-4 text-center text-muted-foreground">
               <Film size={46} />
-              <strong className="text-secondary-foreground">
+              <strong className="text-foreground">
                 {reel ? `${reel.progress}% generated` : "Select or create a reel"}
               </strong>
               <span className="text-[13px] text-muted-foreground">Completed reels appear here for review.</span>

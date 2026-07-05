@@ -264,10 +264,10 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
   }
 
   return (
-    <aside className={cn(panelClassName, "grid gap-3 p-3.5 xl:sticky xl:top-4")}>
-      <div className="flex items-center justify-between gap-3">
+    <aside className={cn(panelClassName, "grid min-w-0 gap-3 overflow-x-hidden p-3.5 xl:sticky xl:top-4")}>
+      <div className="flex min-w-0 items-center justify-between gap-3">
         <PanelTitle>Review Package</PanelTitle>
-        <span className="rounded-full bg-warning px-2.5 py-1 text-xs font-extrabold text-warning-foreground">
+        <span className="shrink-0 rounded-full bg-warning px-2.5 py-1 text-xs font-extrabold text-warning-foreground">
           {reelTopStatus(reel, draft)}
         </span>
       </div>
@@ -328,8 +328,8 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         />
       </Label>
 
-      <div className="grid gap-2.5">
-        <div className="flex items-center justify-between gap-3">
+      <div className="grid min-w-0 gap-2.5">
+        <div className="flex min-w-0 items-center justify-between gap-3">
           <PanelTitle>Thumbnail</PanelTitle>
           <span className="text-xs text-muted-foreground">Selected before publish</span>
         </div>
@@ -347,7 +347,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           </div>
         )}
 
-        <div className="grid grid-cols-[1fr_auto] gap-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
           <Label className="gap-0">
             <Input
               type="number"
@@ -428,7 +428,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
             placeholder="Thumbnail caption text"
             onChange={(event) => setCustomText(event.target.value)}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <Label className="gap-0 text-xs">
               Font
               <Select
@@ -466,7 +466,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
                 onChange={(event) => setCustomSize(Number(event.target.value) || 120)}
               />
             </Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
               <Label className="gap-0 text-xs">
                 Text
                 <input
@@ -560,7 +560,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Select>
       </Label>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <Button type="button" variant="outline" disabled={!canReview} onClick={() => void saveDraftReview()}>
           <RefreshCw size={16} />
           {hasUnsavedReviewEdits ? "Save Changes" : "Saved"}
@@ -571,8 +571,8 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Button>
       </div>
 
-      <div className="grid gap-2.5 rounded-lg border border-border bg-muted/25 p-3">
-        <div className="flex items-center justify-between gap-3">
+      <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
             <Youtube size={17} />
             YouTube Publishing
@@ -602,7 +602,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </Label>
 
         {selectedChannel ? (
-          <div className="flex items-center gap-3 rounded-md border border-border bg-background/70 p-2.5">
+          <div className="flex min-w-0 items-center gap-3 rounded-md border border-border bg-card/70 p-2.5">
             {selectedChannel.logoUrl ? (
               <img
                 className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
@@ -642,7 +642,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-extrabold text-foreground">Channel Accounts</span>
           <Button
             type="button"
@@ -656,7 +656,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
         </div>
 
         {showChannelConnect ? (
-          <div className="grid gap-2 rounded-md border border-border bg-background/70 p-2.5">
+          <div className="grid gap-2 rounded-md border border-border bg-card/70 p-2.5">
             <Label>
               Internal nickname
               <Input
@@ -668,7 +668,7 @@ function ReviewInspectorForm({ reel, review }: Omit<ReviewInspectorProps, "selec
                 Only used inside this app. The real YouTube name and logo are pulled from Google after connect.
               </small>
             </Label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
               <Label>
                 Content type
                 <Select
@@ -904,7 +904,7 @@ function StoryFlowPanel({ reel }: { reel?: Reel }) {
   if (!isReddit && !isHorror) return null;
 
   return (
-    <div className="grid gap-2.5 rounded-lg border border-border bg-muted/25 p-3">
+    <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
           <GitBranch size={16} />
@@ -1072,7 +1072,7 @@ function FlowStep({
   state: "pending" | "active" | "done" | "blocked";
 }) {
   return (
-    <div className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-border bg-background/70 p-2.5">
+    <div className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-border bg-card/70 p-2.5">
       <div
         className={cn(
           "grid h-7 w-7 place-items-center rounded-full",
