@@ -401,46 +401,46 @@ export function ThumbnailStudioScreen() {
   const disableEdits = busy || previewing || isGenerating;
 
   return (
-    <section className="studio-workspace w-full min-w-0 overflow-x-clip px-3 pb-5 text-foreground sm:px-4 lg:px-5">
-      <header className="glass-panel sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border-t-0 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
+    <section className="studio-workspace w-full min-w-0 overflow-x-clip text-foreground">
+      <header className="sticky top-0 z-20 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             to="/studio/$id"
             params={{ id }}
-            className="grid size-9 place-items-center rounded-md border border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
             title="Back to studio"
           >
-            <ArrowLeft size={17} />
+            <ArrowLeft size={16} />
           </Link>
           <div className="min-w-0">
-            <h1 className="m-0 flex min-w-0 items-center gap-2 truncate text-base tracking-normal text-foreground">
-              <ImageIcon size={18} className="text-primary" />
-              <span className="truncate">Thumbnail studio · {reel.title || "Untitled reel"}</span>
+            <h1 className="m-0 min-w-0 truncate text-sm font-semibold tracking-normal text-foreground">
+              Thumbnail studio · {reel.title || "Untitled reel"}
             </h1>
-            <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-              {reel.niche} · <ReelStatusChip status={reel.status} className="min-w-[82px]" />
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              {reel.niche} · <ReelStatusChip status={reel.status} size="sm" />
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {hasDraft ? (
-            <span className="rounded-full border border-warning/50 bg-warning/10 px-2.5 py-1 text-xs font-bold text-warning">
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
               Local draft — not uploaded
             </span>
           ) : null}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
+            size="icon"
+            title="Refresh"
             onClick={() => void refresh()}
             disabled={busy}
-            className="border-border bg-secondary text-foreground hover:bg-accent"
           >
             <RefreshCw size={15} className={isGenerating ? "animate-spin" : undefined} />
-            Refresh
           </Button>
         </div>
       </header>
 
+      <div className="px-3 pb-6 pt-3 sm:px-4 lg:px-5">
       {error ? (
         <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
@@ -481,7 +481,7 @@ export function ThumbnailStudioScreen() {
 
       <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(230px,290px)_minmax(0,1fr)_minmax(300px,360px)]">
         {/* ---- Source rail ---- */}
-        <aside className="grid min-w-0 content-start gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)] xl:overflow-y-auto xl:pr-1">
+        <aside className="grid min-w-0 content-start gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)] xl:overflow-y-auto xl:pr-1">
           <StudioPanel title="Source" icon={<ImageIcon size={15} />}>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -529,7 +529,7 @@ export function ThumbnailStudioScreen() {
                       title={`Use scene ${scene.index + 1} still`}
                     >
                       <img src={url} alt="" className="aspect-video w-full object-cover" />
-                      <span className="block truncate px-1.5 py-1 text-[11px] font-bold text-muted-foreground">
+                      <span className="block truncate px-1.5 py-1 text-[11px] font-medium text-muted-foreground">
                         Scene {scene.index + 1}
                       </span>
                     </button>
@@ -550,7 +550,7 @@ export function ThumbnailStudioScreen() {
                     value={Math.min(frameSeconds, Math.max(videoDuration, 1))}
                     disabled={disableEdits || !reel.outputUrl}
                     onChange={(event) => setFrameSeconds(Number(event.target.value))}
-                    className="w-full accent-[oklch(74%_0.132_187)]"
+                    className="w-full accent-[var(--color-primary)]"
                   />
                 </Label>
                 <div className="grid grid-cols-[1fr_auto] items-end gap-2">
@@ -597,7 +597,7 @@ export function ThumbnailStudioScreen() {
             )}
             {reel.thumbnailDraft ? (
               <div className="grid gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-warning">
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-warning">
                   Staged draft (local)
                 </span>
                 <img
@@ -621,24 +621,24 @@ export function ThumbnailStudioScreen() {
                   type="button"
                   onClick={() => setShowGuides((v) => !v)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold",
+                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium",
                     showGuides
                       ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Grid3x3 size={13} /> Guides
                 </button>
-                <span className="rounded-full border border-border bg-background/60 px-2 py-1 text-[11px] font-bold text-muted-foreground">
+                <span className="rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
                   {aspectRatio} · {output.width}×{output.height}
                 </span>
               </div>
             }
           >
-            <div className="grid place-items-center bg-black/45 p-4">
+            <div className="grid place-items-center bg-black/20 p-4">
               <div
                 ref={stageRef}
-                className="relative grid place-items-center overflow-hidden rounded-md border border-border bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)]"
+                className="relative grid place-items-center overflow-hidden rounded-md border border-border bg-black"
                 style={{ aspectRatio: aspectCss, width: stageMaxWidth }}
               >
                 {flattenedPreviewUrl ? (
@@ -747,7 +747,7 @@ export function ThumbnailStudioScreen() {
         </main>
 
         {/* ---- Controls rail ---- */}
-        <div className="grid min-w-0 content-start gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)] xl:overflow-y-auto xl:pr-1">
+        <div className="grid min-w-0 content-start gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)] xl:overflow-y-auto xl:pr-1">
           <StudioPanel title="Layout" icon={<Grid3x3 size={15} />}>
             <Label className="text-xs text-muted-foreground">
               Aspect ratio
@@ -907,7 +907,7 @@ export function ThumbnailStudioScreen() {
                 Text color
                 <input
                   type="color"
-                  className="h-9 w-full rounded border border-border bg-background/60"
+                  className="h-9 w-full rounded border border-border bg-background"
                   disabled={disableEdits}
                   value={overlay.color}
                   onChange={(event) => patchOverlay({ color: event.target.value })}
@@ -917,7 +917,7 @@ export function ThumbnailStudioScreen() {
                 Outline color
                 <input
                   type="color"
-                  className="h-9 w-full rounded border border-border bg-background/60"
+                  className="h-9 w-full rounded border border-border bg-background"
                   disabled={disableEdits}
                   value={overlay.outlineColor}
                   onChange={(event) => patchOverlay({ outlineColor: event.target.value })}
@@ -990,6 +990,7 @@ export function ThumbnailStudioScreen() {
           </StudioPanel>
         </div>
       </div>
+      </div>
 
       <ConfirmDialog action={confirmAction} busy={busy} onClose={() => setConfirmAction(undefined)} />
     </section>
@@ -1008,10 +1009,10 @@ function StudioPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="glass-panel min-w-0 rounded-lg">
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border px-3 py-2">
-        <strong className="inline-flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-          <span className="text-primary/80">{icon}</span>
+    <section className="min-w-0 rounded-lg border border-border bg-card">
+      <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <strong className="section-label inline-flex min-w-0 items-center gap-2">
+          {icon ? <span className="text-muted-foreground/70">{icon}</span> : null}
           <span className="truncate">{title}</span>
         </strong>
         {actions}
