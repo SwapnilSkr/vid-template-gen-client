@@ -31,7 +31,7 @@ export const YoutubeSearchResultCard = memo(function YoutubeSearchResultCard({
         <div className="h-20 w-36 shrink-0 rounded-md bg-muted" />
       )}
       <div className="min-w-0 flex-1">
-        <h3 className="line-clamp-2 text-sm font-bold text-foreground">{video.title}</h3>
+        <h3 className="line-clamp-2 text-sm font-medium text-foreground">{video.title}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {video.channelTitle}
           {video.durationSec ? ` · ${formatDuration(video.durationSec)}` : ""}

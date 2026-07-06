@@ -42,7 +42,7 @@ export function RecentReelsList({
         </PanelHeader>
 
         <div className="grid">
-          <div className="hidden min-h-10 grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] items-center gap-2.5 border-b border-border/70 bg-black/15 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground md:grid">
+          <div className="hidden min-h-10 grid-cols-[minmax(170px,1.5fr)_minmax(120px,0.9fr)_92px_100px_64px] items-center gap-2.5 border-b border-border/70 bg-black/15 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground md:grid">
             <span>Title</span>
             <span>Genre</span>
             <span>Mode</span>

@@ -180,7 +180,7 @@ export function YtImportDetailScreen() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           to="/youtube"
-          className="inline-flex items-center gap-2 text-sm font-bold text-muted-foreground no-underline hover:text-foreground"
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground no-underline hover:text-foreground"
         >
           <ArrowLeft size={16} />
           Back to search
@@ -208,8 +208,8 @@ export function YtImportDetailScreen() {
         </div>
       ) : null}
 
-      <header className="rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
-        <h1 className="text-xl font-extrabold text-foreground">{item.title}</h1>
+      <header className="border-b border-border pb-4">
+        <h1 className="text-lg font-semibold text-foreground">{item.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {item.channelTitle} · {item.assetId} · {item.storage.toUpperCase()}
         </p>
@@ -311,7 +311,7 @@ export function YtImportDetailScreen() {
                       onSelectFrame={handleSelectFrame}
                     />
                     <details className="rounded-md border border-border/60 p-3">
-                      <summary className="cursor-pointer text-sm font-bold">
+                      <summary className="cursor-pointer text-sm font-medium">
                         Re-extract different range
                       </summary>
                       <div className="mt-3 flex flex-col gap-3">

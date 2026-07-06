@@ -137,8 +137,8 @@ export function YtSearchScreen() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 lg:p-6">
-      <header className="rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
-        <h1 className="text-2xl font-extrabold text-foreground">
+      <header className="border-b border-border pb-4">
+        <h1 className="text-lg font-semibold text-foreground">
           YouTube Import
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -184,7 +184,7 @@ export function YtSearchScreen() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-extrabold uppercase text-muted-foreground">
+          <h2 className="text-sm font-semibold uppercase text-muted-foreground">
             Results
           </h2>
           {results.length === 0 ? (
@@ -214,7 +214,7 @@ export function YtSearchScreen() {
               <PanelTitle>Download options</PanelTitle>
             </PanelHeader>
             <div className="flex flex-col gap-3 p-3.5">
-              <label className="text-xs font-bold uppercase text-muted-foreground">
+              <label className="text-xs font-medium uppercase text-muted-foreground">
                 Storage
               </label>
               <Select

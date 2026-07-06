@@ -113,9 +113,9 @@ export function TrendsScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-4 grid min-h-12 gap-3 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)] sm:flex sm:items-start sm:justify-between">
+      <header className="mb-5 grid min-h-12 gap-3 border-b border-border pb-4 sm:flex sm:items-start sm:justify-between">
         <div>
-          <h1 className="m-0 flex items-center gap-2 text-2xl leading-tight tracking-normal text-foreground">
+          <h1 className="m-0 flex items-center gap-2 text-lg leading-tight text-foreground">
             <TrendingUp size={22} className="text-primary" /> Trend Scout
           </h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -232,13 +232,13 @@ function GenreCard({ genre }: { genre: TrendGenreSummary }) {
             className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md px-1.5 py-1 text-xs no-underline hover:bg-accent"
           >
             <span className="truncate font-semibold text-foreground">{perf.title ?? "Untitled"}</span>
-            <span className="whitespace-nowrap font-bold text-muted-foreground">{formatViews(perf.views)}</span>
+            <span className="whitespace-nowrap font-medium text-muted-foreground">{formatViews(perf.views)}</span>
           </a>
         ))}
       </div>
 
       {genre.bestPostingTime ? (
-        <div className="rounded-md bg-muted px-2.5 py-2 text-xs font-bold text-foreground">
+        <div className="rounded-md bg-muted px-2.5 py-2 text-xs font-medium text-foreground">
           Best posting time: {formatBestTime(genre.bestPostingTime.dayOfWeek, genre.bestPostingTime.hourUtc)}
           <span className="ml-1.5 font-normal text-muted-foreground">(competitor-timing prior)</span>
         </div>
@@ -247,7 +247,7 @@ function GenreCard({ genre }: { genre: TrendGenreSummary }) {
       <Link
         to="/trends/$genre"
         params={{ genre: genre.genre }}
-        className="flex items-center justify-center gap-1 rounded-md border border-border py-2 text-xs font-bold text-foreground no-underline hover:bg-accent"
+        className="flex items-center justify-center gap-1 rounded-md border border-border py-2 text-xs font-medium text-foreground no-underline hover:bg-accent"
       >
         View all {genre.sampleSize} samples
         <ChevronRight size={14} />
@@ -266,7 +266,7 @@ function HorrorReferenceLibrary({ refs, loading }: { refs: HorrorReference[]; lo
             Public-domain references used by the AI horror story-bible pass. These guide atmosphere and structure, not verbatim narration.
           </p>
         </div>
-        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">
+        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
           {loading ? "Loading" : `${refs.length} shown`}
         </span>
       </div>
@@ -286,17 +286,17 @@ function HorrorReferenceLibrary({ refs, loading }: { refs: HorrorReference[]; lo
               className="grid min-h-40 gap-2 rounded-md border border-border bg-card/70 p-3 text-xs no-underline hover:bg-accent"
             >
               <div className="min-w-0">
-                <div className="line-clamp-2 font-extrabold leading-snug text-foreground">{ref.title}</div>
+                <div className="line-clamp-2 font-semibold leading-snug text-foreground">{ref.title}</div>
                 <div className="mt-1 truncate font-semibold text-muted-foreground">{ref.author ?? "Unknown author"}</div>
               </div>
               <div className="flex flex-wrap gap-1">
-                <span className="rounded-full bg-muted px-2 py-0.5 font-bold text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
                   score {ref.qualityScore}
                 </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 font-bold text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
                   used {ref.usedInReelIds?.length ?? 0}
                 </span>
-                <span className="rounded-full bg-success/15 px-2 py-0.5 font-bold text-success-foreground">
+                <span className="rounded-full bg-success/15 px-2 py-0.5 font-medium text-success-foreground">
                   {ref.license.replace("_", " ")}
                 </span>
               </div>

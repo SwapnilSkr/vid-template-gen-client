@@ -97,14 +97,11 @@ export function VoiceVariantsPanel({
 
   return (
     <section
-      className={cn(
-        "grid gap-3 glass-panel rounded-lg p-4",
-        "shadow-[0_18px_50px_rgba(0,0,0,0.18)]",
-      )}
+      className={cn("grid gap-3 rounded-lg border border-border bg-card p-4")}
     >
       <div className="flex items-center justify-between gap-3">
-        <strong className="inline-flex items-center gap-1.5 text-[13px] uppercase tracking-[0.08em] text-muted-foreground">
-          <Mic size={15} className="text-cyan-300" /> Voice Variants
+        <strong className="section-label inline-flex items-center gap-2">
+          <Mic size={15} className="text-muted-foreground/70" /> Voice Variants
         </strong>
         <span className="text-xs text-muted-foreground/80">
           Whole-reel alternate takes
@@ -125,7 +122,7 @@ export function VoiceVariantsPanel({
               className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/60 px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-bold text-foreground">
+                <div className="truncate text-[13px] font-medium text-foreground">
                   {variant.label ||
                     `${variant.model.split("/").pop()} / ${variant.voice}`}
                 </div>
@@ -138,7 +135,7 @@ export function VoiceVariantsPanel({
               </div>
               <div className="flex items-center gap-2">
                 {variant.status === "pending" ? (
-                  <Loader2 className="animate-spin text-cyan-300" size={16} />
+                  <Loader2 className="animate-spin text-muted-foreground" size={16} />
                 ) : null}
                 {variant.status === "ready" && variant.videoUrl ? (
                   <a
@@ -194,7 +191,7 @@ export function VoiceVariantsPanel({
             {queued.map((q) => (
               <span
                 key={`${q.model}-${q.voice}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-bold text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-foreground"
               >
                 {q.label}
                 <button

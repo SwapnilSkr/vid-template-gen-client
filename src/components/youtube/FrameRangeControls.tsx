@@ -73,7 +73,7 @@ export const FrameRangeControls = memo(function FrameRangeControls({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs">
-          <span className="mb-1 block font-bold text-muted-foreground">From (sec)</span>
+          <span className="mb-1 block font-medium text-muted-foreground">From (sec)</span>
           <Input
             type="number"
             min={0}
@@ -84,7 +84,7 @@ export const FrameRangeControls = memo(function FrameRangeControls({
           />
         </label>
         <label className="text-xs">
-          <span className="mb-1 block font-bold text-muted-foreground">To (sec)</span>
+          <span className="mb-1 block font-medium text-muted-foreground">To (sec)</span>
           <Input
             type="number"
             min={0}

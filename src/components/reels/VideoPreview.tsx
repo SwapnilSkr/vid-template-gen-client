@@ -94,7 +94,7 @@ export function VideoPreview({
           ) : null}
           {reel?.outputUrl ? (
             <a
-              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-[13px] font-bold text-foreground no-underline"
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-[13px] font-medium text-foreground no-underline"
               href={reel.outputUrl}
               target="_blank"
               rel="noreferrer"

@@ -105,7 +105,7 @@ export function VoicePickerList({
     <div className={cn("max-h-64 overflow-y-auto rounded-md border border-border", className)}>
       {grouped.map(([model, voices]) => (
         <div key={model}>
-          <div className="sticky top-0 flex items-center justify-between gap-2 bg-muted px-2.5 py-1.5 text-[11px] font-extrabold uppercase text-muted-foreground">
+          <div className="sticky top-0 flex items-center justify-between gap-2 bg-muted px-2.5 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
             <span>{voices[0]?.provider ?? modelLabel(model)}</span>
             {voices[0]?.priceLabel ? <span className="normal-case">{voices[0].priceLabel}</span> : null}
           </div>
@@ -152,7 +152,7 @@ export function VoicePickerList({
                   onClick={() => onToggle(option)}
                   disabled={disabled}
                   className={cn(
-                    "shrink-0 rounded-md border px-2 py-1 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-40",
+                    "shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
                     selected
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border text-foreground hover:bg-accent"

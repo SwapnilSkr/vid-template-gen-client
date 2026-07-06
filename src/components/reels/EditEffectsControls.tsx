@@ -151,7 +151,7 @@ function Toggle({
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <span className="inline-flex items-center gap-1.5 font-bold">
+        <span className="inline-flex items-center gap-1.5 font-medium">
           {icon}
           {label}
         </span>
@@ -187,12 +187,12 @@ function Slider({
   return (
     <div className={cn("grid gap-1", icon && "rounded-md border border-border bg-background/60 px-2.5 py-2")}>
       <div className="flex items-center justify-between text-xs">
-        <span className="inline-flex items-center gap-1.5 font-bold text-foreground">
+        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
           {icon}
           {label}
           {hint ? <span className="font-normal text-muted-foreground">{hint}</span> : null}
         </span>
-        <span className="tabular-nums font-bold text-muted-foreground">{off ? "off" : value.toFixed(2)}</span>
+        <span className="tabular-nums font-medium text-muted-foreground">{off ? "off" : value.toFixed(2)}</span>
       </div>
       <input
         type="range"

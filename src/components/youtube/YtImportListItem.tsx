@@ -37,7 +37,7 @@ export const YtImportListItem = memo(function YtImportListItem({
       <Link
         to="/youtube/$importId"
         params={{ importId: item._id }}
-        className="block text-sm font-bold text-foreground no-underline hover:text-primary"
+        className="block text-sm font-medium text-foreground no-underline hover:text-primary"
       >
         {item.title}
       </Link>

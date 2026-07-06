@@ -13,15 +13,15 @@ export function CreateReelScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-4 grid gap-2 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
+      <header className="mb-5 grid gap-2 border-b border-border pb-4">
         <Link
           to="/"
           search={{ status: undefined }}
-          className="inline-flex w-fit items-center gap-1.5 text-[13px] font-bold text-muted-foreground no-underline hover:text-foreground"
+          className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-muted-foreground no-underline hover:text-foreground"
         >
           <ArrowLeft size={15} /> Back to dashboard
         </Link>
-        <h1 className="m-0 text-2xl leading-tight tracking-normal text-foreground">Create New Reel</h1>
+        <h1 className="m-0 text-lg leading-tight text-foreground">Create New Reel</h1>
         <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
           Set the niche, genre, source, tier, and background, then generate — you'll be taken to the
           dashboard to watch it render.

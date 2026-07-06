@@ -86,7 +86,7 @@ export function ReviewScreen() {
 
       {status === "rejected" && failedCount > 0 ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5">
-          <span className="text-xs font-bold text-destructive">
+          <span className="text-xs font-medium text-destructive">
             {failedCount} failed reel{failedCount === 1 ? "" : "s"} can be
             deleted with recorded S3 assets.
           </span>

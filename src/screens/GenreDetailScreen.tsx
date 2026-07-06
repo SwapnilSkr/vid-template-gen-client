@@ -27,14 +27,14 @@ export function GenreDetailScreen() {
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-      <header className="mb-4 grid gap-2 rounded-lg border border-border bg-card/70 px-4 py-3 shadow-[var(--shadow-panel)]">
+      <header className="mb-5 grid gap-2 border-b border-border pb-4">
         <Link
           to="/trends"
-          className="inline-flex w-fit items-center gap-1.5 text-[13px] font-bold text-muted-foreground no-underline hover:text-foreground"
+          className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-muted-foreground no-underline hover:text-foreground"
         >
           <ArrowLeft size={15} /> Back to Trend Scout
         </Link>
-        <h1 className="m-0 text-2xl leading-tight tracking-normal text-foreground">{formatLabel(genre)}</h1>
+        <h1 className="m-0 text-lg leading-tight text-foreground">{formatLabel(genre)}</h1>
         <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
           {samples.length} sample{samples.length === 1 ? "" : "s"} scouted for this genre.
         </p>
@@ -66,12 +66,12 @@ export function GenreDetailScreen() {
                 </div>
               )}
               <div className="grid gap-1 px-3 pb-3">
-                <span className="line-clamp-2 text-[13px] font-bold leading-snug text-foreground">
+                <span className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground">
                   {sample.title ?? "Untitled"}
                 </span>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="truncate">{sample.channelTitle}</span>
-                  <span className="whitespace-nowrap font-bold text-foreground">{formatViews(sample.metrics?.views)}</span>
+                  <span className="whitespace-nowrap font-medium text-foreground">{formatViews(sample.metrics?.views)}</span>
                 </div>
                 {sample.metrics?.postedAt ? (
                   <span className="text-xs text-muted-foreground">{formatPostedAt(sample.metrics.postedAt)}</span>

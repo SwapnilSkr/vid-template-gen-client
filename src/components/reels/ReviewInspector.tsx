@@ -257,7 +257,7 @@ function ReviewInspectorForm({
         <div className="grid gap-3 border-b border-border/70 bg-black/10 p-3.5">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <PanelTitle>Review Package</PanelTitle>
-            <span className="shrink-0 rounded-full bg-warning px-2.5 py-1 text-xs font-extrabold text-warning-foreground">
+            <span className="shrink-0 rounded-full bg-warning px-2.5 py-1 text-xs font-semibold text-warning-foreground">
               {reelTopStatus(reel, draft)}
             </span>
           </div>
@@ -286,7 +286,7 @@ function ReviewInspectorForm({
                 key={tab.id}
                 type="button"
                 className={cn(
-                  "inline-flex min-h-8 min-w-0 items-center justify-center gap-1 rounded px-1.5 text-xs font-extrabold text-muted-foreground transition",
+                  "inline-flex min-h-8 min-w-0 items-center justify-center gap-1 rounded px-1.5 text-xs font-semibold text-muted-foreground transition",
                   activePanel === tab.id &&
                     "bg-primary text-primary-foreground shadow-sm",
                 )}
@@ -411,7 +411,7 @@ function ReviewInspectorForm({
                   alt="Reviewed thumbnail"
                 />
               ) : (
-                <div className="grid aspect-video w-full place-items-center gap-2 rounded-lg border border-border bg-muted text-[13px] font-bold text-muted-foreground">
+                <div className="grid aspect-video w-full place-items-center gap-2 rounded-lg border border-border bg-muted text-[13px] font-medium text-muted-foreground">
                   <Image size={22} />
                   Thumbnail appears after render
                 </div>
@@ -439,11 +439,11 @@ function ReviewInspectorForm({
             <>
               <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
                 <div className="flex min-w-0 items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                     <Youtube size={17} />
                     YouTube Publishing
                   </span>
-                  <span className="text-xs font-bold text-muted-foreground">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {youtubeChannels.length} channel
                     {youtubeChannels.length === 1 ? "" : "s"}
                   </span>
@@ -489,21 +489,21 @@ function ReviewInspectorForm({
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-extrabold text-foreground">
+                      <div className="truncate text-sm font-semibold text-foreground">
                         {channelName(selectedChannel)}
                       </div>
                       <div className="truncate text-xs font-semibold text-muted-foreground">
                         {channelHandle(selectedChannel)}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {channelPurpose(selectedChannel)}
                         </span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {selectedChannel.privacyStatus}
                         </span>
                         {selectedChannel.source === "env" ? (
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                             server default
                           </span>
                         ) : null}
@@ -517,7 +517,7 @@ function ReviewInspectorForm({
                 )}
 
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-extrabold text-foreground">
+                  <span className="text-xs font-semibold text-foreground">
                     Channel Accounts
                   </span>
                   <Button
@@ -636,7 +636,7 @@ function ReviewInspectorForm({
                               </div>
                             )}
                             <div className="min-w-0">
-                              <div className="truncate font-extrabold text-foreground">
+                              <div className="truncate font-semibold text-foreground">
                                 {channelName(channel)}
                               </div>
                               <div className="truncate font-semibold text-muted-foreground">
@@ -687,7 +687,7 @@ function ReviewInspectorForm({
                       : "border-border bg-muted/40 text-muted-foreground",
                   )}
                 >
-                  <div className="font-bold text-foreground">
+                  <div className="font-medium text-foreground">
                     YouTube:{" "}
                     {reel.youtube.status === "pending"
                       ? "Queued"
@@ -750,7 +750,7 @@ function ReviewInspectorForm({
 
               {reel?.youtube?.url ? (
                 <a
-                  className="text-center text-[13px] font-bold text-primary no-underline"
+                  className="text-center text-[13px] font-medium text-primary no-underline"
                   href={reel.youtube.url}
                   target="_blank"
                   rel="noreferrer"
@@ -771,11 +771,11 @@ function ReviewInspectorForm({
               {costBreakdown ? (
                 <div className="grid gap-2 rounded-lg border border-border bg-muted/40 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                       <ReceiptText size={16} />
                       Generation Cost
                     </span>
-                    <span className="text-sm font-extrabold text-foreground">
+                    <span className="text-sm font-semibold text-foreground">
                       ${costBreakdown.totalUsd.toFixed(4)}
                     </span>
                   </div>
@@ -786,10 +786,10 @@ function ReviewInspectorForm({
                         className="grid gap-0.5 text-xs"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="font-bold text-foreground">
+                          <span className="font-medium text-foreground">
                             {line.label}
                           </span>
-                          <span className="font-bold text-foreground">
+                          <span className="font-medium text-foreground">
                             ${line.costUsd.toFixed(4)}
                           </span>
                         </div>
@@ -849,31 +849,31 @@ function StyleLookPanel({ reel }: { reel?: Reel }) {
 
   return (
     <div className="grid gap-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
-      <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <Palette size={16} />
         Style &amp; Look
       </div>
       <div className="grid gap-1.5 text-xs">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="font-extrabold text-muted-foreground">
+          <span className="font-semibold text-muted-foreground">
             Art style
           </span>
-          <span className="font-extrabold text-foreground">
+          <span className="font-semibold text-foreground">
             {artStyle?.displayName ?? reel.artStyleId ?? "Auto (rotate)"}
           </span>
         </div>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="font-extrabold text-muted-foreground">Motion</span>
-          <span className="font-bold capitalize text-foreground">
+          <span className="font-semibold text-muted-foreground">Motion</span>
+          <span className="font-medium capitalize text-foreground">
             {motionLabel}
           </span>
         </div>
         {reel.captionStyle?.fontName ? (
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-extrabold text-muted-foreground">
+            <span className="font-semibold text-muted-foreground">
               Caption font
             </span>
-            <span className="font-bold text-foreground">
+            <span className="font-medium text-foreground">
               {reel.captionStyle.fontName}
             </span>
           </div>
@@ -908,11 +908,11 @@ function StoryFlowPanel({ reel }: { reel?: Reel }) {
   return (
     <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-sm font-extrabold text-foreground">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
           <GitBranch size={16} />
           Story Flow
         </span>
-        <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+        <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
           {isReddit ? "Reddit" : "AI horror"}
         </span>
       </div>
@@ -1065,7 +1065,7 @@ function HorrorStoryFlow({ reel }: { reel: Reel }) {
       />
       {bible?.escalation?.length ? (
         <div className="grid gap-1 rounded-md border border-border bg-background/65 p-2.5">
-          <span className="text-[11px] font-extrabold uppercase tracking-normal text-muted-foreground">
+          <span className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
             Escalation ladder
           </span>
           <div className="grid gap-1">
@@ -1074,7 +1074,7 @@ function HorrorStoryFlow({ reel }: { reel: Reel }) {
                 key={`${index}-${beat}`}
                 className="grid grid-cols-[18px_1fr] gap-1.5 text-xs leading-snug"
               >
-                <span className="font-extrabold text-primary">{index + 1}</span>
+                <span className="font-semibold text-primary">{index + 1}</span>
                 <span className="text-muted-foreground">{beat}</span>
               </div>
             ))}
@@ -1166,7 +1166,7 @@ function FlowStep({
       </div>
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <span className="text-[11px] font-extrabold uppercase tracking-normal text-muted-foreground">
+          <span className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
             {label}
           </span>
           {href ? (
@@ -1180,7 +1180,7 @@ function FlowStep({
             </a>
           ) : null}
         </div>
-        <div className="wrap-break-word text-xs font-extrabold leading-snug text-foreground">
+        <div className="wrap-break-word text-xs font-semibold leading-snug text-foreground">
           {value}
         </div>
         {detail ? (

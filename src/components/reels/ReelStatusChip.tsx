@@ -38,8 +38,8 @@ export function ReelStatusChip({
       className={cn(
         "inline-flex justify-center rounded-full border capitalize leading-none",
         size === "md" &&
-          "min-w-[86px] px-2.5 py-1 text-[11px] font-extrabold tracking-normal",
-        size === "sm" && "w-fit px-2 py-0.5 text-[10px] font-bold",
+          "min-w-[86px] px-2.5 py-1 text-[11px] font-medium tracking-normal",
+        size === "sm" && "w-fit px-2 py-0.5 text-[10px] font-medium",
         reelStatusTone(status),
         className,
       )}
