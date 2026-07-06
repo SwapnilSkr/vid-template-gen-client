@@ -98,20 +98,20 @@ export function VoiceVariantsPanel({
   return (
     <section
       className={cn(
-        "grid gap-3 rounded-lg border border-slate-800 bg-[#171a20] p-4",
+        "grid gap-3 glass-panel rounded-lg p-4",
         "shadow-[0_18px_50px_rgba(0,0,0,0.18)]",
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        <strong className="inline-flex items-center gap-1.5 text-[13px] uppercase tracking-[0.08em] text-slate-300">
+        <strong className="inline-flex items-center gap-1.5 text-[13px] uppercase tracking-[0.08em] text-muted-foreground">
           <Mic size={15} className="text-cyan-300" /> Voice Variants
         </strong>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-muted-foreground/80">
           Whole-reel alternate takes
         </span>
       </div>
 
-      <p className="m-0 text-xs leading-relaxed text-slate-500">
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
         Re-narrate the full video with up to five voices, compare previews, then
         promote the take you want. Per-scene audio changes use the Audio button
         on each scene card.
@@ -122,14 +122,14 @@ export function VoiceVariantsPanel({
           {variants.map((variant) => (
             <div
               key={variant.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-[#111419] px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/60 px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-bold text-slate-100">
+                <div className="truncate text-[13px] font-bold text-foreground">
                   {variant.label ||
                     `${variant.model.split("/").pop()} / ${variant.voice}`}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-muted-foreground/80">
                   {variant.status === "pending" && "Rendering…"}
                   {variant.status === "ready" &&
                     (reel.outputUrl === variant.videoUrl ? "Active" : "Ready")}
@@ -145,7 +145,7 @@ export function VoiceVariantsPanel({
                     href={variant.videoUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="grid size-8 place-items-center rounded-md border border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+                    className="grid size-8 place-items-center rounded-md border border-border bg-secondary text-foreground hover:bg-accent"
                     aria-label="Preview voice variant"
                   >
                     <Play size={14} />
@@ -169,7 +169,7 @@ export function VoiceVariantsPanel({
           ))}
         </div>
       ) : (
-        <p className="m-0 text-xs leading-relaxed text-slate-500">
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
           No voice variants yet. Preview and pick up to 5 voices below,
           generate, then promote the take you like best — the gameplay clip and
           story stay the same, only the narration changes.
@@ -194,7 +194,7 @@ export function VoiceVariantsPanel({
             {queued.map((q) => (
               <span
                 key={`${q.model}-${q.voice}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-[#20242c] px-2.5 py-1 text-xs font-bold text-slate-100"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-bold text-foreground"
               >
                 {q.label}
                 <button
@@ -207,7 +207,7 @@ export function VoiceVariantsPanel({
                     )
                   }
                   aria-label={`Remove ${q.label}`}
-                  className="cursor-pointer text-slate-500 hover:text-slate-100"
+                  className="cursor-pointer text-muted-foreground/80 hover:text-foreground"
                 >
                   <X size={12} />
                 </button>

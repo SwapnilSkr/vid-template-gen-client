@@ -3,15 +3,20 @@ import {
   ArrowLeft,
   Captions,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clapperboard,
+  Download,
   ExternalLink,
   Image as ImageIcon,
   Layers,
   Loader2,
   Palette,
   Play,
+  Receipt,
   RefreshCw,
   Scissors,
+  Send,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -44,6 +49,9 @@ import {
   applyCaptions,
   updateReelSettings,
   updateScene,
+  listStylePresets,
+  publishReel,
+  reorderScenes,
   type ArtStyleOption,
   type CaptionStyle,
   type EditEffects,
@@ -52,6 +60,7 @@ import {
   type OutroSettings,
   type Reel,
   type Scene,
+  type StylePreset,
   type TtsVoiceOption,
   type YouTubeChannelOption,
 } from "@/api/reels";
@@ -293,23 +302,23 @@ export function StudioScreen() {
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
 
   return (
-    <section className="studio-workspace w-full min-w-0 overflow-x-clip bg-[#101216] px-3 pb-5 text-slate-100 sm:px-4 lg:px-5">
-      <header className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border border-t-0 border-slate-800 bg-[#171a20]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
+    <section className="studio-workspace w-full min-w-0 overflow-x-clip px-3 pb-5 text-foreground sm:px-4 lg:px-5">
+      <header className="glass-panel sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border-t-0 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/"
             search={{ status: undefined }}
-            className="grid size-9 place-items-center rounded-md border border-slate-700 bg-[#20242c] text-slate-300 hover:bg-[#2a303a] hover:text-white"
+            className="grid size-9 place-items-center rounded-md border border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
             title="Back to reels"
           >
             <ArrowLeft size={17} />
           </Link>
           <div className="min-w-0">
-            <h1 className="m-0 flex min-w-0 items-center gap-2 truncate text-base tracking-normal text-white">
-              <Clapperboard size={18} className="text-cyan-300" />
+            <h1 className="m-0 flex min-w-0 items-center gap-2 truncate text-base tracking-normal text-foreground">
+              <Clapperboard size={18} className="text-primary" />
               <span className="truncate">{reel.title || "Untitled reel"}</span>
             </h1>
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
               <ReelStatusChip status={reel.status} className="min-w-[82px]" /> · {reel.progress}%
             </p>
@@ -317,16 +326,37 @@ export function StudioScreen() {
         </div>
         <div className="flex items-center gap-2">
           {hasDraft ? (
-            <span className="rounded-full border border-amber-400/50 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-200">
+            <span className="rounded-full border border-warning/50 bg-warning/10 px-2.5 py-1 text-xs font-bold text-warning">
               Unsaved draft
             </span>
+          ) : null}
+          <Link
+            to="/studio/$id/thumbnail"
+            params={{ id }}
+            className={cn(buttonClassName("outline"), "no-underline")}
+            title="Open Thumbnail Studio"
+          >
+            <ImageIcon size={15} />
+            <span className="hidden sm:inline">Thumbnail</span>
+          </Link>
+          {reel.outputUrl ? (
+            <a
+              href={apiUrl(`/reels/${encodeURIComponent(id)}/download`)}
+              download
+              target="_blank"
+              rel="noreferrer"
+              className={cn(buttonClassName("outline"), "no-underline")}
+              title="Download the rendered video"
+            >
+              <Download size={15} />
+              <span className="hidden sm:inline">Download</span>
+            </a>
           ) : null}
           <Button
             type="button"
             variant="outline"
             onClick={() => void refresh()}
             disabled={busy}
-            className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
           >
             <RefreshCw
               size={15}
@@ -367,12 +397,12 @@ export function StudioScreen() {
       />
 
       {pendingRegen ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-warning">
           <div className="min-w-0">
-            <div className="font-semibold text-amber-200">
+            <div className="font-semibold text-warning">
               Settings changed — re-render to apply
             </div>
-            <div className="text-xs text-amber-100/80">
+            <div className="text-xs text-warning/80">
               {clearedImages && clearedAudio
                 ? "Scene stills and narration were cleared"
                 : clearedImages
@@ -418,12 +448,14 @@ export function StudioScreen() {
         <main className="grid min-w-0 content-start gap-3">
           <ProgramMonitor reel={reel} previewUrl={previewUrl} />
           <TimelinePanel
+            reelId={id}
             reel={reel}
             scenes={scenes}
             selectedSceneIndex={selectedSceneIndex}
             onSelectScene={setSelectedSceneIndex}
             busy={busy}
             disabled={isGenerating}
+            run={run}
             onAddScene={() =>
               void run(() =>
                 addScene(id, { narration: "New scene narration." }),
@@ -442,7 +474,7 @@ export function StudioScreen() {
               requestConfirm={setConfirmAction}
             />
           ) : (
-            <div className="grid place-items-center rounded-lg border border-slate-800 bg-[#171a20] p-8 text-sm text-slate-400">
+            <div className="grid place-items-center rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
               No scenes yet.
             </div>
           )}
@@ -483,15 +515,10 @@ function EditorPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className={cn(
-        "min-w-0 rounded-lg border border-slate-800 bg-[#171a20] shadow-[0_18px_50px_rgba(0,0,0,0.18)]",
-        className,
-      )}
-    >
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-        <strong className="inline-flex min-w-0 items-center gap-2 text-[13px] uppercase tracking-[0.08em] text-slate-300">
-          {icon}
+    <section className={cn("glass-panel min-w-0 rounded-lg", className)}>
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border/70 px-3 py-2">
+        <strong className="inline-flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          <span className="text-primary/80">{icon}</span>
           <span className="truncate">{title}</span>
         </strong>
         {actions}
@@ -529,8 +556,8 @@ function ProjectPanel({
           currentId={currentId}
         />
         <div className="grid gap-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold text-slate-200">Scene bin</span>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-bold text-foreground">Scene bin</span>
             <span>{scenes.length} clips</span>
           </div>
           <div className="grid gap-1.5">
@@ -542,17 +569,17 @@ function ProjectPanel({
                 className={cn(
                   "grid grid-cols-[42px_1fr] items-center gap-2 rounded-md border p-1.5 text-left transition-colors",
                   selectedSceneIndex === scene.index
-                    ? "border-cyan-400/70 bg-cyan-400/10"
-                    : "border-slate-800 bg-[#111419] hover:border-slate-600 hover:bg-[#1d222b]",
+                    ? "border-primary/70 bg-primary/10"
+                    : "border-border bg-background/60 hover:border-input hover:bg-accent",
                 )}
               >
                 <SceneThumb reel={reel} scene={scene} className="w-[42px]" />
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-bold text-slate-100">
+                  <span className="block truncate text-xs font-bold text-foreground">
                     {String(scene.index + 1).padStart(2, "0")} ·{" "}
                     {scene.narration || "Untitled beat"}
                   </span>
-                  <span className="block truncate text-[11px] text-slate-500">
+                  <span className="block truncate text-[11px] text-muted-foreground/80">
                     {scene.motion.type}
                   </span>
                 </span>
@@ -579,26 +606,26 @@ function ProgramMonitor({
       }
       icon={<Play size={15} />}
       actions={
-        <span className="rounded-full border border-slate-700 bg-[#101216] px-2 py-1 text-[11px] font-bold text-slate-400">
+        <span className="rounded-full border border-border bg-background/60 px-2 py-1 text-[11px] font-bold text-muted-foreground">
           9:16
         </span>
       }
       className="overflow-hidden"
     >
-      <div className="grid place-items-center bg-[#0b0d10] p-3">
+      <div className="grid place-items-center bg-black/45 p-3">
         {previewUrl ? (
           <div className="relative grid w-full max-w-[360px] place-items-center">
-            <div className="absolute -inset-3 rounded-[18px] bg-cyan-400/5 blur-xl" />
+            <div className="absolute -inset-3 rounded-[18px] bg-primary/5 blur-xl" />
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               key={previewUrl}
               src={previewUrl}
               controls
-              className="relative aspect-9/16 max-h-[50vh] w-full rounded-lg border border-slate-800 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)] xl:max-h-[46vh]"
+              className="relative aspect-9/16 max-h-[50vh] w-full rounded-lg border border-border bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)] xl:max-h-[46vh]"
             />
           </div>
         ) : (
-          <div className="grid aspect-9/16 max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-slate-800 bg-black text-sm text-slate-500 xl:max-h-[46vh]">
+          <div className="grid aspect-9/16 max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-border bg-black text-sm text-muted-foreground/80 xl:max-h-[46vh]">
             No preview yet
           </div>
         )}
@@ -623,7 +650,7 @@ function SceneThumb({
   return (
     <span
       className={cn(
-        "grid aspect-9/16 place-items-center overflow-hidden rounded border border-slate-700 bg-[#0b0d10] text-slate-500",
+        "grid aspect-9/16 place-items-center overflow-hidden rounded border border-border bg-black/45 text-muted-foreground/80",
         className,
       )}
     >
@@ -637,6 +664,7 @@ function SceneThumb({
 }
 
 function TimelinePanel({
+  reelId,
   reel,
   scenes,
   selectedSceneIndex,
@@ -644,7 +672,9 @@ function TimelinePanel({
   busy,
   disabled,
   onAddScene,
+  run,
 }: {
+  reelId: string;
   reel: Reel;
   scenes: Scene[];
   selectedSceneIndex: number;
@@ -652,49 +682,94 @@ function TimelinePanel({
   busy: boolean;
   disabled: boolean;
   onAddScene: () => void;
+  run: (a: () => Promise<Reel>) => Promise<void>;
 }) {
+  const totalDuration = scenes.reduce((sum, scene) => sum + Math.max(scene.duration || 0, 0), 0);
+  // Clip width tracks real duration so the timeline reads like an NLE — clamped
+  // so tiny scenes stay clickable and one long scene can't crowd out the rest.
+  const clipWidth = (scene: Scene) => {
+    if (!totalDuration) return 132;
+    const share = Math.max(scene.duration || 0, 0) / totalDuration;
+    return Math.round(Math.min(Math.max(share * scenes.length * 132, 104), 260));
+  };
+  // order[newPos] = oldPos — swap adjacent positions to move a scene.
+  const moveScene = (from: number, to: number) => {
+    if (to < 0 || to >= scenes.length) return;
+    const order = scenes.map((_, i) => i);
+    [order[from], order[to]] = [order[to], order[from]];
+    void run(async () => {
+      const next = await reorderScenes(reelId, order);
+      onSelectScene(to);
+      return next;
+    });
+  };
+
   return (
     <EditorPanel
-      title="Timeline"
+      title={`Timeline · ${totalDuration.toFixed(1)}s`}
       icon={<Scissors size={15} />}
       actions={
-        <Button
-          type="button"
-          variant="outline"
-          size="default"
-          disabled={busy || disabled}
-          onClick={onAddScene}
-          className="min-h-8 border-slate-700 bg-[#20242c] px-2 py-1 text-xs text-slate-100 hover:bg-[#2a303a]"
-        >
-          + Add scene
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            disabled={busy || disabled || selectedSceneIndex <= 0}
+            title="Move selected scene earlier"
+            onClick={() => moveScene(selectedSceneIndex, selectedSceneIndex - 1)}
+          >
+            <ChevronLeft size={15} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            disabled={busy || disabled || selectedSceneIndex >= scenes.length - 1}
+            title="Move selected scene later"
+            onClick={() => moveScene(selectedSceneIndex, selectedSceneIndex + 1)}
+          >
+            <ChevronRight size={15} />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy || disabled}
+            onClick={onAddScene}
+          >
+            + Add scene
+          </Button>
+        </div>
       }
     >
       <div className="grid min-w-0 gap-2 p-3">
         <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground/80">
             Video
           </span>
-          <div className="min-w-0 overflow-x-auto pb-1">
+          <div className="studio-scrollbar min-w-0 overflow-x-auto pb-1">
             <div className="flex w-max gap-1.5">
               {scenes.map((scene) => (
                 <button
                   key={scene.index}
                   type="button"
                   onClick={() => onSelectScene(scene.index)}
+                  style={{ width: clipWidth(scene) }}
                   className={cn(
-                    "relative grid min-w-[132px] grid-cols-[34px_1fr] items-center gap-2 rounded-md border px-2 py-1.5 text-left",
+                    "relative grid grid-cols-[34px_1fr] items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors",
                     selectedSceneIndex === scene.index
-                      ? "border-cyan-400 bg-cyan-400/10"
-                      : "border-slate-800 bg-[#111419] hover:border-slate-600",
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background/60 hover:border-input",
                   )}
                 >
                   <SceneThumb reel={reel} scene={scene} className="w-[34px]" />
                   <span className="min-w-0">
-                    <span className="block truncate text-[11px] font-bold text-slate-200">
+                    <span className="block truncate text-[11px] font-bold text-foreground">
                       Scene {scene.index + 1}
                     </span>
-                    <span className="block text-[10px] text-slate-500">
+                    <span className="block text-[10px] tabular-nums text-muted-foreground/80">
                       {Math.max(scene.duration || 0, 0).toFixed(1)}s
                     </span>
                   </span>
@@ -704,25 +779,26 @@ function TimelinePanel({
           </div>
         </div>
         <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground/80">
             Audio
           </span>
-          <div className="min-w-0 overflow-x-auto pb-1">
+          <div className="studio-scrollbar min-w-0 overflow-x-auto pb-1">
             <div className="flex w-max gap-1.5">
               {scenes.map((scene) => (
                 <button
                   key={scene.index}
                   type="button"
                   onClick={() => onSelectScene(scene.index)}
+                  style={{ width: clipWidth(scene) }}
                   className={cn(
-                    "flex min-w-[132px] items-center gap-2 rounded-md border px-2 py-2 text-left",
+                    "flex items-center gap-2 rounded-md border px-2 py-2 text-left transition-colors",
                     selectedSceneIndex === scene.index
-                      ? "border-emerald-400/70 bg-emerald-400/10"
-                      : "border-slate-800 bg-[#111419] hover:border-slate-600",
+                      ? "border-success/70 bg-success/10"
+                      : "border-border bg-background/60 hover:border-input",
                   )}
                 >
-                  <Volume2 size={14} className="text-emerald-300" />
-                  <span className="truncate text-[11px] font-bold text-slate-300">
+                  <Volume2 size={14} className="shrink-0 text-success" />
+                  <span className="truncate text-[11px] font-bold text-muted-foreground">
                     Narration {scene.index + 1}
                   </span>
                 </button>
@@ -756,7 +832,7 @@ function InspectorPanel({
       icon={<Settings2 size={15} />}
       className="overflow-hidden xl:max-h-[calc(100vh-83px)]"
     >
-      <div className="border-b border-slate-800 bg-[#111419]">
+      <div className="border-b border-border bg-background/60">
         <div className="studio-scrollbar flex min-w-0 gap-1 overflow-x-auto overscroll-x-contain p-2">
           {INSPECTOR_TABS.map((item) => (
             <button
@@ -767,8 +843,8 @@ function InspectorPanel({
                 "inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-bold transition-colors",
                 item.id === "thumbnail" ? "min-w-[92px]" : "min-w-[86px]",
                 tab === item.id
-                  ? "bg-cyan-400 text-slate-950"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {item.icon}
@@ -802,12 +878,21 @@ function InspectorPanel({
           <CaptionEditor reel={reel} busy={busy} run={run} />
         ) : null}
         {tab === "export" ? (
-          <RegeneratePanel
-            reel={reel}
-            busy={busy}
-            run={run}
-            requestConfirm={requestConfirm}
-          />
+          <div className="grid gap-3">
+            <RegeneratePanel
+              reel={reel}
+              busy={busy}
+              run={run}
+              requestConfirm={requestConfirm}
+            />
+            <PublishPanel
+              reel={reel}
+              busy={busy}
+              run={run}
+              requestConfirm={requestConfirm}
+            />
+            <CostPanel reel={reel} />
+          </div>
         ) : null}
       </div>
     </EditorPanel>
@@ -826,7 +911,7 @@ function EditDraftBanner({
   if (!reel.editDraft) return null;
   const reelKey = reel._id ?? reel.id ?? "";
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-warning">
       <div>
         <div className="font-semibold">Unsaved editor draft</div>
         <div className="text-xs">
@@ -873,11 +958,11 @@ function ConfirmModal({
   };
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4">
-      <div className="grid w-full max-w-md gap-3 rounded-lg border border-slate-700 bg-[#171a20] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+      <div className="grid w-full max-w-md gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
         <div className="flex items-start justify-between gap-3">
           <div className="grid gap-1">
-            <strong className="text-base text-white">{action.title}</strong>
-            <p className="m-0 text-sm leading-relaxed text-slate-400">
+            <strong className="text-base text-foreground">{action.title}</strong>
+            <p className="m-0 text-sm leading-relaxed text-muted-foreground">
               {action.body}
             </p>
           </div>
@@ -887,16 +972,16 @@ function ConfirmModal({
             variant="ghost"
             disabled={busy}
             onClick={onClose}
-            className="text-slate-300 hover:bg-slate-800"
+            className="text-muted-foreground hover:bg-accent"
           >
             <X size={16} />
           </Button>
         </div>
         {action.details?.length ? (
-          <div className="grid gap-1 rounded-md border border-slate-800 bg-[#111419] p-2.5 text-xs text-slate-400">
+          <div className="grid gap-1 rounded-md border border-border bg-background/60 p-2.5 text-xs text-muted-foreground">
             {action.details.map((detail) => (
               <div key={detail} className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 <span>{detail}</span>
               </div>
             ))}
@@ -944,9 +1029,9 @@ function ReelContextBar({
   const isSeries = Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
   if (!isSeries) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-800 bg-[#111419] px-3 py-2 text-xs">
-        <span className="font-extrabold text-slate-100">Standalone reel</span>
-        <span className="text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background/60 px-3 py-2 text-xs">
+        <span className="font-extrabold text-foreground">Standalone reel</span>
+        <span className="text-muted-foreground/80">
           Scenes, voice, captions, and render settings apply only to this reel.
         </span>
       </div>
@@ -955,15 +1040,15 @@ function ReelContextBar({
 
   const parts = seriesReels.length ? seriesReels : [reel];
   return (
-    <div className="grid gap-2 rounded-md border border-slate-800 bg-[#111419] px-3 py-2">
+    <div className="grid gap-2 rounded-md border border-border bg-background/60 px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs">
-          <span className="font-extrabold text-slate-100">Series</span>
-          <span className="ml-2 text-slate-500">
+          <span className="font-extrabold text-foreground">Series</span>
+          <span className="ml-2 text-muted-foreground/80">
             Part {reel.partNumber ?? 1} of {reel.partCount ?? parts.length}
           </span>
         </div>
-        <span className="text-[11px] font-bold text-slate-500">
+        <span className="text-[11px] font-bold text-muted-foreground/80">
           Edit and generate each part independently.
         </span>
       </div>
@@ -979,14 +1064,14 @@ function ReelContextBar({
               className={cn(
                 "grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left text-xs no-underline",
                 active
-                  ? "border-cyan-400/70 bg-cyan-400/10"
-                  : "border-slate-800 bg-[#171a20] hover:bg-[#20242c]",
+                  ? "border-primary/70 bg-primary/10"
+                  : "border-border bg-card hover:bg-secondary",
               )}
             >
-              <span className="font-extrabold text-slate-100">
+              <span className="font-extrabold text-foreground">
                 Part {part.partNumber ?? 1}
               </span>
-              <span className="truncate text-slate-500">
+              <span className="truncate text-muted-foreground/80">
                 {part.title || part.topic || "Untitled"}
               </span>
               <ReelStatusChip
@@ -1016,12 +1101,12 @@ function GateBanner({
     <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
       <div className="flex items-center gap-2 text-sm">
         <Sparkles size={18} className="text-warning" />
-        <span className="font-bold text-slate-100">
+        <span className="font-bold text-foreground">
           {reel.partCount && reel.partCount > 1
             ? `Part ${reel.partNumber ?? 1} plan ready — review & edit this episode below.`
             : "Plan ready — review & edit the script, art, voice, and captions below."}
         </span>
-        <span className="text-slate-400">
+        <span className="text-muted-foreground">
           No images/voice have been generated yet (no spend).
         </span>
       </div>
@@ -1062,12 +1147,12 @@ function StoryPanel({
   }, []);
 
   return (
-    <div className="grid gap-3 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Story source</PanelTitle>
+    <div className="grid gap-3 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Story source</PanelTitle>
 
       {reel.horrorReference ? (
-        <div className="rounded-md border border-slate-800 bg-[#171a20] p-2.5 text-xs">
-          <div className="font-bold text-slate-100">Reference used</div>
+        <div className="rounded-md border border-border bg-card p-2.5 text-xs">
+          <div className="font-bold text-foreground">Reference used</div>
           <a
             href={reel.horrorReference.sourceUrl}
             target="_blank"
@@ -1076,7 +1161,7 @@ function StoryPanel({
           >
             {reel.horrorReference.title} <ExternalLink size={12} />
           </a>
-          <span className="ml-1 text-slate-500">
+          <span className="ml-1 text-muted-foreground/80">
             {reel.horrorReference.author
               ? `· ${reel.horrorReference.author}`
               : ""}{" "}
@@ -1086,16 +1171,16 @@ function StoryPanel({
       ) : null}
 
       {bible ? (
-        <div className="grid gap-1 rounded-md border border-slate-800 bg-[#171a20] p-2.5 text-xs">
-          <div className="font-bold text-slate-100">{bible.premise}</div>
-          <div className="text-slate-500">
+        <div className="grid gap-1 rounded-md border border-border bg-card p-2.5 text-xs">
+          <div className="font-bold text-foreground">{bible.premise}</div>
+          <div className="text-muted-foreground/80">
             Anchor: {bible.anchorObject} · Rule: {bible.impossibleRule}
           </div>
-          <div className="text-slate-500">Twist: {bible.finalTwist}</div>
+          <div className="text-muted-foreground/80">Twist: {bible.finalTwist}</div>
         </div>
       ) : null}
 
-      <Label className="text-slate-300">
+      <Label className="text-muted-foreground">
         Pick a scraped reference (optional)
         <Select
           disabled={busy}
@@ -1118,7 +1203,7 @@ function StoryPanel({
         </Select>
       </Label>
 
-      <Label className="text-slate-300">
+      <Label className="text-muted-foreground">
         Bring your own story (replaces AI script)
         <Textarea
           rows={5}
@@ -1131,7 +1216,7 @@ function StoryPanel({
       <Button
         type="button"
         variant="outline"
-        className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+        className="border-border bg-secondary text-foreground hover:bg-accent"
         disabled={busy || !script.trim()}
         onClick={() =>
           void run(() =>
@@ -1184,9 +1269,9 @@ function SceneCard({
   const audioUrl = mediaUrl(draftAsset?.audioUrl) ?? scene.audioUrl;
 
   return (
-    <div className="grid min-w-0 gap-3 rounded-lg border border-slate-800 bg-[#171a20] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:grid-cols-[120px_minmax(0,1fr)]">
+    <div className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:grid-cols-[120px_minmax(0,1fr)]">
       <div className="grid gap-1.5">
-        <div className="grid aspect-9/16 w-full place-items-center overflow-hidden rounded-md border border-slate-700 bg-[#0b0d10] text-slate-500">
+        <div className="grid aspect-9/16 w-full place-items-center overflow-hidden rounded-md border border-border bg-black/45 text-muted-foreground/80">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -1197,21 +1282,21 @@ function SceneCard({
             <ImageIcon size={20} />
           )}
         </div>
-        <span className="text-center text-[11px] font-bold text-slate-500">
+        <span className="text-center text-[11px] font-bold text-muted-foreground/80">
           Scene {scene.index + 1}/{total}
         </span>
         {audioUrl ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <audio src={audioUrl} controls className="h-7 w-full" />
         ) : (
-          <span className="inline-flex items-center justify-center gap-1 text-[11px] text-slate-500">
+          <span className="inline-flex items-center justify-center gap-1 text-[11px] text-muted-foreground/80">
             <Play size={11} /> no audio
           </span>
         )}
       </div>
 
       <div className="grid min-w-0 gap-2 overflow-hidden">
-        <Label className="gap-1 text-xs text-slate-300">
+        <Label className="gap-1 text-xs text-muted-foreground">
           Narration
           <Textarea
             rows={3}
@@ -1220,7 +1305,7 @@ function SceneCard({
             onChange={(e) => setNarration(e.target.value)}
           />
         </Label>
-        <Label className="gap-1 text-xs text-slate-300">
+        <Label className="gap-1 text-xs text-muted-foreground">
           Visual prompt
           <Textarea
             rows={2}
@@ -1267,7 +1352,7 @@ function SceneCard({
             type="button"
             size="default"
             variant="outline"
-            className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+            className="border-border bg-secondary text-foreground hover:bg-accent"
             disabled={disableAll}
             title="Regenerate this scene's image"
             onClick={() =>
@@ -1292,7 +1377,7 @@ function SceneCard({
             type="button"
             size="default"
             variant="outline"
-            className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+            className="border-border bg-secondary text-foreground hover:bg-accent"
             disabled={disableAll}
             title="Regenerate this scene's narration audio"
             onClick={() =>
@@ -1318,7 +1403,7 @@ function SceneCard({
               type="button"
               size="icon"
               variant="ghost"
-              className="text-red-300 hover:bg-red-400/10 hover:text-red-200"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={disableAll}
               onClick={() =>
                 requestConfirm({
@@ -1353,6 +1438,7 @@ function PresetsPanel({
   const [artStyles, setArtStyles] = useState<ArtStyleOption[]>([]);
   const [imageModels, setImageModels] = useState<ImageModelOption[]>([]);
   const [voices, setVoices] = useState<TtsVoiceOption[]>([]);
+  const [presets, setPresets] = useState<StylePreset[]>([]);
   const reelKey = reel._id ?? reel.id ?? "";
 
   useEffect(() => {
@@ -1365,16 +1451,77 @@ function PresetsPanel({
     void listTtsVoices()
       .then(setVoices)
       .catch(() => undefined);
-  }, []);
+    void listStylePresets(reel.niche)
+      .then(setPresets)
+      .catch(() => setPresets([]));
+  }, [reel.niche]);
 
   const currentVoice =
     reel.voiceOverride?.voice ?? reel.narrationVoice?.voice ?? "";
 
-  return (
-    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Look & Voice</PanelTitle>
+  const applyPreset = (preset: StylePreset) =>
+    requestConfirm({
+      title: `Apply "${preset.displayName}" preset?`,
+      body: `${preset.description} This sets art style, motion, voice, voice FX, and caption look in one go.`,
+      details: [
+        "Existing scene stills and narration are cleared so the new look/voice can generate.",
+        "No OpenRouter call happens immediately — the next produce run regenerates them.",
+        "Caption style is applied to the next render.",
+      ],
+      confirmLabel: "Apply preset",
+      onConfirm: () =>
+        run(async () => {
+          await updateReelSettings(reelKey, {
+            artStyleId: preset.artStyleId,
+            motionMode: preset.motionMode,
+            voice: preset.voice,
+            audioPost: preset.audioPost,
+          });
+          return updateCaptions(reelKey, preset.captionStyle);
+        }),
+    });
 
-      <Label className="text-xs text-slate-300">
+  return (
+    <div className="grid gap-2.5 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Look & Voice</PanelTitle>
+
+      {presets.length ? (
+        <div className="grid gap-2 rounded-md border border-border bg-card p-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-extrabold text-foreground">
+            <Sparkles size={14} className="text-primary" /> Style presets
+          </span>
+          <div className="grid gap-1.5">
+            {presets.map((preset) => {
+              const active = reel.presetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => applyPreset(preset)}
+                  className={cn(
+                    "grid gap-0.5 rounded-md border px-2.5 py-2 text-left transition-colors",
+                    active
+                      ? "border-primary/60 bg-primary/10"
+                      : "border-border bg-background/60 hover:border-input hover:bg-accent",
+                  )}
+                >
+                  <span className="text-xs font-bold text-foreground">
+                    {preset.displayName}
+                    {active ? <span className="ml-2 text-[10px] font-extrabold uppercase text-primary">current</span> : null}
+                  </span>
+                  <span className="truncate text-[11px] text-muted-foreground/80">{preset.description}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground/80">
+            One-click bundle of art, motion, voice, voice FX, and caption look.
+          </p>
+        </div>
+      ) : null}
+
+      <Label className="text-xs text-muted-foreground">
         Art style
         <Select
           disabled={busy}
@@ -1404,7 +1551,7 @@ function PresetsPanel({
         </Select>
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Motion
         <Select
           disabled={busy}
@@ -1425,7 +1572,7 @@ function PresetsPanel({
         </Select>
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Image model
         <Select
           disabled={busy}
@@ -1455,7 +1602,7 @@ function PresetsPanel({
         </Select>
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Narration voice
         <Select
           disabled={busy}
@@ -1490,7 +1637,7 @@ function PresetsPanel({
         </Select>
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Voice post-processing
         <Select
           disabled={busy}
@@ -1527,7 +1674,7 @@ function PresetsPanel({
           ))}
         </Select>
       </Label>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground/80">
         Changing art/image model clears stills; changing voice or voice FX
         clears narration. Re-render below to apply.
       </p>
@@ -1550,12 +1697,12 @@ function RegeneratePanel({
   const canRegen = reel.status === "completed" || reel.status === "failed";
   if (!canRegen) return null;
   return (
-    <div className="grid gap-2 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Render Queue</PanelTitle>
+    <div className="grid gap-2 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Render Queue</PanelTitle>
       <Button
         type="button"
         variant="outline"
-        className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+        className="border-border bg-secondary text-foreground hover:bg-accent"
         disabled={busy}
         onClick={() => void run(() => regenerateReel(reelKey, "render_only"))}
       >
@@ -1564,7 +1711,7 @@ function RegeneratePanel({
       <Button
         type="button"
         variant="outline"
-        className="border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/15"
+        className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
         disabled={busy}
         onClick={() =>
           requestConfirm({
@@ -1589,6 +1736,131 @@ function RegeneratePanel({
   );
 }
 
+function CostPanel({ reel }: { reel: Reel }) {
+  const breakdown = reel.costBreakdown;
+  if (!breakdown?.lines?.length) return null;
+  return (
+    <div className="grid gap-2 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="inline-flex items-center gap-2 text-foreground">
+        <Receipt size={15} className="text-primary" /> Cost breakdown
+      </PanelTitle>
+      <div className="grid gap-1">
+        {breakdown.lines.map((line) => (
+          <div
+            key={`${line.label}-${line.model ?? ""}`}
+            className="flex items-baseline justify-between gap-3 text-xs"
+          >
+            <span className="min-w-0 truncate text-muted-foreground">
+              {line.label}
+              {line.model ? <span className="text-muted-foreground/60"> · {line.model}</span> : null}
+            </span>
+            <span className="shrink-0 font-bold tabular-nums text-foreground">
+              ${line.costUsd.toFixed(4)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-baseline justify-between border-t border-border/70 pt-2 text-sm">
+        <span className="font-bold text-foreground">Total</span>
+        <span className="font-extrabold tabular-nums text-primary">${breakdown.totalUsd.toFixed(4)}</span>
+      </div>
+      {breakdown.note ? <p className="m-0 text-[11px] text-muted-foreground/80">{breakdown.note}</p> : null}
+    </div>
+  );
+}
+
+function PublishPanel({
+  reel,
+  busy,
+  run,
+  requestConfirm,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
+}) {
+  const reelKey = reel._id ?? reel.id ?? "";
+  const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
+  const [channelId, setChannelId] = useState("");
+
+  useEffect(() => {
+    void listYouTubeChannels()
+      .then(setChannels)
+      .catch(() => setChannels([]));
+  }, []);
+
+  if (reel.status !== "completed") return null;
+  const yt = reel.youtube;
+  const selected = channels.find((channel) => channel.id === channelId);
+
+  return (
+    <div className="grid gap-2 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="inline-flex items-center gap-2 text-foreground">
+        <Youtube size={15} className="text-primary" /> Publish
+      </PanelTitle>
+
+      {yt ? (
+        <div
+          className={cn(
+            "rounded-md border px-2.5 py-2 text-xs",
+            yt.status === "published"
+              ? "border-success/40 bg-success/10 text-success"
+              : yt.status === "failed"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-warning/40 bg-warning/10 text-warning",
+          )}
+        >
+          <span className="font-bold capitalize">{yt.status}</span>
+          {yt.channelLabel ? ` · ${yt.channelLabel}` : ""}
+          {yt.url ? (
+            <a href={yt.url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-primary">
+              Watch <ExternalLink size={11} />
+            </a>
+          ) : null}
+          {yt.error ? <div className="mt-1 text-[11px] opacity-90">{yt.error}</div> : null}
+        </div>
+      ) : null}
+
+      <Label className="text-xs text-muted-foreground">
+        Channel
+        <Select disabled={busy} value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+          <option value="">Auto by niche</option>
+          {channels.map((channel) => (
+            <option key={channel.id} value={channel.id}>
+              {channel.googleChannelTitle || channel.label} · {channel.privacyStatus}
+            </option>
+          ))}
+        </Select>
+      </Label>
+
+      <Button
+        type="button"
+        variant="default"
+        disabled={busy || !reel.outputUrl}
+        onClick={() =>
+          requestConfirm({
+            title: yt?.status === "published" ? "Publish again?" : "Publish to YouTube?",
+            body: `Uploads the rendered video${selected ? ` to ${selected.googleChannelTitle || selected.label}` : " to the niche's default channel"} with the reviewed title, description, tags, and thumbnail.`,
+            details: [
+              "Uses the review package (edit it on the Review screen first if needed).",
+              "The upload runs in the background — status appears above.",
+            ],
+            confirmLabel: "Publish",
+            onConfirm: () =>
+              run(async () => {
+                await publishReel(reelKey, channelId || undefined);
+                return getReel(reelKey);
+              }),
+          })
+        }
+      >
+        <Send size={15} /> {yt?.status === "published" ? "Republish" : "Publish to YouTube"}
+      </Button>
+    </div>
+  );
+}
+
 // ---- Cinematic edit effects (rain / grain / vignette / letterbox) ----
 
 function EffectsPanel({
@@ -1605,8 +1877,8 @@ function EffectsPanel({
   useEffect(() => setFx(reel.editEffects ?? {}), [reel.editEffects]);
 
   return (
-    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Edit Effects</PanelTitle>
+    <div className="grid gap-2.5 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Edit Effects</PanelTitle>
       <EditEffectsControls value={fx} onChange={setFx} disabled={busy} />
       <Button
         type="button"
@@ -1621,7 +1893,7 @@ function EffectsPanel({
       >
         <RefreshCw size={15} /> Apply &amp; re-render (free)
       </Button>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground/80">
         A cinematic finish over the whole reel. Render-only — reuses every
         asset, no generation spend.
       </p>
@@ -1675,10 +1947,10 @@ function OutroPanel({
     setOutro((current) => ({ ...current, ...patch }));
 
   return (
-    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Outro</PanelTitle>
+    <div className="grid gap-2.5 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Outro</PanelTitle>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Brand channel
         <Select
           disabled={busy}
@@ -1695,12 +1967,12 @@ function OutroPanel({
       </Label>
 
       {selected ? (
-        <div className="rounded-md border border-slate-800 bg-[#171a20] px-3 py-2 text-xs text-slate-400">
+        <div className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
           The outro will use {channelDisplayName(selected)} unless you override the display name below.
         </div>
       ) : null}
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Display name override
         <Input
           disabled={busy}
@@ -1710,7 +1982,7 @@ function OutroPanel({
         />
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Handle override
         <Input
           disabled={busy}
@@ -1720,7 +1992,7 @@ function OutroPanel({
         />
       </Label>
 
-      <Label className="text-xs text-slate-300">
+      <Label className="text-xs text-muted-foreground">
         Spoken outro line
         <Textarea
           rows={2}
@@ -1736,7 +2008,7 @@ function OutroPanel({
       </Label>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <Label className="text-xs text-slate-300">
+        <Label className="text-xs text-muted-foreground">
           Card title
           <Input
             disabled={busy}
@@ -1745,7 +2017,7 @@ function OutroPanel({
             onChange={(event) => patchOutro({ title: event.target.value })}
           />
         </Label>
-        <Label className="text-xs text-slate-300">
+        <Label className="text-xs text-muted-foreground">
           Card subtitle
           <Input
             disabled={busy}
@@ -1757,7 +2029,7 @@ function OutroPanel({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <Label className="text-xs text-slate-300">
+        <Label className="text-xs text-muted-foreground">
           CTA button
           <Input
             disabled={busy}
@@ -1766,7 +2038,7 @@ function OutroPanel({
             onChange={(event) => patchOutro({ cta: event.target.value })}
           />
         </Label>
-        <Label className="text-xs text-slate-300">
+        <Label className="text-xs text-muted-foreground">
           Footer
           <Input
             disabled={busy}
@@ -1793,7 +2065,7 @@ function OutroPanel({
       >
         <RefreshCw size={15} /> Render outro draft
       </Button>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground/80">
         Reuses all scene stills and narration. Only the outro narration, outro card, and preview video are rebuilt.
       </p>
     </div>
@@ -1804,26 +2076,26 @@ function ThumbnailPanel({ reel }: { reel: Reel }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const draft = reel.thumbnailDraft;
   return (
-    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Thumbnail</PanelTitle>
+    <div className="grid gap-2.5 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Thumbnail</PanelTitle>
 
       {reel.review?.thumbnailUrl ? (
         <img
           src={reel.review.thumbnailUrl}
           alt="Saved thumbnail"
-          className="w-full rounded-md border border-slate-700 object-cover"
+          className="w-full rounded-md border border-border object-cover"
         />
       ) : (
-        <div className="grid aspect-video w-full place-items-center gap-2 rounded-md border border-slate-800 bg-[#0b0d10] text-xs font-semibold text-slate-500">
+        <div className="grid aspect-video w-full place-items-center gap-2 rounded-md border border-border bg-black/45 text-xs font-semibold text-muted-foreground/80">
           <ImageIcon size={24} />
           No thumbnail uploaded yet
         </div>
       )}
 
       {draft ? (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-400/50 bg-amber-400/10 px-2.5 py-2 text-xs text-amber-200">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-warning/50 bg-warning/10 px-2.5 py-2 text-xs text-warning">
           <span className="font-bold">Staged local draft waiting</span>
-          <span className="text-amber-100/80">upload or discard it in the studio</span>
+          <span className="text-warning/80">upload or discard it in the studio</span>
         </div>
       ) : null}
 
@@ -1834,7 +2106,7 @@ function ThumbnailPanel({ reel }: { reel: Reel }) {
       >
         <ImageIcon size={15} /> Open Thumbnail Studio
       </Link>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground/80">
         Frame grabs, scene stills, text overlay, aspect ratio, and AI generation all live in the
         dedicated Thumbnail Studio. Drafts stay local until uploaded to S3 or discarded.
       </p>
@@ -1993,12 +2265,12 @@ function CaptionEditor({
   };
 
   return (
-    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
-      <PanelTitle className="text-slate-100">Captions</PanelTitle>
+    <div className="grid gap-2.5 rounded-md border border-border bg-background/60 p-3">
+      <PanelTitle className="text-foreground">Captions</PanelTitle>
 
       <div
         ref={previewRef}
-        className="relative mx-auto aspect-9/16 w-40 select-none overflow-hidden rounded-md border border-slate-700 bg-black"
+        className="relative mx-auto aspect-9/16 w-40 select-none overflow-hidden rounded-md border border-border bg-black"
         style={
           bg
             ? {
@@ -2037,13 +2309,13 @@ function CaptionEditor({
           ))}
         </div>
       </div>
-      <p className="text-center text-[11px] text-slate-500">
+      <p className="text-center text-[11px] text-muted-foreground/80">
         Drag vertically to position — saved automatically
         {hasHighlight ? " · text catches up letter by letter" : null}
       </p>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Font
           <Select
             value={style.fontName}
@@ -2060,7 +2332,7 @@ function CaptionEditor({
             ))}
           </Select>
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Size
           <Input
             type="number"
@@ -2069,7 +2341,7 @@ function CaptionEditor({
             onChange={(e) => set("fontSize", Number(e.target.value) || 0)}
           />
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Words/chunk
           <Input
             type="number"
@@ -2082,11 +2354,11 @@ function CaptionEditor({
             }
           />
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Text color
           <input
             type="color"
-            className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
+            className="h-8 w-full rounded border border-border bg-card"
             value={style.primaryColor}
             disabled={busy}
             onChange={(e) =>
@@ -2094,9 +2366,9 @@ function CaptionEditor({
             }
           />
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Highlight color
-          <span className="text-[10px] font-normal text-slate-500">
+          <span className="text-[10px] font-normal text-muted-foreground/80">
             {!style.karaoke
               ? "Enable letter-by-letter fill to use"
               : hasHighlight
@@ -2105,7 +2377,7 @@ function CaptionEditor({
           </span>
           <input
             type="color"
-            className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
+            className="h-8 w-full rounded border border-border bg-card"
             value={style.activeColor}
             disabled={busy}
             onChange={(e) =>
@@ -2113,11 +2385,11 @@ function CaptionEditor({
             }
           />
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Outline color
           <input
             type="color"
-            className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
+            className="h-8 w-full rounded border border-border bg-card"
             value={style.outlineColor}
             disabled={busy}
             onChange={(e) =>
@@ -2125,7 +2397,7 @@ function CaptionEditor({
             }
           />
         </Label>
-        <Label className="gap-1 text-slate-300">
+        <Label className="gap-1 text-muted-foreground">
           Outline width
           <Input
             type="number"
@@ -2138,7 +2410,7 @@ function CaptionEditor({
         </Label>
       </div>
 
-      <label className="flex items-center gap-2 text-xs font-bold text-slate-300">
+      <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
         <input
           type="checkbox"
           checked={style.uppercase}
@@ -2148,7 +2420,7 @@ function CaptionEditor({
         ALL CAPS
       </label>
 
-      <label className="flex items-center gap-2 text-xs font-bold text-slate-300">
+      <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
         <input
           type="checkbox"
           checked={style.karaoke}
@@ -2156,7 +2428,7 @@ function CaptionEditor({
           onChange={(e) => set("karaoke", e.target.checked)}
         />
         Letter-by-letter fill
-        <span className="font-normal text-slate-500">
+        <span className="font-normal text-muted-foreground/80">
           (word starts in highlight, text catches up)
         </span>
       </label>

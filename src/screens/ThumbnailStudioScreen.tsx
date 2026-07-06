@@ -401,30 +401,30 @@ export function ThumbnailStudioScreen() {
   const disableEdits = busy || previewing || isGenerating;
 
   return (
-    <section className="studio-workspace w-full min-w-0 overflow-x-clip bg-[#101216] px-3 pb-5 text-slate-100 sm:px-4 lg:px-5">
-      <header className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border border-t-0 border-slate-800 bg-[#171a20]/95 px-3 py-2 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
+    <section className="studio-workspace w-full min-w-0 overflow-x-clip px-3 pb-5 text-foreground sm:px-4 lg:px-5">
+      <header className="glass-panel sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-b-lg border-t-0 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/studio/$id"
             params={{ id }}
-            className="grid size-9 place-items-center rounded-md border border-slate-700 bg-[#20242c] text-slate-300 hover:bg-[#2a303a] hover:text-white"
+            className="grid size-9 place-items-center rounded-md border border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
             title="Back to studio"
           >
             <ArrowLeft size={17} />
           </Link>
           <div className="min-w-0">
-            <h1 className="m-0 flex min-w-0 items-center gap-2 truncate text-base tracking-normal text-white">
-              <ImageIcon size={18} className="text-cyan-300" />
+            <h1 className="m-0 flex min-w-0 items-center gap-2 truncate text-base tracking-normal text-foreground">
+              <ImageIcon size={18} className="text-primary" />
               <span className="truncate">Thumbnail studio · {reel.title || "Untitled reel"}</span>
             </h1>
-            <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+            <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
               {reel.niche} · <ReelStatusChip status={reel.status} className="min-w-[82px]" />
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {hasDraft ? (
-            <span className="rounded-full border border-amber-400/50 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-200">
+            <span className="rounded-full border border-warning/50 bg-warning/10 px-2.5 py-1 text-xs font-bold text-warning">
               Local draft — not uploaded
             </span>
           ) : null}
@@ -433,7 +433,7 @@ export function ThumbnailStudioScreen() {
             variant="outline"
             onClick={() => void refresh()}
             disabled={busy}
-            className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+            className="border-border bg-secondary text-foreground hover:bg-accent"
           >
             <RefreshCw size={15} className={isGenerating ? "animate-spin" : undefined} />
             Refresh
@@ -448,7 +448,7 @@ export function ThumbnailStudioScreen() {
       ) : null}
 
       {hasDraft ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-warning">
           <div>
             <div className="font-semibold">Staged thumbnail draft</div>
             <div className="text-xs">
@@ -474,7 +474,7 @@ export function ThumbnailStudioScreen() {
       ) : null}
 
       {isGenerating ? (
-        <div className="mb-3 rounded-lg border border-slate-700 bg-[#171a20] px-3 py-2 text-xs text-slate-300">
+        <div className="mb-3 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
           Generation is active — thumbnail editing unlocks when the reel settles.
         </div>
       ) : null}
@@ -521,26 +521,26 @@ export function ThumbnailStudioScreen() {
                         setFlattenedPreviewUrl(undefined);
                       }}
                       className={cn(
-                        "group overflow-hidden rounded-md border bg-[#0b0d10] text-left transition-colors",
+                        "group overflow-hidden rounded-md border bg-black/45 text-left transition-colors",
                         sceneIndex === scene.index
-                          ? "border-cyan-400 ring-1 ring-cyan-400/60"
-                          : "border-slate-800 hover:border-slate-600"
+                          ? "border-primary ring-1 ring-primary/60"
+                          : "border-border hover:border-input"
                       )}
                       title={`Use scene ${scene.index + 1} still`}
                     >
                       <img src={url} alt="" className="aspect-video w-full object-cover" />
-                      <span className="block truncate px-1.5 py-1 text-[11px] font-bold text-slate-300">
+                      <span className="block truncate px-1.5 py-1 text-[11px] font-bold text-muted-foreground">
                         Scene {scene.index + 1}
                       </span>
                     </button>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-slate-500">No scene stills yet — generate the reel first.</p>
+                <p className="text-xs text-muted-foreground/80">No scene stills yet — generate the reel first.</p>
               )
             ) : (
               <div className="grid gap-2">
-                <Label className="text-xs text-slate-300">
+                <Label className="text-xs text-muted-foreground">
                   Video time — {frameSeconds.toFixed(1)}s
                   <input
                     type="range"
@@ -550,11 +550,11 @@ export function ThumbnailStudioScreen() {
                     value={Math.min(frameSeconds, Math.max(videoDuration, 1))}
                     disabled={disableEdits || !reel.outputUrl}
                     onChange={(event) => setFrameSeconds(Number(event.target.value))}
-                    className="w-full accent-cyan-400"
+                    className="w-full accent-[oklch(74%_0.132_187)]"
                   />
                 </Label>
                 <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                  <Label className="text-xs text-slate-300">
+                  <Label className="text-xs text-muted-foreground">
                     Seconds
                     <Input
                       type="number"
@@ -568,7 +568,7 @@ export function ThumbnailStudioScreen() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+                    className="border-border bg-secondary text-foreground hover:bg-accent"
                     disabled={disableEdits || grabbingFrame || !reel.outputUrl}
                     onClick={() => void grabFrame()}
                   >
@@ -577,7 +577,7 @@ export function ThumbnailStudioScreen() {
                   </Button>
                 </div>
                 {!reel.outputUrl ? (
-                  <p className="text-xs text-slate-500">Render the reel to pull frames from the video.</p>
+                  <p className="text-xs text-muted-foreground/80">Render the reel to pull frames from the video.</p>
                 ) : null}
               </div>
             )}
@@ -588,22 +588,22 @@ export function ThumbnailStudioScreen() {
               <img
                 src={savedThumbnailUrl}
                 alt="Saved thumbnail"
-                className="w-full rounded-md border border-slate-700 object-cover"
+                className="w-full rounded-md border border-border object-cover"
               />
             ) : (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground/80">
                 Nothing uploaded yet. The published thumbnail will show here.
               </p>
             )}
             {reel.thumbnailDraft ? (
               <div className="grid gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-amber-300">
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-warning">
                   Staged draft (local)
                 </span>
                 <img
                   src={mediaUrl(reel.thumbnailDraft.imageUrl)}
                   alt="Staged thumbnail draft"
-                  className="w-full rounded-md border border-amber-400/50 object-cover"
+                  className="w-full rounded-md border border-warning/50 object-cover"
                 />
               </div>
             ) : null}
@@ -623,22 +623,22 @@ export function ThumbnailStudioScreen() {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold",
                     showGuides
-                      ? "border-cyan-400/60 bg-cyan-400/10 text-cyan-200"
-                      : "border-slate-700 bg-[#101216] text-slate-400 hover:text-slate-200"
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Grid3x3 size={13} /> Guides
                 </button>
-                <span className="rounded-full border border-slate-700 bg-[#101216] px-2 py-1 text-[11px] font-bold text-slate-400">
+                <span className="rounded-full border border-border bg-background/60 px-2 py-1 text-[11px] font-bold text-muted-foreground">
                   {aspectRatio} · {output.width}×{output.height}
                 </span>
               </div>
             }
           >
-            <div className="grid place-items-center bg-[#0b0d10] p-4">
+            <div className="grid place-items-center bg-black/45 p-4">
               <div
                 ref={stageRef}
-                className="relative grid place-items-center overflow-hidden rounded-md border border-slate-700 bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)]"
+                className="relative grid place-items-center overflow-hidden rounded-md border border-border bg-black shadow-[0_24px_90px_rgba(0,0,0,0.45)]"
                 style={{ aspectRatio: aspectCss, width: stageMaxWidth }}
               >
                 {flattenedPreviewUrl ? (
@@ -646,7 +646,7 @@ export function ThumbnailStudioScreen() {
                 ) : sourceImageUrl ? (
                   <img src={sourceImageUrl} alt="Thumbnail source" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="grid gap-2 px-4 text-center text-xs font-semibold text-slate-500">
+                  <div className="grid gap-2 px-4 text-center text-xs font-semibold text-muted-foreground/80">
                     <ImageIcon className="mx-auto" size={28} />
                     {sourceType === "frame" ? "Grab a video frame to start" : "Pick a scene still to start"}
                   </div>
@@ -655,11 +655,11 @@ export function ThumbnailStudioScreen() {
                 {showGuides && !flattenedPreviewUrl ? (
                   <div className="pointer-events-none absolute inset-0">
                     {/* rule-of-thirds grid + title-safe margin */}
-                    <div className="absolute inset-y-0 left-1/3 w-px bg-cyan-300/20" />
-                    <div className="absolute inset-y-0 left-2/3 w-px bg-cyan-300/20" />
-                    <div className="absolute inset-x-0 top-1/3 h-px bg-cyan-300/20" />
-                    <div className="absolute inset-x-0 top-2/3 h-px bg-cyan-300/20" />
-                    <div className="absolute inset-[6%] rounded border border-dashed border-cyan-300/25" />
+                    <div className="absolute inset-y-0 left-1/3 w-px bg-primary/20" />
+                    <div className="absolute inset-y-0 left-2/3 w-px bg-primary/20" />
+                    <div className="absolute inset-x-0 top-1/3 h-px bg-primary/20" />
+                    <div className="absolute inset-x-0 top-2/3 h-px bg-primary/20" />
+                    <div className="absolute inset-[6%] rounded border border-dashed border-primary/25" />
                   </div>
                 ) : null}
 
@@ -700,7 +700,7 @@ export function ThumbnailStudioScreen() {
                 ) : null}
               </div>
             </div>
-            <div className="border-t border-slate-800 px-3 py-2 text-[11px] text-slate-400">
+            <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
               {flattenedPreviewUrl
                 ? "Server-rendered preview — exactly what will be saved. Change any control to return to live edit."
                 : "Live edit: drag the text to position it. Staging or uploading flattens source + text server-side into one PNG."}
@@ -712,7 +712,7 @@ export function ThumbnailStudioScreen() {
               <Button
                 type="button"
                 variant="outline"
-                className="border-slate-700 bg-[#20242c] text-slate-100 hover:bg-[#2a303a]"
+                className="border-border bg-secondary text-foreground hover:bg-accent"
                 disabled={disableEdits || !sourceReady || (sourceType === "scene" && !overlay.text.trim())}
                 title={
                   sourceType === "scene" && !overlay.text.trim()
@@ -727,7 +727,7 @@ export function ThumbnailStudioScreen() {
               <Button
                 type="button"
                 variant="outline"
-                className="border-amber-400/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15"
+                className="border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
                 disabled={disableEdits || !sourceReady}
                 onClick={() => void stageDraft()}
               >
@@ -738,7 +738,7 @@ export function ThumbnailStudioScreen() {
                 Upload to S3
               </Button>
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-muted-foreground/80">
               Previews are rendered to temp files and deleted immediately. A saved draft keeps one composed
               PNG locally until you upload or discard it — uploading replaces (and deletes) the previous S3
               thumbnail, so only one object per reel ever lives in the bucket.
@@ -749,7 +749,7 @@ export function ThumbnailStudioScreen() {
         {/* ---- Controls rail ---- */}
         <div className="grid min-w-0 content-start gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)] xl:overflow-y-auto xl:pr-1">
           <StudioPanel title="Layout" icon={<Grid3x3 size={15} />}>
-            <Label className="text-xs text-slate-300">
+            <Label className="text-xs text-muted-foreground">
               Aspect ratio
               <Select
                 disabled={disableEdits}
@@ -776,7 +776,7 @@ export function ThumbnailStudioScreen() {
                   key={label}
                   type="button"
                   variant="outline"
-                  className="border-slate-700 bg-[#20242c] text-xs text-slate-100 hover:bg-[#2a303a]"
+                  className="border-border bg-secondary text-xs text-foreground hover:bg-accent"
                   disabled={disableEdits}
                   onClick={() => patchOverlay({ xPct: 0.5, yPct: y })}
                 >
@@ -785,7 +785,7 @@ export function ThumbnailStudioScreen() {
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 X %
                 <Input
                   type="number"
@@ -798,7 +798,7 @@ export function ThumbnailStudioScreen() {
                   }
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Y %
                 <Input
                   type="number"
@@ -811,7 +811,7 @@ export function ThumbnailStudioScreen() {
                   }
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Wrap width %
                 <Input
                   type="number"
@@ -824,7 +824,7 @@ export function ThumbnailStudioScreen() {
                   }
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Line height
                 <Input
                   type="number"
@@ -851,7 +851,7 @@ export function ThumbnailStudioScreen() {
               onChange={(event) => patchOverlay({ text: event.target.value })}
             />
             <div className="grid gap-2 sm:grid-cols-2">
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Font
                 <Select
                   disabled={disableEdits}
@@ -865,7 +865,7 @@ export function ThumbnailStudioScreen() {
                   ))}
                 </Select>
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Align
                 <Select
                   disabled={disableEdits}
@@ -877,7 +877,7 @@ export function ThumbnailStudioScreen() {
                   <option value="right">Right</option>
                 </Select>
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Size ({overlay.fontSize}px @ {output.width}w)
                 <Input
                   type="number"
@@ -890,7 +890,7 @@ export function ThumbnailStudioScreen() {
                   }
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Outline width
                 <Input
                   type="number"
@@ -903,28 +903,28 @@ export function ThumbnailStudioScreen() {
                   }
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Text color
                 <input
                   type="color"
-                  className="h-9 w-full rounded border border-slate-700 bg-[#101216]"
+                  className="h-9 w-full rounded border border-border bg-background/60"
                   disabled={disableEdits}
                   value={overlay.color}
                   onChange={(event) => patchOverlay({ color: event.target.value })}
                 />
               </Label>
-              <Label className="text-xs text-slate-300">
+              <Label className="text-xs text-muted-foreground">
                 Outline color
                 <input
                   type="color"
-                  className="h-9 w-full rounded border border-slate-700 bg-[#101216]"
+                  className="h-9 w-full rounded border border-border bg-background/60"
                   disabled={disableEdits}
                   value={overlay.outlineColor}
                   onChange={(event) => patchOverlay({ outlineColor: event.target.value })}
                 />
               </Label>
             </div>
-            <Label className="text-xs text-slate-300">
+            <Label className="text-xs text-muted-foreground">
               Text effect
               <Select
                 disabled={disableEdits}
@@ -937,7 +937,7 @@ export function ThumbnailStudioScreen() {
                 <option value="none">None</option>
               </Select>
             </Label>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
                 checked={overlay.uppercase}
@@ -949,7 +949,7 @@ export function ThumbnailStudioScreen() {
           </StudioPanel>
 
           <StudioPanel title="AI thumbnail" icon={<Sparkles size={15} />}>
-            <Label className="text-xs text-slate-300">
+            <Label className="text-xs text-muted-foreground">
               Prompt
               <Textarea
                 rows={3}
@@ -962,7 +962,7 @@ export function ThumbnailStudioScreen() {
             <Button
               type="button"
               variant="outline"
-              className="border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/15"
+              className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
               disabled={disableEdits || !aiPrompt.trim()}
               onClick={() =>
                 setConfirmAction({
@@ -983,7 +983,7 @@ export function ThumbnailStudioScreen() {
             >
               <Wand2 size={15} /> Generate with AI ($)
             </Button>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-muted-foreground/80">
               Uses the reel's title and this prompt to render a full AI thumbnail — separate from the canvas
               composition above.
             </p>
@@ -1008,10 +1008,10 @@ function StudioPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="min-w-0 rounded-lg border border-slate-800 bg-[#171a20] shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-        <strong className="inline-flex min-w-0 items-center gap-2 text-[13px] uppercase tracking-[0.08em] text-slate-300">
-          {icon}
+    <section className="glass-panel min-w-0 rounded-lg">
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <strong className="inline-flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
+          <span className="text-primary/80">{icon}</span>
           <span className="truncate">{title}</span>
         </strong>
         {actions}
