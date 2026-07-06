@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export const panelClassName =
-  "rounded-lg border border-border bg-card shadow-[var(--shadow-panel)]";
+export const panelClassName = "glass-panel rounded-lg";
 
 export function Panel({
   className,

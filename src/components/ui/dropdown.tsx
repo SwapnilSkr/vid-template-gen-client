@@ -20,7 +20,7 @@ export function Dropdown({ className, ref, style, ...props }: DropdownProps) {
         ...style,
       }}
       className={cn(
-        "min-h-[38px] w-full appearance-none rounded-md border border-input bg-background/45 py-2 pl-2.5 pr-9 text-[13px] font-semibold text-foreground outline-none transition-colors focus:border-primary focus:ring-3 focus:ring-ring/20 disabled:bg-muted disabled:text-muted-foreground",
+        "min-h-[38px] w-full appearance-none rounded-md border border-input/70 bg-background/55 py-2 pl-2.5 pr-9 text-[13px] font-semibold text-foreground shadow-[0_1px_0_rgba(255,255,255,0.02)_inset] outline-none transition-colors hover:border-input focus:border-primary/70 focus:ring-3 focus:ring-ring/20 disabled:bg-muted disabled:text-muted-foreground",
         className,
       )}
       {...props}

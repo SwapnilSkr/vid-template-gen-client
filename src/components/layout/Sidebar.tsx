@@ -68,8 +68,9 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
 
   const navLinkClass = (isActive: boolean) =>
     cn(
-      "grid min-h-9 grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-bold text-sidebar-foreground/85 no-underline transition-colors hover:border-border hover:bg-card/70 hover:text-foreground",
-      isActive && "border-primary/55 bg-primary text-sidebar-accent-foreground shadow-[var(--shadow-sidebar-active)] hover:bg-primary hover:text-sidebar-accent-foreground"
+      "relative grid min-h-9 grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-semibold text-sidebar-foreground/85 no-underline transition-colors hover:bg-card/80 hover:text-foreground",
+      isActive &&
+        "border-primary/25 bg-primary/12 font-bold text-primary shadow-[var(--shadow-sidebar-active)] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary hover:bg-primary/15 hover:text-primary"
     );
 
   return (
@@ -83,13 +84,13 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         to="/"
         search={{ status: undefined }}
         onClick={onNavigate}
-        className="mb-4 flex min-h-14 items-center gap-2.5 rounded-lg border border-border bg-card/50 px-3 py-3 no-underline"
+        className="glass-panel mb-4 flex min-h-14 items-center gap-2.5 rounded-lg px-3 py-3 no-underline"
       >
-        <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
+        <span className="grid size-9 place-items-center rounded-md bg-gradient-to-br from-primary to-[oklch(70%_0.1_230)] text-primary-foreground shadow-[0_8px_20px_rgba(45,212,191,0.28)]">
           <Play size={19} />
         </span>
         <div className="min-w-0">
-          <strong className="block text-base leading-tight text-foreground">ReelForge</strong>
+          <strong className="brand-gradient-text block text-base leading-tight">ReelForge</strong>
           <span className="block truncate text-xs text-muted-foreground">Shorts production console</span>
         </div>
       </Link>
@@ -125,8 +126,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
             <span>{name}</span>
             <em
               className={cn(
-                "min-w-6 rounded-full border border-border bg-muted px-2 py-0.5 text-center text-xs not-italic text-muted-foreground",
-                isActive && "border-black/10 bg-black/15 text-primary-foreground"
+                "min-w-6 rounded-full border border-border/70 bg-muted/70 px-2 py-0.5 text-center text-[11px] font-bold not-italic tabular-nums text-muted-foreground",
+                isActive && "border-primary/30 bg-primary/15 text-primary"
               )}
             >
               {count}

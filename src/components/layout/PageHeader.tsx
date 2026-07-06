@@ -9,7 +9,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ downloadUrl }: PageHeaderProps) {
   return (
-    <header className="sticky top-0 z-20 mb-4 grid min-h-12 gap-3 rounded-lg border border-border bg-card/90 px-4 py-3 shadow-[var(--shadow-panel)] backdrop-blur sm:flex sm:items-start sm:justify-between">
+    <header className="glass-panel sticky top-0 z-20 mb-4 grid min-h-12 gap-3 rounded-lg px-4 py-3 sm:flex sm:items-start sm:justify-between">
       <div>
         <h1 className="m-0 text-2xl leading-tight tracking-normal text-foreground">Production Review</h1>
         <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
