@@ -11,7 +11,6 @@ import {
   Palette,
   Play,
   RefreshCw,
-  Save,
   Scissors,
   Settings2,
   SlidersHorizontal,
@@ -20,6 +19,7 @@ import {
   Wand2,
   Volume2,
   X,
+  Youtube,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -31,6 +31,7 @@ import {
   listArtStyles,
   listFonts,
   listImageModels,
+  listYouTubeChannels,
   listTtsVoices,
   mediaUrl,
   regenerateReel,
@@ -48,15 +49,17 @@ import {
   type EditEffects,
   type FontOption,
   type ImageModelOption,
+  type OutroSettings,
   type Reel,
   type Scene,
   type TtsVoiceOption,
+  type YouTubeChannelOption,
 } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { EditEffectsControls } from "@/components/reels/EditEffectsControls";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
@@ -102,6 +105,7 @@ const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
   bold: true,
   uppercase: false,
   animation: "none",
+  karaoke: false,
 };
 
 const CAPTION_STYLE_DEFAULTS = {
@@ -121,7 +125,7 @@ const VOICE_POST_PROFILES: {
   { value: "none", label: "Clean - no voice FX" },
 ];
 
-type InspectorTab = "source" | "look" | "effects" | "captions" | "export";
+type InspectorTab = "source" | "look" | "effects" | "outro" | "thumbnail" | "captions" | "export";
 
 const INSPECTOR_TABS: {
   id: InspectorTab;
@@ -131,6 +135,8 @@ const INSPECTOR_TABS: {
   { id: "source", label: "Source", icon: <Layers size={15} /> },
   { id: "look", label: "Look", icon: <Palette size={15} /> },
   { id: "effects", label: "Effects", icon: <SlidersHorizontal size={15} /> },
+  { id: "outro", label: "Outro", icon: <Youtube size={15} /> },
+  { id: "thumbnail", label: "Thumb", icon: <ImageIcon size={15} /> },
   { id: "captions", label: "Captions", icon: <Captions size={15} /> },
   { id: "export", label: "Render", icon: <Settings2 size={15} /> },
 ];
@@ -269,6 +275,17 @@ export function StudioScreen() {
   const isGenerating = ACTIVE.includes(reel.status);
   const scenes = reel.scenes ?? [];
   const hasDraft = Boolean(reel.editDraft);
+  // A look/voice change (art, image model, narration voice, voice FX) clears the
+  // affected assets so the next produce regenerates them — deferred by design, so
+  // it's easy to miss. Surface it on an already-produced reel with a one-click apply.
+  const clearedImages = scenes.some((s) => !s.assetUrl && !s.isHero);
+  const clearedAudio = scenes.some((s) => !s.audioUrl);
+  const pendingRegen =
+    !isGenerating &&
+    !hasDraft &&
+    Boolean(reel.outputUrl) &&
+    scenes.length > 0 &&
+    (clearedImages || clearedAudio);
   const basePreviewUrl = mediaUrl(reel.editDraft?.outputUrl) ?? reel.outputUrl;
   const previewUrl = basePreviewUrl
     ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(reel.outputUrl ?? reel.editDraft?.id ?? reel.updatedAt ?? String(reel.progress))}`
@@ -348,6 +365,43 @@ export function StudioScreen() {
           })
         }
       />
+
+      {pendingRegen ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          <div className="min-w-0">
+            <div className="font-semibold text-amber-200">
+              Settings changed — re-render to apply
+            </div>
+            <div className="text-xs text-amber-100/80">
+              {clearedImages && clearedAudio
+                ? "Scene stills and narration were cleared"
+                : clearedImages
+                  ? "Scene stills were cleared"
+                  : "Narration was cleared"}{" "}
+              by a look/voice change. Re-render to regenerate{" "}
+              {clearedImages && clearedAudio
+                ? "them"
+                : clearedImages
+                  ? "the stills"
+                  : "the narration"}{" "}
+              and bake the change into the video.
+            </div>
+          </div>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(() => regenerateReel(id, "render_only"))}
+            className="shrink-0"
+          >
+            {busy ? (
+              <Loader2 className="animate-spin" size={15} />
+            ) : (
+              <RefreshCw size={15} />
+            )}
+            Re-render to apply
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(320px,380px)]">
         <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[71px] xl:max-h-[calc(100vh-83px)]">
@@ -702,23 +756,26 @@ function InspectorPanel({
       icon={<Settings2 size={15} />}
       className="overflow-hidden xl:max-h-[calc(100vh-83px)]"
     >
-      <div className="flex min-w-0 flex-wrap gap-1 border-b border-slate-800 bg-[#111419] p-2">
-        {INSPECTOR_TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onTabChange(item.id)}
-            className={cn(
-              "inline-flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-bold transition-colors",
-              tab === item.id
-                ? "bg-cyan-400 text-slate-950"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
-            )}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
+      <div className="border-b border-slate-800 bg-[#111419]">
+        <div className="studio-scrollbar flex min-w-0 gap-1 overflow-x-auto overscroll-x-contain p-2">
+          {INSPECTOR_TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onTabChange(item.id)}
+              className={cn(
+                "inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-bold transition-colors",
+                item.id === "thumbnail" ? "min-w-[92px]" : "min-w-[86px]",
+                tab === item.id
+                  ? "bg-cyan-400 text-slate-950"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+              )}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="min-w-0 overflow-x-hidden p-3 xl:max-h-[calc(100vh-174px)] xl:overflow-y-auto">
         {tab === "source" ? (
@@ -734,6 +791,12 @@ function InspectorPanel({
         ) : null}
         {tab === "effects" ? (
           <EffectsPanel reel={reel} busy={busy} run={run} />
+        ) : null}
+        {tab === "outro" ? (
+          <OutroPanel reel={reel} busy={busy} run={run} />
+        ) : null}
+        {tab === "thumbnail" ? (
+          <ThumbnailPanel reel={reel} />
         ) : null}
         {tab === "captions" ? (
           <CaptionEditor reel={reel} busy={busy} run={run} />
@@ -1566,6 +1629,219 @@ function EffectsPanel({
   );
 }
 
+function compactOutroSettings(outro: OutroSettings): OutroSettings {
+  return Object.fromEntries(
+    Object.entries(outro)
+      .map(([key, value]) => [key, value?.trim()])
+      .filter(([, value]) => Boolean(value)),
+  ) as OutroSettings;
+}
+
+function channelDisplayName(channel: YouTubeChannelOption): string {
+  return channel.googleChannelTitle || channel.label;
+}
+
+function channelPurpose(channel: YouTubeChannelOption): string {
+  return channel.niches?.length ? channel.niches.join(", ") : "general";
+}
+
+function OutroPanel({
+  reel,
+  busy,
+  run,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: (a: () => Promise<Reel>) => Promise<void>;
+}) {
+  const reelKey = reel._id ?? reel.id ?? "";
+  const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
+  const [outroChannelId, setOutroChannelId] = useState(reel.outroChannelId ?? "");
+  const [outro, setOutro] = useState<OutroSettings>(reel.outro ?? {});
+
+  useEffect(() => {
+    void listYouTubeChannels()
+      .then(setChannels)
+      .catch(() => setChannels([]));
+  }, []);
+
+  useEffect(() => {
+    setOutroChannelId(reel.outroChannelId ?? "");
+    setOutro(reel.outro ?? {});
+  }, [reel.outro, reel.outroChannelId]);
+
+  const selected = channels.find((channel) => channel.id === outroChannelId);
+  const patchOutro = (patch: Partial<OutroSettings>) =>
+    setOutro((current) => ({ ...current, ...patch }));
+
+  return (
+    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
+      <PanelTitle className="text-slate-100">Outro</PanelTitle>
+
+      <Label className="text-xs text-slate-300">
+        Brand channel
+        <Select
+          disabled={busy}
+          value={outroChannelId}
+          onChange={(event) => setOutroChannelId(event.target.value)}
+        >
+          <option value="">Auto by niche</option>
+          {channels.map((channel) => (
+            <option key={channel.id} value={channel.id}>
+              {channelDisplayName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
+            </option>
+          ))}
+        </Select>
+      </Label>
+
+      {selected ? (
+        <div className="rounded-md border border-slate-800 bg-[#171a20] px-3 py-2 text-xs text-slate-400">
+          The outro will use {channelDisplayName(selected)} unless you override the display name below.
+        </div>
+      ) : null}
+
+      <Label className="text-xs text-slate-300">
+        Display name override
+        <Input
+          disabled={busy}
+          value={outro.channelName ?? ""}
+          placeholder={selected ? channelDisplayName(selected) : "Auto channel name"}
+          onChange={(event) => patchOutro({ channelName: event.target.value })}
+        />
+      </Label>
+
+      <Label className="text-xs text-slate-300">
+        Handle override
+        <Input
+          disabled={busy}
+          value={outro.channelHandle ?? ""}
+          placeholder="@channel"
+          onChange={(event) => patchOutro({ channelHandle: event.target.value })}
+        />
+      </Label>
+
+      <Label className="text-xs text-slate-300">
+        Spoken outro line
+        <Textarea
+          rows={2}
+          disabled={busy}
+          value={outro.spokenLine ?? ""}
+          placeholder={
+            reel.niche === "reddit"
+              ? "Follow Channel Name for more stories."
+              : "Subscribe to Channel Name. The next story is already waiting."
+          }
+          onChange={(event) => patchOutro({ spokenLine: event.target.value })}
+        />
+      </Label>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Label className="text-xs text-slate-300">
+          Card title
+          <Input
+            disabled={busy}
+            value={outro.title ?? ""}
+            placeholder={reel.niche.startsWith("horror") ? "DON'T WATCH ALONE" : "FOLLOW FOR MORE"}
+            onChange={(event) => patchOutro({ title: event.target.value })}
+          />
+        </Label>
+        <Label className="text-xs text-slate-300">
+          Card subtitle
+          <Input
+            disabled={busy}
+            value={outro.subtitle ?? ""}
+            placeholder={reel.niche.startsWith("horror") ? "New nightmares every night" : "More stories after this one"}
+            onChange={(event) => patchOutro({ subtitle: event.target.value })}
+          />
+        </Label>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Label className="text-xs text-slate-300">
+          CTA button
+          <Input
+            disabled={busy}
+            value={outro.cta ?? ""}
+            placeholder="SUBSCRIBE"
+            onChange={(event) => patchOutro({ cta: event.target.value })}
+          />
+        </Label>
+        <Label className="text-xs text-slate-300">
+          Footer
+          <Input
+            disabled={busy}
+            value={outro.footer ?? ""}
+            placeholder={reel.niche.startsWith("horror") ? "it already knows you're here" : ""}
+            onChange={(event) => patchOutro({ footer: event.target.value })}
+          />
+        </Label>
+      </div>
+
+      <Button
+        type="button"
+        variant="default"
+        disabled={busy}
+        onClick={() =>
+          void run(async () => {
+            await updateReelSettings(reelKey, {
+              outroChannelId,
+              outro: compactOutroSettings(outro),
+            });
+            return regenerateReel(reelKey, "render_only");
+          })
+        }
+      >
+        <RefreshCw size={15} /> Render outro draft
+      </Button>
+      <p className="text-[11px] text-slate-500">
+        Reuses all scene stills and narration. Only the outro narration, outro card, and preview video are rebuilt.
+      </p>
+    </div>
+  );
+}
+
+function ThumbnailPanel({ reel }: { reel: Reel }) {
+  const reelKey = reel._id ?? reel.id ?? "";
+  const draft = reel.thumbnailDraft;
+  return (
+    <div className="grid gap-2.5 rounded-md border border-slate-800 bg-[#111419] p-3">
+      <PanelTitle className="text-slate-100">Thumbnail</PanelTitle>
+
+      {reel.review?.thumbnailUrl ? (
+        <img
+          src={reel.review.thumbnailUrl}
+          alt="Saved thumbnail"
+          className="w-full rounded-md border border-slate-700 object-cover"
+        />
+      ) : (
+        <div className="grid aspect-video w-full place-items-center gap-2 rounded-md border border-slate-800 bg-[#0b0d10] text-xs font-semibold text-slate-500">
+          <ImageIcon size={24} />
+          No thumbnail uploaded yet
+        </div>
+      )}
+
+      {draft ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-400/50 bg-amber-400/10 px-2.5 py-2 text-xs text-amber-200">
+          <span className="font-bold">Staged local draft waiting</span>
+          <span className="text-amber-100/80">upload or discard it in the studio</span>
+        </div>
+      ) : null}
+
+      <Link
+        to="/studio/$id/thumbnail"
+        params={{ id: reelKey }}
+        className={cn(buttonClassName("default"), "no-underline")}
+      >
+        <ImageIcon size={15} /> Open Thumbnail Studio
+      </Link>
+      <p className="text-[11px] text-slate-500">
+        Frame grabs, scene stills, text overlay, aspect ratio, and AI generation all live in the
+        dedicated Thumbnail Studio. Drafts stay local until uploaded to S3 or discarded.
+      </p>
+    </div>
+  );
+}
+
 // ---- Live caption editor ----
 
 function normalizeHexColor(value: string | undefined, fallback: string): string {
@@ -1695,8 +1971,15 @@ function CaptionEditor({
   );
 
   const previewWords = captionPreviewWords(reel, style.chunkSize, style.uppercase);
-  const activeWordIndex =
-    style.chunkSize >= 2 ? Math.min(1, Math.max(previewWords.length - 1, 0)) : -1;
+  // Karaoke fill is opt-in. Only when it's on AND a distinct highlight colour is
+  // set does the highlight base appear. Mirrors KARAOKE/HAS_HIGHLIGHT in the
+  // renderer's buildPortraitKaraoke.
+  const hasHighlight =
+    style.karaoke &&
+    style.activeColor.toLowerCase() !== style.primaryColor.toLowerCase();
+  const activeWordIndex = hasHighlight
+    ? Math.min(1, Math.max(previewWords.length - 1, 0))
+    : -1;
   const outlinePx = Math.max(1, Math.round(style.outlineWidth / 2));
   const previewFontPx = captionPreviewFontSize(style.fontSize, previewHeight);
   const wordStyle = {
@@ -1756,7 +2039,7 @@ function CaptionEditor({
       </div>
       <p className="text-center text-[11px] text-slate-500">
         Drag vertically to position — saved automatically
-        {style.chunkSize >= 2 ? " · second word previews highlight colour" : null}
+        {hasHighlight ? " · text catches up letter by letter" : null}
       </p>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1813,11 +2096,13 @@ function CaptionEditor({
         </Label>
         <Label className="gap-1 text-slate-300">
           Highlight color
-          {style.chunkSize <= 1 ? (
-            <span className="text-[10px] font-normal text-slate-500">
-              Used when words/chunk &gt; 1
-            </span>
-          ) : null}
+          <span className="text-[10px] font-normal text-slate-500">
+            {!style.karaoke
+              ? "Enable letter-by-letter fill to use"
+              : hasHighlight
+                ? "Word starts here; text catches up"
+                : "Match text colour = no highlight"}
+          </span>
           <input
             type="color"
             className="h-8 w-full rounded border border-slate-700 bg-[#171a20]"
@@ -1861,6 +2146,19 @@ function CaptionEditor({
           onChange={(e) => set("uppercase", e.target.checked)}
         />
         ALL CAPS
+      </label>
+
+      <label className="flex items-center gap-2 text-xs font-bold text-slate-300">
+        <input
+          type="checkbox"
+          checked={style.karaoke}
+          disabled={busy}
+          onChange={(e) => set("karaoke", e.target.checked)}
+        />
+        Letter-by-letter fill
+        <span className="font-normal text-slate-500">
+          (word starts in highlight, text catches up)
+        </span>
       </label>
 
       <Button
