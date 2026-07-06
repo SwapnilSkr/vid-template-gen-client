@@ -30,11 +30,11 @@ export function ConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm">
-      <div className="grid w-full max-w-md gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
+      <div className="grid w-full max-w-md gap-4 rounded-xl border border-border bg-card p-5 shadow-pop">
         <div className="flex items-start justify-between gap-3">
-          <div className="grid gap-1">
-            <strong className="text-base text-foreground">
+          <div className="grid gap-1.5">
+            <strong className="text-[15px] font-semibold text-foreground">
               {action.title}
             </strong>
             <p className="m-0 text-sm leading-relaxed text-muted-foreground">
@@ -49,15 +49,15 @@ export function ConfirmDialog({
             onClick={onClose}
             title="Close"
           >
-            <X size={16} />
+            <X size={15} />
           </Button>
         </div>
 
         {action.details?.length ? (
-          <div className="grid gap-1 rounded-md border border-border bg-background/55 p-2.5 text-xs text-muted-foreground">
+          <div className="grid gap-1.5 rounded-md border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground">
             {action.details.map((detail) => (
               <div key={detail} className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
                 <span>{detail}</span>
               </div>
             ))}
@@ -67,7 +67,7 @@ export function ConfirmDialog({
         <div className="flex justify-end gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             disabled={busy}
             onClick={onClose}
           >
@@ -81,7 +81,7 @@ export function ConfirmDialog({
             disabled={busy}
             onClick={() => void confirm()}
           >
-            {busy ? <Loader2 className="animate-spin" size={15} /> : null}
+            {busy ? <Loader2 className="animate-spin" size={14} /> : null}
             {action.confirmLabel}
           </Button>
         </div>
