@@ -8,6 +8,7 @@ import { TrendsScreen } from "@/screens/TrendsScreen";
 import { GenreDetailScreen } from "@/screens/GenreDetailScreen";
 import { CreateReelScreen } from "@/screens/CreateReelScreen";
 import { StudioScreen } from "@/screens/StudioScreen";
+import { ThumbnailStudioScreen } from "@/screens/ThumbnailStudioScreen";
 import { YtSearchScreen } from "@/screens/YtSearchScreen";
 import { YtImportDetailScreen } from "@/screens/YtImportDetailScreen";
 import { getYtImport } from "@/api/yt-imports";
@@ -52,6 +53,12 @@ export const studioRoute = createRoute({
   component: StudioScreen,
 });
 
+export const thumbnailStudioRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/studio/$id/thumbnail",
+  component: ThumbnailStudioScreen,
+});
+
 export const ytSearchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/youtube",
@@ -71,6 +78,7 @@ const routeTree = rootRoute.addChildren([
   trendsGenreRoute,
   createReelRoute,
   studioRoute,
+  thumbnailStudioRoute,
   ytSearchRoute,
   ytImportDetailRoute,
 ]);

@@ -47,6 +47,7 @@ export interface CaptionStyle {
   bold?: boolean;
   uppercase?: boolean;
   animation?: "none" | "pop";
+  karaoke?: boolean;
 }
 
 export interface AudioPost {
@@ -118,6 +119,27 @@ export interface ReelEditDraft {
   createdAt?: string;
 }
 
+/** A locally staged Thumbnail Studio composition — lives on the server's disk
+ *  only (no S3) until saved or discarded. `input` echoes the composition
+ *  controls so the studio can restore them on reopen. */
+export interface ThumbnailDraft {
+  id: string;
+  imageUrl: string;
+  input?: Partial<ThumbnailComposeInput>;
+  aspectRatio?: ThumbnailAspectRatio;
+  createdAt?: string;
+}
+
+export interface OutroSettings {
+  channelName?: string;
+  channelHandle?: string;
+  spokenLine?: string;
+  title?: string;
+  subtitle?: string;
+  cta?: string;
+  footer?: string;
+}
+
 export interface Reel {
   _id?: string;
   id?: string;
@@ -157,6 +179,7 @@ export interface Reel {
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;
+  outro?: OutroSettings;
   imageModelOverride?: string;
   artStyleId?: string;
   presetId?: string;
@@ -175,6 +198,7 @@ export interface Reel {
   narrationVoice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   voiceVariants?: VoiceVariant[];
   editDraft?: ReelEditDraft;
+  thumbnailDraft?: ThumbnailDraft;
 }
 
 export type YouTubePublishStatus = NonNullable<Reel["youtube"]>;
@@ -238,6 +262,7 @@ export interface CreateReelInput {
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;
+  outro?: OutroSettings;
   thumbnailMode?: "frame" | "ai";
   imageModel?: string;
   artStyleId?: string;
@@ -490,10 +515,38 @@ export async function promoteVoiceVariant(
   return request(`/reels/${id}/revoice/${variantId}/promote`, { method: "POST" });
 }
 
-export async function useFrameAsThumbnail(id: string, atSeconds: number): Promise<ReelReview> {
+export type ThumbnailAspectRatio = "16:9" | "9:16" | "1:1";
+
+export async function useFrameAsThumbnail(
+  id: string,
+  atSeconds: number,
+  aspectRatio?: ThumbnailAspectRatio
+): Promise<ReelReview> {
   return request<ReelReview>(`/reels/${id}/review/thumbnail/frame`, {
     method: "POST",
-    body: JSON.stringify({ atSeconds }),
+    body: JSON.stringify({ atSeconds, aspectRatio }),
+  });
+}
+
+export async function useSceneImageAsThumbnail(
+  id: string,
+  sceneIndex: number,
+  aspectRatio?: ThumbnailAspectRatio
+): Promise<ReelReview> {
+  return request<ReelReview>(`/reels/${id}/review/thumbnail/scene`, {
+    method: "POST",
+    body: JSON.stringify({ sceneIndex, aspectRatio }),
+  });
+}
+
+export async function previewFrameThumbnail(
+  id: string,
+  atSeconds: number,
+  aspectRatio?: ThumbnailAspectRatio
+): Promise<{ imageDataUrl: string }> {
+  return request<{ imageDataUrl: string }>(`/reels/${id}/review/thumbnail/frame/preview`, {
+    method: "POST",
+    body: JSON.stringify({ atSeconds, aspectRatio }),
   });
 }
 
@@ -510,7 +563,16 @@ export async function listFonts(): Promise<FontOption[]> {
 
 export interface CustomThumbnailInput {
   atSeconds: number;
+  sourceType?: "frame" | "scene";
+  sceneIndex?: number;
   text: string;
+  aspectRatio?: ThumbnailAspectRatio;
+  xPct?: number;
+  yPct?: number;
+  widthPct?: number;
+  align?: "left" | "center" | "right";
+  lineHeight?: number;
+  effect?: "none" | "shadow" | "glow" | "box";
   fontFamily?: string;
   fontSize?: number;
   color?: string;
@@ -528,6 +590,39 @@ export async function customFrameThumbnail(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function previewCustomFrameThumbnail(
+  id: string,
+  input: CustomThumbnailInput
+): Promise<{ imageDataUrl: string }> {
+  return request<{ imageDataUrl: string }>(`/reels/${id}/review/thumbnail/custom/preview`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ---- Thumbnail Studio drafts ----
+
+/** Same composition controls, but text is optional (a clean source can be staged). */
+export type ThumbnailComposeInput = Omit<CustomThumbnailInput, "text"> & { text?: string };
+
+/** Compose and stage the thumbnail locally on the server — no S3 upload. */
+export async function stageThumbnailDraft(id: string, input: ThumbnailComposeInput): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/thumbnail-draft`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Upload the staged draft to S3 (replacing the previous thumbnail) and clean up local files. */
+export async function saveThumbnailDraft(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/thumbnail-draft/save`, { method: "POST" });
+}
+
+/** Delete the staged draft's local files without touching the saved thumbnail. */
+export async function discardThumbnailDraft(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/thumbnail-draft/discard`, { method: "POST" });
 }
 
 // ---- Studio editing (co-creation) ----
@@ -583,6 +678,8 @@ export interface ReelSettingsInput {
   imageModel?: string;
   horrorAudioKey?: string;
   horrorReferenceId?: string;
+  outroChannelId?: string;
+  outro?: OutroSettings;
   voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   audioPost?: AudioPost;
   editEffects?: EditEffects;

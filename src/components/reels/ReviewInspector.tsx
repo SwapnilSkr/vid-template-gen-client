@@ -22,9 +22,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  listFonts,
   listArtStyles,
-  type FontOption,
   type Reel,
   type ReelReview,
   type ArtStyleOption,
@@ -70,13 +68,6 @@ function ReviewInspectorForm({
 }: Omit<ReviewInspectorProps, "selectedId">) {
   const loading = useReelStudio((state) => state.loading);
   const saveReview = useReelStudio((state) => state.saveReview);
-  const regenerateThumbnail = useReelStudio(
-    (state) => state.regenerateThumbnail,
-  );
-  const useFrameAsThumbnail = useReelStudio(
-    (state) => state.useFrameAsThumbnail,
-  );
-  const useCustomThumbnail = useReelStudio((state) => state.useCustomThumbnail);
   const approveReview = useReelStudio((state) => state.approveReview);
   const publish = useReelStudio((state) => state.publish);
   const deleteSelected = useReelStudio((state) => state.deleteSelected);
@@ -90,23 +81,8 @@ function ReviewInspectorForm({
   const removeYouTubeChannel = useReelStudio(
     (state) => state.removeYouTubeChannel,
   );
-  const previewTimeSeconds = useReelStudio((state) => state.previewTimeSeconds);
 
   const [draft, setDraft] = useState<ReelReview | undefined>(review);
-  const [frameSeconds, setFrameSeconds] = useState("1");
-  const [pendingFrameSeconds, setPendingFrameSeconds] = useState<
-    number | undefined
-  >();
-  const [fonts, setFonts] = useState<FontOption[]>([]);
-  const [customText, setCustomText] = useState("");
-  const [customFont, setCustomFont] = useState("");
-  const [customSize, setCustomSize] = useState(120);
-  const [customColor, setCustomColor] = useState("#FFFFFF");
-  const [customOutline, setCustomOutline] = useState("#000000");
-  const [customPos, setCustomPos] = useState<"top" | "middle" | "bottom">(
-    "bottom",
-  );
-  const [customCaps, setCustomCaps] = useState(true);
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [showChannelConnect, setShowChannelConnect] = useState(false);
   const [newChannelLabel, setNewChannelLabel] = useState("");
@@ -131,34 +107,6 @@ function ReviewInspectorForm({
   useEffect(() => {
     if (!hasUnsavedReviewEdits) setDraft(review);
   }, [hasUnsavedReviewEdits, review]);
-
-  useEffect(() => {
-    void listFonts()
-      .then((list) => {
-        setFonts(list);
-        setCustomFont((current) => current || list[0]?.family || "");
-      })
-      .catch(() => setFonts([]));
-  }, []);
-
-  useEffect(() => {
-    if (draft?.title && !customText) setCustomText(draft.title);
-  }, [draft?.title, customText]);
-
-  async function createCustomTextThumbnail() {
-    const atSeconds = pendingFrameSeconds ?? previewTimeSeconds;
-    await useCustomThumbnail({
-      atSeconds,
-      text: customText.trim(),
-      fontFamily: customFont || undefined,
-      fontSize: customSize,
-      color: customColor,
-      outlineColor: customOutline,
-      position: customPos,
-      uppercase: customCaps,
-    });
-    setPendingFrameSeconds(undefined);
-  }
 
   useEffect(() => {
     const defaultChannel =
@@ -260,46 +208,13 @@ function ReviewInspectorForm({
     await approveReview();
   }
 
-  async function regenerateDraftThumbnail() {
-    if (!draft) return;
-    await regenerateThumbnail(draft);
-    setPendingFrameSeconds(undefined);
-    setHasUnsavedReviewEdits(false);
-  }
-
-  function selectPreviewFrame(seconds: number) {
-    const selected = Math.max(seconds, 0);
-    setPendingFrameSeconds(selected);
-    setFrameSeconds(selected.toFixed(1));
-  }
-
-  async function savePendingFrameThumbnail(): Promise<void> {
-    if (pendingFrameSeconds === undefined) return;
-    await useFrameAsThumbnail(pendingFrameSeconds);
-    setPendingFrameSeconds(undefined);
-  }
-
-  function useCurrentPreviewFrame() {
-    selectPreviewFrame(previewTimeSeconds);
-  }
-
-  function useTypedFrameTime() {
-    selectPreviewFrame(Number(frameSeconds) || 0);
-  }
-
   async function commitReviewBeforePublish() {
-    if (pendingFrameSeconds !== undefined) await savePendingFrameThumbnail();
     if (hasUnsavedReviewEdits) await saveDraftReview();
   }
 
   async function publishDraftReview() {
     await commitReviewBeforePublish();
     await publish(selectedChannelId || undefined);
-  }
-
-  function pendingFrameLabel() {
-    if (pendingFrameSeconds === undefined) return "No frame selected";
-    return `Selected frame at ${pendingFrameSeconds.toFixed(1)}s. Save it once before publishing.`;
   }
 
   function channelName(channel: (typeof youtubeChannels)[number]) {
@@ -502,200 +417,20 @@ function ReviewInspectorForm({
                 </div>
               )}
 
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
-                <Label className="gap-0">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={frameSeconds}
-                    disabled={!completed}
-                    onChange={(event) => setFrameSeconds(event.target.value)}
-                    placeholder="Seconds into video"
-                  />
-                </Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canReview || loading}
-                  onClick={() => useTypedFrameTime()}
-                >
-                  <Clapperboard size={16} />
-                  Select Time
-                </Button>
-              </div>
-
-              <Button
-                type="button"
-                variant="default"
-                disabled={!canReview || loading}
-                onClick={() => void useCurrentPreviewFrame()}
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={16} />
-                ) : (
-                  <Clapperboard size={16} />
-                )}
-                Select Current Preview Frame ({previewTimeSeconds.toFixed(1)}s)
-              </Button>
-
               <div className="grid gap-2 rounded-md border border-border bg-muted/35 p-2.5">
-                <span className="text-xs font-semibold text-muted-foreground">
-                  {pendingFrameLabel()}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    !canReview || loading || pendingFrameSeconds === undefined
-                  }
-                  onClick={() => void savePendingFrameThumbnail()}
-                >
-                  {loading ? (
-                    <Loader2 className="animate-spin" size={16} />
-                  ) : (
-                    <Clapperboard size={16} />
-                  )}
-                  Save Selected Frame Thumbnail
-                </Button>
-              </div>
-
-              <Label>
-                AI concept prompt
-                <Textarea
-                  value={draft?.thumbnailPrompt ?? ""}
-                  disabled={!completed}
-                  rows={3}
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      thumbnailPrompt: event.target.value,
-                    }))
-                  }
-                />
-              </Label>
-
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!canReview || loading}
-                onClick={() => void regenerateDraftThumbnail()}
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={16} />
-                ) : (
-                  <RefreshCw size={16} />
-                )}
-                Generate AI Thumbnail
-              </Button>
-
-              <div className="grid gap-2 rounded-md border border-border bg-muted/35 p-2.5">
-                <span className="inline-flex items-center gap-2 text-xs font-extrabold text-foreground">
-                  <FileText size={14} /> Custom text thumbnail
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Uses the selected frame (
-                  {(pendingFrameSeconds ?? previewTimeSeconds).toFixed(1)}s)
-                  with your caption.
-                </span>
-                <Input
-                  value={customText}
-                  disabled={!completed}
-                  maxLength={120}
-                  placeholder="Thumbnail caption text"
-                  onChange={(event) => setCustomText(event.target.value)}
-                />
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Label className="gap-0 text-xs">
-                    Font
-                    <Select
-                      value={customFont}
-                      disabled={!completed}
-                      onChange={(event) => setCustomFont(event.target.value)}
-                    >
-                      {fonts.map((font) => (
-                        <option key={font.id} value={font.family}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </Label>
-                  <Label className="gap-0 text-xs">
-                    Position
-                    <Select
-                      value={customPos}
-                      disabled={!completed}
-                      onChange={(event) =>
-                        setCustomPos(
-                          event.target.value as "top" | "middle" | "bottom",
-                        )
-                      }
-                    >
-                      <option value="bottom">Bottom</option>
-                      <option value="middle">Middle</option>
-                      <option value="top">Top</option>
-                    </Select>
-                  </Label>
-                  <Label className="gap-0 text-xs">
-                    Size
-                    <Input
-                      type="number"
-                      min={20}
-                      max={400}
-                      value={customSize}
-                      disabled={!completed}
-                      onChange={(event) =>
-                        setCustomSize(Number(event.target.value) || 120)
-                      }
-                    />
-                  </Label>
-                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                    <Label className="gap-0 text-xs">
-                      Text
-                      <input
-                        type="color"
-                        className="h-9 w-full rounded border border-border bg-background"
-                        value={customColor}
-                        disabled={!completed}
-                        onChange={(event) => setCustomColor(event.target.value)}
-                      />
-                    </Label>
-                    <Label className="gap-0 text-xs">
-                      Outline
-                      <input
-                        type="color"
-                        className="h-9 w-full rounded border border-border bg-background"
-                        value={customOutline}
-                        disabled={!completed}
-                        onChange={(event) =>
-                          setCustomOutline(event.target.value)
-                        }
-                      />
-                    </Label>
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={customCaps}
-                    disabled={!completed}
-                    onChange={(event) => setCustomCaps(event.target.checked)}
-                  />
-                  ALL CAPS
-                </label>
-                <Button
-                  type="button"
-                  variant="default"
-                  disabled={!canReview || loading || !customText.trim()}
-                  onClick={() => void createCustomTextThumbnail()}
-                >
-                  {loading ? (
-                    <Loader2 className="animate-spin" size={16} />
-                  ) : (
-                    <FileText size={16} />
-                  )}
-                  Create text thumbnail
-                </Button>
+                <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                  Thumbnail editing lives in the dedicated Thumbnail Studio — frame grabs, scene stills, text overlay, aspect ratio, and drafts stay separate from publishing.
+                </p>
+                {reel ? (
+                  <Link
+                    to="/studio/$id/thumbnail"
+                    params={{ id: reel._id ?? reel.id ?? "" }}
+                    className={buttonClassName("default")}
+                  >
+                    <Sparkles size={16} />
+                    Open Thumbnail Studio
+                  </Link>
+                ) : null}
               </div>
             </div>
           ) : null}
