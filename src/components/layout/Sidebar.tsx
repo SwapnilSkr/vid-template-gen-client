@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CheckCircle2,
   CircleAlert,
+  CircleCheck,
   Clock3,
   Home,
   Layers3,
@@ -47,7 +48,7 @@ const queueNav: { name: string; icon: typeof Home; filter: QueueFilter }[] = [
   { name: "Intake", icon: Layers3, filter: "intake" },
   { name: "In Progress", icon: Clock3, filter: "in_progress" },
   { name: "Review", icon: CheckCircle2, filter: "review" },
-  { name: "Approved", icon: CheckCircle2, filter: "approved" },
+  { name: "Approved", icon: CircleCheck, filter: "approved" },
   { name: "Published", icon: Send, filter: "published" },
   { name: "Rejected", icon: CircleAlert, filter: "rejected" },
 ];
@@ -61,6 +62,10 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <div className="section-label mb-1 mt-6 px-2.5">{children}</div>;
+}
+
 export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search as { status?: string } });
@@ -68,15 +73,14 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
 
   const navLinkClass = (isActive: boolean) =>
     cn(
-      "relative grid min-h-9 grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-sm font-semibold text-sidebar-foreground/85 no-underline transition-colors hover:bg-card/80 hover:text-foreground",
-      isActive &&
-        "border-primary/25 bg-primary/12 font-bold text-primary shadow-[var(--shadow-sidebar-active)] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary hover:bg-primary/15 hover:text-primary"
+      "grid min-h-8 grid-cols-[16px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-sidebar-foreground no-underline transition-colors hover:bg-secondary hover:text-foreground",
+      isActive && "bg-accent text-foreground hover:bg-accent"
     );
 
   return (
     <nav
       className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 overflow-auto border-r border-border bg-sidebar px-2.5 py-4 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-40 w-60 overflow-y-auto border-r border-border bg-sidebar px-3 py-4 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:translate-x-0",
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >
@@ -84,31 +88,28 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         to="/"
         search={{ status: undefined }}
         onClick={onNavigate}
-        className="glass-panel mb-4 flex min-h-14 items-center gap-2.5 rounded-lg px-3 py-3 no-underline"
+        className="flex items-center gap-2.5 rounded-md px-2 py-1.5 no-underline"
       >
-        <span className="grid size-9 place-items-center rounded-md bg-gradient-to-br from-primary to-[oklch(70%_0.1_230)] text-primary-foreground shadow-[0_8px_20px_rgba(45,212,191,0.28)]">
-          <Play size={19} />
+        <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
+          <Play size={14} fill="currentColor" />
         </span>
-        <div className="min-w-0">
-          <strong className="brand-gradient-text block text-base leading-tight">ReelForge</strong>
-          <span className="block truncate text-xs text-muted-foreground">Shorts production console</span>
-        </div>
+        <span className="text-sm font-semibold tracking-tight text-foreground">ReelForge</span>
       </Link>
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Insights</div>
+      <SectionLabel>Insights</SectionLabel>
       <Link to="/trends" onClick={onNavigate} className={navLinkClass(pathname === "/trends")}>
-        <TrendingUp size={17} />
+        <TrendingUp size={15} />
         <span>Trend Scout</span>
       </Link>
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Queue</div>
+      <SectionLabel>Queue</SectionLabel>
       <Link
         to="/"
         search={{ status: undefined }}
         onClick={onNavigate}
         className={navLinkClass(pathname === "/" && !search.status)}
       >
-        <Home size={17} />
+        <Home size={15} />
         <span>Overview</span>
       </Link>
       {queueNav.map(({ name, icon: Icon, filter }) => {
@@ -122,47 +123,44 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
             onClick={onNavigate}
             className={navLinkClass(isActive)}
           >
-            <Icon size={17} />
+            <Icon size={15} />
             <span>{name}</span>
-            <em
-              className={cn(
-                "min-w-6 rounded-full border border-border/70 bg-muted/70 px-2 py-0.5 text-center text-[11px] font-bold not-italic tabular-nums text-muted-foreground",
-                isActive && "border-primary/30 bg-primary/15 text-primary"
-              )}
-            >
-              {count}
-            </em>
+            {count > 0 ? (
+              <em className="min-w-5 rounded px-1 text-right text-xs font-normal not-italic tabular-nums text-muted-foreground">
+                {count}
+              </em>
+            ) : null}
           </Link>
         );
       })}
 
-      <div className="mx-2.5 mb-2 mt-5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Library</div>
+      <SectionLabel>Library</SectionLabel>
       <Link
         to="/youtube"
         onClick={onNavigate}
         className={navLinkClass(pathname.startsWith("/youtube"))}
       >
-        <Youtube size={17} />
+        <Youtube size={15} />
         <span>YouTube Import</span>
       </Link>
       <Link
         to="/"
         search={{ status: undefined }}
         onClick={onNavigate}
-        className={navLinkClass(pathname === "/" && !search.status)}
+        className={navLinkClass(false)}
       >
-        <ListVideo size={17} />
+        <ListVideo size={15} />
         <span>Reels</span>
       </Link>
       {comingSoonLibraryNav.map((item) => (
         <div
           key={item}
           aria-disabled="true"
-          className="grid min-h-9 cursor-not-allowed grid-cols-[18px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-bold text-muted-foreground/55"
+          className="grid min-h-8 cursor-not-allowed grid-cols-[16px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground/40"
         >
-          <ListVideo size={17} />
+          <ListVideo size={15} />
           <span>{item}</span>
-          <em className="whitespace-nowrap text-[10px] font-bold not-italic uppercase text-muted-foreground/60">Soon</em>
+          <em className="text-[10px] font-medium not-italic uppercase tracking-wide text-muted-foreground/40">Soon</em>
         </div>
       ))}
     </nav>

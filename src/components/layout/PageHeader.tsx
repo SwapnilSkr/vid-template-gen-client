@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Bell, CircleHelp, Download, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Download, Plus } from "lucide-react";
+import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
@@ -9,41 +9,33 @@ interface PageHeaderProps {
 
 export function PageHeader({ downloadUrl }: PageHeaderProps) {
   return (
-    <header className="glass-panel sticky top-0 z-20 mb-4 grid min-h-12 gap-3 rounded-lg px-4 py-3 sm:flex sm:items-start sm:justify-between">
+    <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
       <div>
-        <h1 className="m-0 text-2xl leading-tight tracking-normal text-foreground">Production Review</h1>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+        <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Production Review</h1>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
           Review, edit and approve reels before publishing.
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="icon" aria-label="Help">
-          <CircleHelp size={18} />
-        </Button>
-        <Button type="button" variant="outline" size="icon" aria-label="Notifications">
-          <Bell size={18} />
-        </Button>
-        <Link
-          to="/reels/new"
-          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-primary bg-primary px-3 py-2 text-[13px] font-bold text-primary-foreground no-underline hover:bg-primary/90"
-        >
-          <Sparkles size={17} />
-          New Reel
-        </Link>
         {downloadUrl ? (
           <a
-            className={cn(
-              "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-[13px] font-bold text-secondary-foreground no-underline hover:bg-accent"
-            )}
+            className={cn(buttonClassName("outline"), "no-underline")}
             href={downloadUrl}
             download
             target="_blank"
             rel="noreferrer"
           >
-            <Download size={17} />
+            <Download size={15} />
             Download
           </a>
         ) : null}
+        <Link
+          to="/reels/new"
+          className={cn(buttonClassName("default"), "no-underline")}
+        >
+          <Plus size={15} />
+          New Reel
+        </Link>
       </div>
     </header>
   );
