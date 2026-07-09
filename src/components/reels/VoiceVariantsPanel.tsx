@@ -11,12 +11,23 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { VoicePickerList } from "./VoicePickerList";
 
+interface ConfirmAction {
+  title: string;
+  body: string;
+  details?: string[];
+  confirmLabel: string;
+  variant?: "default" | "destructive";
+  onConfirm: () => void | Promise<void>;
+}
+
 interface VoiceVariantsPanelProps {
   reel: Reel;
   reelId: string;
+  locked?: boolean;
   onRefresh: () => void | Promise<void>;
   /** Optional: preview a ready variant in the program monitor without promoting. */
   onPreviewVariant?: (videoUrl: string | undefined) => void;
+  requestConfirm?: (action: ConfirmAction) => void;
 }
 
 /** Compare re-narrated voice takes (different OpenRouter TTS model/voice, same
@@ -24,8 +35,10 @@ interface VoiceVariantsPanelProps {
 export function VoiceVariantsPanel({
   reel,
   reelId,
+  locked = false,
   onRefresh,
   onPreviewVariant,
+  requestConfirm,
 }: VoiceVariantsPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -36,6 +49,7 @@ export function VoiceVariantsPanel({
   if (!eligible) return null;
 
   const variants = reel.voiceVariants ?? [];
+  const controlsDisabled = busy || locked;
 
   async function generateQueuedVariants() {
     setError(undefined);
@@ -69,6 +83,23 @@ export function VoiceVariantsPanel({
     }
   }
 
+  function requestGenerate() {
+    if (!queued.length) return;
+    const action: ConfirmAction = {
+      title: `Generate ${queued.length} voice variant${queued.length === 1 ? "" : "s"}?`,
+      body: "Each variant re-narrates the full reel with OpenRouter TTS and renders a new preview video.",
+      details: [
+        `${queued.length} × full-reel TTS + gameplay composite.`,
+        "OpenRouter narration credits will be charged per variant.",
+        "Promote a ready take afterward to make it the studio output.",
+      ],
+      confirmLabel: "Spend credits & generate",
+      onConfirm: () => void generateQueuedVariants(),
+    };
+    if (requestConfirm) requestConfirm(action);
+    else void generateQueuedVariants();
+  }
+
   function isQueued(option: TtsVoiceOption) {
     return queued.some(
       (q) => q.model === option.model && q.voice === option.voice,
@@ -76,6 +107,7 @@ export function VoiceVariantsPanel({
   }
 
   function toggleQueued(option: TtsVoiceOption) {
+    if (controlsDisabled) return;
     setQueued((current) => {
       if (
         current.some(
@@ -152,7 +184,7 @@ export function VoiceVariantsPanel({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={busy}
+                      disabled={controlsDisabled}
                       onClick={() => onPreviewVariant?.(variant.videoUrl)}
                       aria-label="Preview voice variant in studio"
                     >
@@ -165,7 +197,7 @@ export function VoiceVariantsPanel({
                       type="button"
                       variant="default"
                       size="sm"
-                      disabled={busy}
+                      disabled={controlsDisabled}
                       onClick={() => void promoteVariant(variant.id)}
                     >
                       {busy ? (
@@ -203,7 +235,7 @@ export function VoiceVariantsPanel({
         <VoicePickerList
           isSelected={isQueued}
           onToggle={toggleQueued}
-          isDisabled={() => queued.length >= 5}
+          isDisabled={() => controlsDisabled || queued.length >= 5}
           selectedLabel="Added"
           unselectedLabel="Add"
         />
@@ -218,6 +250,7 @@ export function VoiceVariantsPanel({
                 {q.label}
                 <button
                   type="button"
+                  disabled={controlsDisabled}
                   onClick={() =>
                     setQueued((current) =>
                       current.filter(
@@ -226,7 +259,7 @@ export function VoiceVariantsPanel({
                     )
                   }
                   aria-label={`Remove ${q.label}`}
-                  className="cursor-pointer text-muted-foreground/80 hover:text-foreground"
+                  className="cursor-pointer text-muted-foreground/80 hover:text-foreground disabled:opacity-50"
                 >
                   <X size={12} />
                 </button>
@@ -238,8 +271,8 @@ export function VoiceVariantsPanel({
         <Button
           type="button"
           variant="default"
-          disabled={!queued.length || busy}
-          onClick={() => void generateQueuedVariants()}
+          disabled={!queued.length || controlsDisabled}
+          onClick={() => requestGenerate()}
         >
           {busy ? (
             <Loader2 className="animate-spin" size={16} />
