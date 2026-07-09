@@ -85,18 +85,9 @@ import {
   captionStylePayload,
   marginVFromDragY,
 } from "@/utils/caption-ass";
+import { REEL_ACTIVE_STATUSES, reelNeedsPolling } from "@/utils/reel";
 
 const route = getRouteApi("/studio/$id");
-
-const ACTIVE: Reel["status"][] = [
-  "pending",
-  "planning",
-  "generating_assets",
-  "generating_audio",
-  "aligning",
-  "rendering",
-  "uploading",
-];
 
 // Mirror of server DEFAULT_CAPTION_STYLE (reel-render buildPortraitKaraoke).
 const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
@@ -174,6 +165,8 @@ export function StudioScreen() {
   >();
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("source");
+  /** Temporary program-monitor override for a ready voice variant (before promote). */
+  const [variantPreviewUrl, setVariantPreviewUrl] = useState<string | undefined>();
 
   const refresh = useCallback(async () => {
     try {
@@ -190,6 +183,10 @@ export function StudioScreen() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setVariantPreviewUrl(undefined);
+  }, [id]);
 
   useEffect(() => {
     if (!reel?.seriesId) {
@@ -209,12 +206,22 @@ export function StudioScreen() {
     };
   }, [reel]);
 
-  // Poll while the reel is actively generating.
+  const needsPoll = reelNeedsPolling(reel);
+
+  // Poll while produce / revoice / YouTube publish (or any other in-flight job) may
+  // still mutate the reel. Publish + revoice leave status=completed, so status-only
+  // polling never picks them up. Depend on the boolean, not `reel`, so each refresh
+  // doesn't tear down and restart the interval. When polling stops, one trailing
+  // refresh catches auto-publish flipping youtube→pending right after completed.
   useEffect(() => {
-    if (!reel || !ACTIVE.includes(reel.status)) return;
-    const t = setInterval(() => void refresh(), 2500);
-    return () => clearInterval(t);
-  }, [reel, refresh]);
+    if (needsPoll) {
+      void refresh();
+      const t = setInterval(() => void refresh(), 2500);
+      return () => clearInterval(t);
+    }
+    const settle = setTimeout(() => void refresh(), 2000);
+    return () => clearTimeout(settle);
+  }, [needsPoll, refresh]);
 
   useEffect(() => {
     if (!reel?.editDraft) return;
@@ -284,7 +291,7 @@ export function StudioScreen() {
     );
   }
 
-  const isGenerating = ACTIVE.includes(reel.status);
+  const isGenerating = REEL_ACTIVE_STATUSES.includes(reel.status);
   const isGameplay = reel.strategy === "gameplay_overlay";
   const scenes = reel.scenes ?? [];
   const hasDraft = Boolean(reel.editDraft);
@@ -303,9 +310,14 @@ export function StudioScreen() {
     Boolean(reel.outputUrl) &&
     scenes.length > 0 &&
     (clearedImages || clearedAudio);
-  const basePreviewUrl = mediaUrl(reel.editDraft?.outputUrl) ?? reel.outputUrl;
+  const basePreviewUrl =
+    variantPreviewUrl ?? mediaUrl(reel.editDraft?.outputUrl) ?? reel.outputUrl;
   const previewUrl = basePreviewUrl
-    ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(reel.outputUrl ?? reel.editDraft?.id ?? reel.updatedAt ?? String(reel.progress))}`
+    ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(
+        variantPreviewUrl
+          ? `variant-${variantPreviewUrl}`
+          : (reel.outputUrl ?? reel.editDraft?.id ?? reel.updatedAt ?? String(reel.progress)),
+      )}`
     : undefined;
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
 
@@ -480,7 +492,12 @@ export function StudioScreen() {
         </aside>
 
         <main className="grid min-w-0 content-start gap-3">
-          <ProgramMonitor reel={reel} previewUrl={previewUrl} />
+          <ProgramMonitor
+            reel={reel}
+            previewUrl={previewUrl}
+            variantPreview={Boolean(variantPreviewUrl)}
+            onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
+          />
           <TimelinePanel
             reelId={id}
             reel={reel}
@@ -525,7 +542,12 @@ export function StudioScreen() {
             run={run}
             requestConfirm={setConfirmAction}
           />
-          <VoiceVariantsPanel reel={reel} reelId={id} onRefresh={refresh} />
+          <VoiceVariantsPanel
+            reel={reel}
+            reelId={id}
+            onRefresh={refresh}
+            onPreviewVariant={setVariantPreviewUrl}
+          />
         </div>
       </div>
       </div>
@@ -632,24 +654,51 @@ function ProjectPanel({
 function ProgramMonitor({
   reel,
   previewUrl,
+  variantPreview,
+  onClearVariantPreview,
 }: {
   reel: Reel;
   previewUrl?: string;
+  variantPreview?: boolean;
+  onClearVariantPreview?: () => void;
 }) {
   return (
     <EditorPanel
       title={
-        reel.editDraft ? "Program monitor · local draft" : "Program monitor"
+        variantPreview
+          ? "Program monitor · voice variant preview"
+          : reel.editDraft
+            ? "Program monitor · local draft"
+            : "Program monitor"
       }
       icon={<Play size={15} />}
       actions={
-        <span className="rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
-          9:16
-        </span>
+        <div className="flex items-center gap-1.5">
+          {variantPreview ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClearVariantPreview}
+            >
+              Back to output
+            </Button>
+          ) : null}
+          <span className="rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            9:16
+          </span>
+        </div>
       }
       className="overflow-hidden"
     >
       <div className="grid place-items-center bg-black/20 p-4">
+        {variantPreview ? (
+          <p className="mb-2 max-w-[360px] text-center text-[11px] text-muted-foreground">
+            Previewing a voice take. Click{" "}
+            <span className="font-medium text-foreground">Use in studio</span>{" "}
+            under Voice Variants to make it the reel output.
+          </p>
+        ) : null}
         {previewUrl ? (
           <div className="grid w-full max-w-[360px] place-items-center">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -1191,6 +1240,7 @@ function RedditSourcePanel({
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
 }) {
+  const reelKey = reel._id ?? reel.id ?? "";
   const story = reel.redditStory;
   const [title, setTitle] = useState(story?.title ?? reel.title ?? "");
   const [subreddit, setSubreddit] = useState(story?.subreddit ?? "");
@@ -1231,11 +1281,30 @@ function RedditSourcePanel({
     return Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
   };
 
+  const canBakeIntoVideo =
+    reel.status === "completed" || reel.status === "failed";
+
+  async function saveTitleCard(andRerender: boolean) {
+    await run(async () => {
+      const updated = await updateRedditCard(reelKey, {
+        title: title.trim(),
+        subreddit,
+        cardUsername,
+        ageHours: parseOptionalInt(ageHours),
+        upvotes: parseOptionalInt(upvotes),
+        comments: parseOptionalInt(comments),
+      });
+      if (!andRerender) return updated;
+      return regenerateReel(reelKey, "render_only");
+    });
+  }
+
   return (
     <div className="grid gap-3">
       <PanelTitle className="text-foreground">Title card</PanelTitle>
       <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
         Shown over gameplay while the title is spoken. Sentence scenes below are the spoken body.
+        Saving only updates metadata — bake into the video with re-render.
       </p>
 
       <Label className="gap-1 text-xs text-muted-foreground">
@@ -1298,25 +1367,33 @@ function RedditSourcePanel({
           />
         </Label>
       </div>
-      <Button
-        type="button"
-        variant={cardDirty ? "default" : "outline"}
-        disabled={busy || !cardDirty || !title.trim()}
-        onClick={() =>
-          void run(() =>
-            updateRedditCard(reel._id ?? reel.id ?? "", {
-              title: title.trim(),
-              subreddit,
-              cardUsername,
-              ageHours: parseOptionalInt(ageHours),
-              upvotes: parseOptionalInt(upvotes),
-              comments: parseOptionalInt(comments),
-            }),
-          )
-        }
-      >
-        {cardDirty ? "Save title card" : "Saved"}
-      </Button>
+      <div className="grid gap-2">
+        <Button
+          type="button"
+          variant={cardDirty ? "default" : "outline"}
+          disabled={busy || !cardDirty || !title.trim()}
+          onClick={() => void saveTitleCard(false)}
+        >
+          {cardDirty ? "Save title card" : "Saved"}
+        </Button>
+        {canBakeIntoVideo ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy || !title.trim()}
+            onClick={() => void saveTitleCard(true)}
+          >
+            {busy ? (
+              <Loader2 className="animate-spin" size={15} />
+            ) : (
+              <RefreshCw size={15} />
+            )}
+            {cardDirty
+              ? "Save & re-render video"
+              : "Re-render title card into video"}
+          </Button>
+        ) : null}
+      </div>
 
       <PanelTitle className="mt-2 text-foreground">Gameplay clip</PanelTitle>
       <Label className="gap-1 text-xs text-muted-foreground">
@@ -1328,7 +1405,7 @@ function RedditSourcePanel({
             const next = e.target.value;
             setGameplayKey(next);
             void run(() =>
-              updateReelSettings(reel._id ?? reel.id ?? "", {
+              updateReelSettings(reelKey, {
                 gameplayKey: next || undefined,
               }),
             );
@@ -1342,6 +1419,16 @@ function RedditSourcePanel({
           ))}
         </Select>
       </Label>
+      {canBakeIntoVideo ? (
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground/80">
+          Clip choice is saved immediately. Use{" "}
+          <span className="font-medium text-foreground">
+            Re-render title card into video
+          </span>{" "}
+          above (or Export → Re-render) to bake the new background — that
+          re-runs TTS with the current studio voice.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -2077,6 +2164,38 @@ function PublishPanel({
               Watch <ExternalLink size={11} />
             </a>
           ) : null}
+          {yt.thumbnailStatus ? (
+            <div className="mt-1 text-[11px] opacity-90">
+              Thumbnail:{" "}
+              {yt.thumbnailStatus === "uploaded"
+                ? "custom image uploaded"
+                : yt.thumbnailStatus === "failed"
+                  ? "not uploaded"
+                  : yt.thumbnailStatus === "missing"
+                    ? "no thumbnail on reel"
+                    : yt.thumbnailStatus}
+            </div>
+          ) : null}
+          {yt.shortsCoverStatus ? (
+            <div className="mt-0.5 text-[11px] opacity-90">
+              Shorts cover:{" "}
+              {yt.shortsCoverStatus === "applied"
+                ? "vertical shelf image updated"
+                : yt.shortsCoverStatus === "unchanged"
+                  ? "still an auto video frame — set cover in YouTube Studio"
+                  : "could not verify yet"}
+            </div>
+          ) : null}
+          {yt.shortsCoverStatus === "unchanged" ? (
+            <div className="mt-0.5 text-[11px] opacity-90">
+              YouTube Shorts often keeps a separate auto cover even when the API
+              accepts a custom thumb. In YouTube Studio → Content → the Short →
+              Details, pick a frame/cover manually if the shelf still looks wrong.
+            </div>
+          ) : null}
+          {yt.thumbnailError ? (
+            <div className="mt-0.5 text-[11px] opacity-90">{yt.thumbnailError}</div>
+          ) : null}
           {yt.error ? <div className="mt-1 text-[11px] opacity-90">{yt.error}</div> : null}
         </div>
       ) : null}
@@ -2368,6 +2487,7 @@ function ThumbnailPanel({ reel }: { reel: Reel }) {
       <p className="text-[11px] text-muted-foreground/80">
         Frame grabs, scene stills, text overlay, aspect ratio, and AI generation all live in the
         dedicated Thumbnail Studio. Drafts stay local until uploaded to S3 or discarded.
+        For Shorts, prefer 9:16 — the swipe feed still uses a video frame, not this image.
       </p>
     </div>
   );
