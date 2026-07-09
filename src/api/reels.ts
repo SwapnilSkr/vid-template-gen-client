@@ -125,7 +125,8 @@ export interface ReelEditDraft {
 export interface ThumbnailDraft {
   id: string;
   imageUrl: string;
-  input?: Partial<ThumbnailComposeInput>;
+  /** Opaque editor state (v2 layered doc) or legacy drawtext controls. */
+  input?: Record<string, unknown>;
   aspectRatio?: ThumbnailAspectRatio;
   createdAt?: string;
 }
@@ -567,6 +568,26 @@ export function fontFileUrl(file: string): string {
   return apiUrl(`/fonts/${encodeURIComponent(file)}`);
 }
 
+export type ThumbnailTextEffect =
+  | "none"
+  | "shadow"
+  | "glow"
+  | "neon"
+  | "impact"
+  | "pill"
+  | "outline"
+  | "pop"
+  | "box";
+
+export type ThumbnailPhotoLook =
+  | "none"
+  | "vivid"
+  | "cinematic"
+  | "noir"
+  | "warm"
+  | "cool"
+  | "punch";
+
 export interface CustomThumbnailInput {
   atSeconds: number;
   sourceType?: "frame" | "scene";
@@ -578,7 +599,8 @@ export interface CustomThumbnailInput {
   widthPct?: number;
   align?: "left" | "center" | "right";
   lineHeight?: number;
-  effect?: "none" | "shadow" | "glow" | "box";
+  effect?: ThumbnailTextEffect;
+  photoLook?: ThumbnailPhotoLook;
   fontFamily?: string;
   fontSize?: number;
   color?: string;
@@ -618,6 +640,40 @@ export async function stageThumbnailDraft(id: string, input: ThumbnailComposeInp
   return request<Reel>(`/reels/${id}/thumbnail-draft`, {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+/** Aspect-corrected background source for the client-side editor canvas.
+ *  Data URLs keep the canvas CORS-clean so it can export a PNG. */
+export interface ThumbnailSourceRequest {
+  sourceType: "frame" | "scene" | "saved";
+  atSeconds?: number;
+  sceneIndex?: number;
+  aspectRatio?: ThumbnailAspectRatio;
+}
+
+export async function getThumbnailSource(
+  id: string,
+  input: ThumbnailSourceRequest
+): Promise<{ imageDataUrl: string }> {
+  return request<{ imageDataUrl: string }>(`/reels/${id}/thumbnail-source`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Stage a client-rendered canvas export (WYSIWYG PNG + editor state). */
+export async function stageThumbnailDraftImage(
+  id: string,
+  payload: {
+    imageDataUrl: string;
+    aspectRatio?: ThumbnailAspectRatio;
+    editorState?: Record<string, unknown>;
+  }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/thumbnail-draft/image`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
