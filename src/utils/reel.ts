@@ -30,6 +30,20 @@ export function reelNeedsPolling(reel?: Reel | null): boolean {
   return false;
 }
 
+/**
+ * True while the studio should block further edits / re-renders. Broader than
+ * produce-only: includes pending revoice and YouTube upload so the UI can't
+ * stack another paid job on top.
+ */
+export function reelStudioLocked(reel?: Reel | null): boolean {
+  return reelNeedsPolling(reel);
+}
+
+/** Whether a gameplay re-render will spend OpenRouter TTS credits. */
+export function gameplayRerenderCostsCredits(reel?: Reel | null): boolean {
+  return reel?.strategy === "gameplay_overlay";
+}
+
 export function formatLabel(value?: string) {
   if (value === "2d_comic_horror") return "2D Comic Horror";
   return value ? value.replace(/_/g, " ") : "reddit";
