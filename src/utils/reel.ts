@@ -1,8 +1,33 @@
 import type { Reel, ReelReview } from "@/api/reels";
 import { STAGE_PROGRESS_THRESHOLDS } from "@/constants/reels";
 
+/** Pipeline statuses that mean a produce/plan job is still running. */
+export const REEL_ACTIVE_STATUSES: Reel["status"][] = [
+  "pending",
+  "planning",
+  "generating_assets",
+  "generating_audio",
+  "aligning",
+  "rendering",
+  "uploading",
+];
+
 export function reelId(reel?: Reel): string {
   return reel?.id ?? reel?._id ?? "";
+}
+
+/**
+ * True while any background job for this reel may still change fields the UI
+ * shows — produce pipeline, revoice variants, or YouTube publish. These last
+ * two leave `status` as `completed`, so status-only polling misses them.
+ */
+export function reelNeedsPolling(reel?: Reel | null): boolean {
+  if (!reel) return false;
+  if (REEL_ACTIVE_STATUSES.includes(reel.status)) return true;
+  if (reel.voiceVariants?.some((v) => v.status === "pending")) return true;
+  const yt = reel.youtube?.status;
+  if (yt === "pending" || yt === "uploading") return true;
+  return false;
 }
 
 export function formatLabel(value?: string) {
