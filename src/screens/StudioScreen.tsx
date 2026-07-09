@@ -85,7 +85,12 @@ import {
   captionStylePayload,
   marginVFromDragY,
 } from "@/utils/caption-ass";
-import { REEL_ACTIVE_STATUSES, reelNeedsPolling } from "@/utils/reel";
+import {
+  gameplayRerenderCostsCredits,
+  REEL_ACTIVE_STATUSES,
+  reelNeedsPolling,
+  reelStudioLocked,
+} from "@/utils/reel";
 
 const route = getRouteApi("/studio/$id");
 
@@ -292,6 +297,8 @@ export function StudioScreen() {
   }
 
   const isGenerating = REEL_ACTIVE_STATUSES.includes(reel.status);
+  /** Block edits while produce / revoice / publish is in flight (or local busy). */
+  const studioLocked = busy || reelStudioLocked(reel);
   const isGameplay = reel.strategy === "gameplay_overlay";
   const scenes = reel.scenes ?? [];
   const hasDraft = Boolean(reel.editDraft);
@@ -377,11 +384,11 @@ export function StudioScreen() {
             size="icon"
             title="Refresh"
             onClick={() => void refresh()}
-            disabled={busy}
+            disabled={studioLocked}
           >
             <RefreshCw
               size={15}
-              className={isGenerating ? "animate-spin" : undefined}
+              className={isGenerating || studioLocked ? "animate-spin" : undefined}
             />
           </Button>
         </div>
@@ -394,7 +401,17 @@ export function StudioScreen() {
         </div>
       ) : null}
 
-      <EditDraftBanner reel={reel} busy={busy} run={run} />
+      {studioLocked && !busy ? (
+        <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          {isGenerating
+            ? `Job in progress (${reel.status.replace(/_/g, " ")}) — edits and re-renders are locked.`
+            : reel.voiceVariants?.some((v) => v.status === "pending")
+              ? "Revoice in progress — edits and re-renders are locked."
+              : "YouTube publish in progress — edits and re-renders are locked."}
+        </div>
+      ) : null}
+
+      <EditDraftBanner reel={reel} busy={studioLocked} run={run} />
 
       {reel.status === "failed" ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -407,8 +424,23 @@ export function StudioScreen() {
           </div>
           <Button
             type="button"
-            disabled={busy}
-            onClick={() => void run(() => resumeFailedReel(id))}
+            disabled={studioLocked}
+            onClick={() =>
+              setConfirmAction({
+                title: "Resume failed job?",
+                body: isGameplay
+                  ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
+                  : "Reuses scene images and narration already on S3, then re-renders.",
+                details: isGameplay
+                  ? [
+                      "Gameplay reels re-narrate every sentence on each produce run.",
+                      "Cost is added to this reel's cost breakdown when the job finishes.",
+                    ]
+                  : ["No new image/TTS spend if assets are already on S3."],
+                confirmLabel: "Resume",
+                onConfirm: () => run(() => resumeFailedReel(id)),
+              })
+            }
             className="shrink-0"
           >
             {busy ? (
@@ -423,7 +455,7 @@ export function StudioScreen() {
 
       <GateBanner
         reel={reel}
-        busy={busy}
+        busy={studioLocked}
         onApprove={() =>
           setConfirmAction({
             title:
@@ -435,6 +467,7 @@ export function StudioScreen() {
               "Generates missing scene images with OpenRouter.",
               "Generates missing narration audio with OpenRouter TTS.",
               "Renders captions, horror mix, edit FX, outro, and preview video after assets are ready.",
+              "Spend is recorded on this reel's cost breakdown when the job finishes.",
             ],
             confirmLabel: "Generate",
             onConfirm: () => run(() => approvePlan(id)),
@@ -465,8 +498,20 @@ export function StudioScreen() {
           </div>
           <Button
             type="button"
-            disabled={busy}
-            onClick={() => void run(() => regenerateReel(id, "render_only"))}
+            disabled={studioLocked}
+            onClick={() =>
+              setConfirmAction({
+                title: "Re-render to apply look/voice changes?",
+                body: "This regenerates cleared assets with OpenRouter, then re-renders the preview.",
+                details: [
+                  clearedImages ? "Scene stills will be regenerated (image credits)." : "",
+                  clearedAudio ? "Narration will be regenerated (TTS credits)." : "",
+                  "Spend is added to this reel's cost breakdown when the job finishes.",
+                ].filter(Boolean),
+                confirmLabel: "Re-render",
+                onConfirm: () => run(() => regenerateReel(id, "render_only")),
+              })
+            }
             className="shrink-0"
           >
             {busy ? (
@@ -504,8 +549,8 @@ export function StudioScreen() {
             scenes={scenes}
             selectedSceneIndex={selectedSceneIndex}
             onSelectScene={setSelectedSceneIndex}
-            busy={busy}
-            disabled={isGenerating}
+            busy={studioLocked}
+            disabled={studioLocked}
             run={run}
             onAddScene={() =>
               void run(() =>
@@ -519,8 +564,8 @@ export function StudioScreen() {
               reel={reel}
               scene={selectedScene}
               total={scenes.length}
-              busy={busy}
-              disabled={isGenerating}
+              busy={studioLocked}
+              disabled={studioLocked}
               isGameplay={isGameplay}
               run={run}
               requestConfirm={setConfirmAction}
@@ -537,7 +582,7 @@ export function StudioScreen() {
             tab={inspectorTab}
             onTabChange={setInspectorTab}
             reel={reel}
-            busy={busy}
+            busy={studioLocked}
             isGameplay={isGameplay}
             run={run}
             requestConfirm={setConfirmAction}
@@ -545,8 +590,10 @@ export function StudioScreen() {
           <VoiceVariantsPanel
             reel={reel}
             reelId={id}
+            locked={studioLocked}
             onRefresh={refresh}
             onPreviewVariant={setVariantPreviewUrl}
+            requestConfirm={setConfirmAction}
           />
         </div>
       </div>
@@ -952,9 +999,19 @@ function InspectorPanel({
       <div className="min-w-0 overflow-x-hidden p-3 xl:max-h-[calc(100vh-164px)] xl:overflow-y-auto">
         {tab === "source" ? (
           isGameplay ? (
-            <RedditSourcePanel reel={reel} busy={busy} run={run} />
+            <RedditSourcePanel
+              reel={reel}
+              busy={busy}
+              run={run}
+              requestConfirm={requestConfirm}
+            />
           ) : (
-            <StoryPanel reel={reel} busy={busy} run={run} />
+            <StoryPanel
+              reel={reel}
+              busy={busy}
+              run={run}
+              requestConfirm={requestConfirm}
+            />
           )
         ) : null}
         {tab === "look" && !isGameplay ? (
@@ -966,16 +1023,31 @@ function InspectorPanel({
           />
         ) : null}
         {tab === "effects" && !isGameplay ? (
-          <EffectsPanel reel={reel} busy={busy} run={run} />
+          <EffectsPanel
+            reel={reel}
+            busy={busy}
+            run={run}
+            requestConfirm={requestConfirm}
+          />
         ) : null}
         {tab === "outro" ? (
-          <OutroPanel reel={reel} busy={busy} run={run} />
+          <OutroPanel
+            reel={reel}
+            busy={busy}
+            run={run}
+            requestConfirm={requestConfirm}
+          />
         ) : null}
         {tab === "thumbnail" ? (
           <ThumbnailPanel reel={reel} />
         ) : null}
         {tab === "captions" ? (
-          <CaptionEditor reel={reel} busy={busy} run={run} />
+          <CaptionEditor
+            reel={reel}
+            busy={busy}
+            run={run}
+            requestConfirm={requestConfirm}
+          />
         ) : null}
         {tab === "export" ? (
           <div className="grid gap-3">
@@ -1235,10 +1307,12 @@ function RedditSourcePanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const story = reel.redditStory;
@@ -1285,18 +1359,41 @@ function RedditSourcePanel({
     reel.status === "completed" || reel.status === "failed";
 
   async function saveTitleCard(andRerender: boolean) {
-    await run(async () => {
-      const updated = await updateRedditCard(reelKey, {
+    if (andRerender) {
+      requestConfirm({
+        title: "Save title card & re-render?",
+        body: "Gameplay re-renders re-run OpenRouter TTS for the title and every sentence, then rebuild the video.",
+        details: [
+          "OpenRouter narration credits will be charged.",
+          "Spend is added to this reel's cost breakdown when the job finishes.",
+          "A job already in progress cannot be stacked.",
+        ],
+        confirmLabel: "Spend credits & re-render",
+        onConfirm: () =>
+          run(async () => {
+            await updateRedditCard(reelKey, {
+              title: title.trim(),
+              subreddit,
+              cardUsername,
+              ageHours: parseOptionalInt(ageHours),
+              upvotes: parseOptionalInt(upvotes),
+              comments: parseOptionalInt(comments),
+            });
+            return regenerateReel(reelKey, "render_only");
+          }),
+      });
+      return;
+    }
+    await run(() =>
+      updateRedditCard(reelKey, {
         title: title.trim(),
         subreddit,
         cardUsername,
         ageHours: parseOptionalInt(ageHours),
         upvotes: parseOptionalInt(upvotes),
         comments: parseOptionalInt(comments),
-      });
-      if (!andRerender) return updated;
-      return regenerateReel(reelKey, "render_only");
-    });
+      }),
+    );
   }
 
   return (
@@ -1437,14 +1534,17 @@ function StoryPanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [script, setScript] = useState(reel.providedScript ?? "");
   const [references, setReferences] = useState<HorrorReference[]>([]);
   const bible = reel.storyBible;
+  const reelKey = reel._id ?? reel.id ?? "";
 
   useEffect(() => {
     void listHorrorReferences(12)
@@ -1491,13 +1591,19 @@ function StoryPanel({
         <Select
           disabled={busy}
           value={reel.horrorReferenceId ?? ""}
-          onChange={(e) =>
-            void run(() =>
-              replanReel(reel._id ?? reel.id ?? "", {
-                horrorReferenceId: e.target.value,
-              }),
-            )
-          }
+          onChange={(e) => {
+            const horrorReferenceId = e.target.value;
+            requestConfirm({
+              title: "Re-plan with this reference?",
+              body: "Discards the current plan and runs OpenRouter script planning again.",
+              details: [
+                "LLM planning credits will be charged.",
+                "Existing scene assets are cleared until you approve and produce again.",
+              ],
+              confirmLabel: "Spend credits & re-plan",
+              onConfirm: () => run(() => replanReel(reelKey, { horrorReferenceId })),
+            });
+          }}
         >
           <option value="">Auto / none</option>
           {references.map((r) => (
@@ -1525,11 +1631,21 @@ function StoryPanel({
         className="border-border bg-secondary text-foreground hover:bg-accent"
         disabled={busy || !script.trim()}
         onClick={() =>
-          void run(() =>
-            replanReel(reel._id ?? reel.id ?? "", {
-              providedScript: script.trim(),
-            }),
-          )
+          requestConfirm({
+            title: "Re-plan from your story?",
+            body: "Structures your pasted story into scenes with OpenRouter, replacing the current plan.",
+            details: [
+              "LLM planning credits will be charged.",
+              "Existing scene assets are cleared until you approve and produce again.",
+            ],
+            confirmLabel: "Spend credits & re-plan",
+            onConfirm: () =>
+              run(() =>
+                replanReel(reelKey, {
+                  providedScript: script.trim(),
+                }),
+              ),
+          })
         }
       >
         <RefreshCw size={15} /> Re-plan from my story
@@ -2023,6 +2139,7 @@ function RegeneratePanel({
   if (!canRegen) return null;
   const isFailed = reel.status === "failed";
   const isGameplay = reel.strategy === "gameplay_overlay";
+  const costsCredits = gameplayRerenderCostsCredits(reel);
   return (
     <div className="grid gap-2">
       <PanelTitle className="text-foreground">Render Queue</PanelTitle>
@@ -2031,7 +2148,22 @@ function RegeneratePanel({
           type="button"
           className="bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={busy}
-          onClick={() => void run(() => resumeFailedReel(reelKey))}
+          onClick={() =>
+            requestConfirm({
+              title: "Resume failed job?",
+              body: costsCredits
+                ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
+                : "Reuses scene images and narration already on S3, then re-renders.",
+              details: costsCredits
+                ? [
+                    "Gameplay reels re-narrate every sentence on each produce run.",
+                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                  ]
+                : ["No new image/TTS spend if assets are already on S3."],
+              confirmLabel: "Resume",
+              onConfirm: () => run(() => resumeFailedReel(reelKey)),
+            })
+          }
         >
           <RefreshCw size={15} />{" "}
           {isGameplay
@@ -2044,7 +2176,26 @@ function RegeneratePanel({
           variant="outline"
           className="border-border bg-secondary text-foreground hover:bg-accent"
           disabled={busy}
-          onClick={() => void run(() => regenerateReel(reelKey, "render_only"))}
+          onClick={() =>
+            requestConfirm({
+              title: costsCredits ? "Re-render gameplay reel?" : "Re-render reel?",
+              body: costsCredits
+                ? "This re-runs OpenRouter TTS for the title + every sentence, then composites over gameplay."
+                : "Reuses existing scene images and narration (no OpenRouter spend), then re-renders locally.",
+              details: costsCredits
+                ? [
+                    "OpenRouter narration credits will be charged.",
+                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                    "A job already in progress cannot be stacked — wait for it to finish.",
+                  ]
+                : [
+                    "Free unless look/voice changes cleared assets (then those regenerate).",
+                    "A job already in progress cannot be stacked — wait for it to finish.",
+                  ],
+              confirmLabel: costsCredits ? "Spend credits & re-render" : "Re-render",
+              onConfirm: () => run(() => regenerateReel(reelKey, "render_only")),
+            })
+          }
         >
           <RefreshCw size={15} />{" "}
           {isGameplay
@@ -2084,16 +2235,28 @@ function RegeneratePanel({
 
 function CostPanel({ reel }: { reel: Reel }) {
   const breakdown = reel.costBreakdown;
-  if (!breakdown?.lines?.length) return null;
+  if (!breakdown?.lines?.length) {
+    return (
+      <div className="grid gap-2">
+        <PanelTitle className="inline-flex items-center gap-2 text-foreground">
+          <Receipt size={15} className="text-primary" /> Cost breakdown
+        </PanelTitle>
+        <p className="m-0 text-[11px] text-muted-foreground/80">
+          No spend recorded yet. Produce and re-render jobs append OpenRouter
+          usage here when they finish.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="grid gap-2">
       <PanelTitle className="inline-flex items-center gap-2 text-foreground">
         <Receipt size={15} className="text-primary" /> Cost breakdown
       </PanelTitle>
       <div className="grid gap-1">
-        {breakdown.lines.map((line) => (
+        {breakdown.lines.map((line, index) => (
           <div
-            key={`${line.label}-${line.model ?? ""}`}
+            key={`${index}-${line.label}-${line.model ?? ""}`}
             className="flex items-baseline justify-between gap-3 text-xs"
           >
             <span className="min-w-0 truncate text-muted-foreground">
@@ -2110,7 +2273,10 @@ function CostPanel({ reel }: { reel: Reel }) {
         <span className="font-medium text-foreground">Total</span>
         <span className="font-semibold tabular-nums text-primary">${breakdown.totalUsd.toFixed(4)}</span>
       </div>
-      {breakdown.note ? <p className="m-0 text-[11px] text-muted-foreground/80">{breakdown.note}</p> : null}
+      <p className="m-0 text-[11px] text-muted-foreground/80">
+        {breakdown.note ??
+          "Re-renders append new lines (prefixed [Re-render]) so totals accumulate."}
+      </p>
     </div>
   );
 }
@@ -2245,10 +2411,12 @@ function EffectsPanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const [fx, setFx] = useState<EditEffects>(reel.editEffects ?? {});
@@ -2263,9 +2431,19 @@ function EffectsPanel({
         variant="default"
         disabled={busy}
         onClick={() =>
-          void run(async () => {
-            await updateReelSettings(reelKey, { editEffects: fx });
-            return regenerateReel(reelKey, "render_only");
+          requestConfirm({
+            title: "Apply effects & re-render?",
+            body: "Render-only pass over the existing video. No OpenRouter image/TTS spend.",
+            details: [
+              "Reuses every scene still and narration clip.",
+              "A job already in progress cannot be stacked.",
+            ],
+            confirmLabel: "Re-render (free)",
+            onConfirm: () =>
+              run(async () => {
+                await updateReelSettings(reelKey, { editEffects: fx });
+                return regenerateReel(reelKey, "render_only");
+              }),
           })
         }
       >
@@ -2299,10 +2477,12 @@ function OutroPanel({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
@@ -2432,19 +2612,40 @@ function OutroPanel({
         variant="default"
         disabled={busy}
         onClick={() =>
-          void run(async () => {
-            await updateReelSettings(reelKey, {
-              outroChannelId,
-              outro: compactOutroSettings(outro),
-            });
-            return regenerateReel(reelKey, "render_only");
+          requestConfirm({
+            title: "Render outro draft?",
+            body: gameplayRerenderCostsCredits(reel)
+              ? "Gameplay re-render re-runs OpenRouter TTS for the whole reel (not just the outro), then rebuilds the video."
+              : "Rebuilds the outro narration/card and preview. Scene stills and body narration are reused.",
+            details: gameplayRerenderCostsCredits(reel)
+              ? [
+                  "OpenRouter narration credits will be charged for the full gameplay re-TTS.",
+                  "Spend is added to this reel's cost breakdown when the job finishes.",
+                ]
+              : [
+                  "Outro spoken line may spend a small OpenRouter TTS amount.",
+                  "Body scene assets are kept.",
+                ],
+            confirmLabel: gameplayRerenderCostsCredits(reel)
+              ? "Spend credits & re-render"
+              : "Render outro",
+            onConfirm: () =>
+              run(async () => {
+                await updateReelSettings(reelKey, {
+                  outroChannelId,
+                  outro: compactOutroSettings(outro),
+                });
+                return regenerateReel(reelKey, "render_only");
+              }),
           })
         }
       >
         <RefreshCw size={15} /> Render outro draft
       </Button>
       <p className="text-[11px] text-muted-foreground/80">
-        Reuses all scene stills and narration. Only the outro narration, outro card, and preview video are rebuilt.
+        {gameplayRerenderCostsCredits(reel)
+          ? "Gameplay path re-narrates the full reel on re-render (OpenRouter TTS)."
+          : "Reuses all scene stills and narration. Only the outro narration, outro card, and preview video are rebuilt."}
       </p>
     </div>
   );
@@ -2531,10 +2732,12 @@ function CaptionEditor({
   reel,
   busy,
   run,
+  requestConfirm,
 }: {
   reel: Reel;
   busy: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
+  requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const [style, setStyleState] = useState(() => captionStyleFromReel(reel.captionStyle));
@@ -2817,19 +3020,39 @@ function CaptionEditor({
         type="button"
         variant="default"
         disabled={busy}
-        onClick={() =>
-          void run(async () => {
-            const burnStyle = captionStylePayload(style, CAPTION_STYLE_DEFAULTS);
-            if (!reel.outputUrl) {
+        onClick={() => {
+          const burnStyle = captionStylePayload(style, CAPTION_STYLE_DEFAULTS);
+          if (!reel.outputUrl) {
+            void run(async () => {
               await updateCaptions(reelKey, burnStyle);
               styleDirtyRef.current = false;
               return getReel(reelKey);
-            }
-            const next = await applyCaptions(reelKey, burnStyle);
-            styleDirtyRef.current = false;
-            return next;
-          })
-        }
+            });
+            return;
+          }
+          const costsCredits = gameplayRerenderCostsCredits(reel);
+          requestConfirm({
+            title: costsCredits
+              ? "Apply captions & re-render (TTS)?"
+              : "Apply captions & re-render?",
+            body: costsCredits
+              ? "Gameplay caption apply re-runs OpenRouter TTS for the full reel, then rebuilds captions."
+              : "Re-burns captions onto the existing video. Scene images and narration are reused.",
+            details: costsCredits
+              ? [
+                  "OpenRouter narration credits will be charged.",
+                  "Spend is added to this reel's cost breakdown when the job finishes.",
+                ]
+              : ["No OpenRouter image/TTS spend for image reels when assets already exist."],
+            confirmLabel: costsCredits ? "Spend credits & apply" : "Apply & re-render",
+            onConfirm: () =>
+              run(async () => {
+                const next = await applyCaptions(reelKey, burnStyle);
+                styleDirtyRef.current = false;
+                return next;
+              }),
+          });
+        }}
       >
         <RefreshCw size={15} />{" "}
         {reel.outputUrl
