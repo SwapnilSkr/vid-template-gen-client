@@ -27,6 +27,7 @@ const defaultForm: CreateReelInput = {
   gameplayKey: "",
   thumbnailMode: "frame",
   imageModel: "",
+  pipelineMode: "review",
 };
 
 interface CreateReelFormProps {
@@ -472,6 +473,35 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             )}
           </div>
         </Label>
+      )}
+
+      {isGameplayNiche && (
+        <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
+          <div className="grid gap-1">
+            <strong className="text-[13px] text-foreground">How this reel is made</strong>
+            <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+              Reddit reels start from a story plan with a title card and sentence scenes over gameplay.
+              Review and edit the card, sentences, captions, and thumbnail in Studio before TTS and render.
+            </p>
+          </div>
+          <label className="flex items-start gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={(form.pipelineMode ?? "review") === "review"}
+              onChange={(event) =>
+                setForm({ ...form, pipelineMode: event.target.checked ? "review" : "auto" })
+              }
+            />
+            <span>
+              Review &amp; edit the plan before generating
+              <span className="block text-muted-foreground">
+                Pauses after the story/sentence plan so you can edit the title card, body sentences,
+                captions, and thumbnail in Studio before TTS and render spend.
+              </span>
+            </span>
+          </label>
+        </div>
       )}
 
       {isHorrorNiche && (
