@@ -47,8 +47,10 @@ import {
   saveEditDraft,
   updateCaptions,
   applyCaptions,
+  updateRedditCard,
   updateReelSettings,
   updateScene,
+  listGameplay,
   listStylePresets,
   publishReel,
   reorderScenes,
@@ -56,6 +58,7 @@ import {
   type CaptionStyle,
   type EditEffects,
   type FontOption,
+  type GameplayClip,
   type ImageModelOption,
   type OutroSettings,
   type Reel,
@@ -282,14 +285,19 @@ export function StudioScreen() {
   }
 
   const isGenerating = ACTIVE.includes(reel.status);
+  const isGameplay = reel.strategy === "gameplay_overlay";
   const scenes = reel.scenes ?? [];
   const hasDraft = Boolean(reel.editDraft);
   // A look/voice change (art, image model, narration voice, voice FX) clears the
   // affected assets so the next produce regenerates them — deferred by design, so
   // it's easy to miss. Surface it on an already-produced reel with a one-click apply.
-  const clearedImages = scenes.some((s) => !s.assetUrl && !s.isHero);
-  const clearedAudio = scenes.some((s) => !s.audioUrl);
+  // Gameplay reels never store per-scene stills/narration URLs (TTS is inline at
+  // render), so missing assetUrl/audioUrl is normal — not a pending look change.
+  const clearedImages =
+    !isGameplay && scenes.some((s) => !s.assetUrl && !s.isHero);
+  const clearedAudio = !isGameplay && scenes.some((s) => !s.audioUrl);
   const pendingRegen =
+    !isGameplay &&
     !isGenerating &&
     !hasDraft &&
     Boolean(reel.outputUrl) &&
@@ -496,6 +504,7 @@ export function StudioScreen() {
               total={scenes.length}
               busy={busy}
               disabled={isGenerating}
+              isGameplay={isGameplay}
               run={run}
               requestConfirm={setConfirmAction}
             />
@@ -512,6 +521,7 @@ export function StudioScreen() {
             onTabChange={setInspectorTab}
             reel={reel}
             busy={busy}
+            isGameplay={isGameplay}
             run={run}
             requestConfirm={setConfirmAction}
           />
@@ -765,7 +775,7 @@ function TimelinePanel({
             disabled={busy || disabled}
             onClick={onAddScene}
           >
-            + Add scene
+            + Add {reel.strategy === "gameplay_overlay" ? "sentence" : "scene"}
           </Button>
         </div>
       }
@@ -842,6 +852,7 @@ function InspectorPanel({
   onTabChange,
   reel,
   busy,
+  isGameplay,
   run,
   requestConfirm,
 }: {
@@ -849,9 +860,19 @@ function InspectorPanel({
   onTabChange: (tab: InspectorTab) => void;
   reel: Reel;
   busy: boolean;
+  isGameplay: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
+  const tabs = isGameplay
+    ? INSPECTOR_TABS.filter((item) => item.id !== "look" && item.id !== "effects")
+    : INSPECTOR_TABS;
+
+  useEffect(() => {
+    if (!isGameplay) return;
+    if (tab === "look" || tab === "effects") onTabChange("source");
+  }, [isGameplay, tab, onTabChange]);
+
   return (
     <EditorPanel
       title="Inspector"
@@ -860,7 +881,7 @@ function InspectorPanel({
     >
       <div className="border-b border-border bg-background">
         <div className="studio-scrollbar flex min-w-0 gap-1 overflow-x-auto overscroll-x-contain p-2">
-          {INSPECTOR_TABS.map((item) => (
+          {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -881,9 +902,13 @@ function InspectorPanel({
       </div>
       <div className="min-w-0 overflow-x-hidden p-3 xl:max-h-[calc(100vh-164px)] xl:overflow-y-auto">
         {tab === "source" ? (
-          <StoryPanel reel={reel} busy={busy} run={run} />
+          isGameplay ? (
+            <RedditSourcePanel reel={reel} busy={busy} run={run} />
+          ) : (
+            <StoryPanel reel={reel} busy={busy} run={run} />
+          )
         ) : null}
-        {tab === "look" ? (
+        {tab === "look" && !isGameplay ? (
           <PresetsPanel
             reel={reel}
             busy={busy}
@@ -891,7 +916,7 @@ function InspectorPanel({
             requestConfirm={requestConfirm}
           />
         ) : null}
-        {tab === "effects" ? (
+        {tab === "effects" && !isGameplay ? (
           <EffectsPanel reel={reel} busy={busy} run={run} />
         ) : null}
         {tab === "outro" ? (
@@ -1130,10 +1155,14 @@ function GateBanner({
         <span className="font-medium text-foreground">
           {reel.partCount && reel.partCount > 1
             ? `Part ${reel.partNumber ?? 1} plan ready — review & edit this episode below.`
-            : "Plan ready — review & edit the script, art, voice, and captions below."}
+            : reel.strategy === "gameplay_overlay"
+              ? "Plan ready — review & edit the title card, sentences, captions, and thumbnail below."
+              : "Plan ready — review & edit the script, art, voice, and captions below."}
         </span>
         <span className="text-muted-foreground">
-          No images/voice have been generated yet (no spend).
+          {reel.strategy === "gameplay_overlay"
+            ? "No TTS or render yet (no spend)."
+            : "No images/voice have been generated yet (no spend)."}
         </span>
       </div>
       <Button
@@ -1149,6 +1178,170 @@ function GateBanner({
         )}
         Generate reel
       </Button>
+    </div>
+  );
+}
+
+function RedditSourcePanel({
+  reel,
+  busy,
+  run,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: (a: () => Promise<Reel>) => Promise<void>;
+}) {
+  const story = reel.redditStory;
+  const [title, setTitle] = useState(story?.title ?? reel.title ?? "");
+  const [subreddit, setSubreddit] = useState(story?.subreddit ?? "");
+  const [cardUsername, setCardUsername] = useState(story?.cardUsername ?? story?.author ?? "");
+  const [ageHours, setAgeHours] = useState(String(story?.ageHours ?? ""));
+  const [upvotes, setUpvotes] = useState(String(story?.upvotes ?? ""));
+  const [comments, setComments] = useState(String(story?.comments ?? ""));
+  const [clips, setClips] = useState<GameplayClip[]>([]);
+  const [gameplayKey, setGameplayKey] = useState(reel.gameplayKey ?? "");
+
+  useEffect(() => {
+    setTitle(story?.title ?? reel.title ?? "");
+    setSubreddit(story?.subreddit ?? "");
+    setCardUsername(story?.cardUsername ?? story?.author ?? "");
+    setAgeHours(String(story?.ageHours ?? ""));
+    setUpvotes(String(story?.upvotes ?? ""));
+    setComments(String(story?.comments ?? ""));
+    setGameplayKey(reel.gameplayKey ?? "");
+  }, [story, reel.title, reel.gameplayKey]);
+
+  useEffect(() => {
+    void listGameplay()
+      .then(setClips)
+      .catch(() => setClips([]));
+  }, []);
+
+  const cardDirty =
+    title !== (story?.title ?? reel.title ?? "") ||
+    subreddit !== (story?.subreddit ?? "") ||
+    cardUsername !== (story?.cardUsername ?? story?.author ?? "") ||
+    ageHours !== String(story?.ageHours ?? "") ||
+    upvotes !== String(story?.upvotes ?? "") ||
+    comments !== String(story?.comments ?? "");
+
+  const parseOptionalInt = (value: string) => {
+    if (!value.trim()) return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
+  };
+
+  return (
+    <div className="grid gap-3">
+      <PanelTitle className="text-foreground">Title card</PanelTitle>
+      <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+        Shown over gameplay while the title is spoken. Sentence scenes below are the spoken body.
+      </p>
+
+      <Label className="gap-1 text-xs text-muted-foreground">
+        Title
+        <Input
+          value={title}
+          disabled={busy}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </Label>
+      <div className="grid grid-cols-2 gap-2">
+        <Label className="gap-1 text-xs text-muted-foreground">
+          Subreddit
+          <Input
+            value={subreddit}
+            disabled={busy}
+            placeholder="r/AmItheAsshole"
+            onChange={(e) => setSubreddit(e.target.value)}
+          />
+        </Label>
+        <Label className="gap-1 text-xs text-muted-foreground">
+          Username
+          <Input
+            value={cardUsername}
+            disabled={busy}
+            placeholder="u/throwaway_1234"
+            onChange={(e) => setCardUsername(e.target.value)}
+          />
+        </Label>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Label className="gap-1 text-xs text-muted-foreground">
+          Age (hours)
+          <Input
+            type="number"
+            min={0}
+            value={ageHours}
+            disabled={busy}
+            onChange={(e) => setAgeHours(e.target.value)}
+          />
+        </Label>
+        <Label className="gap-1 text-xs text-muted-foreground">
+          Upvotes
+          <Input
+            type="number"
+            min={0}
+            value={upvotes}
+            disabled={busy}
+            onChange={(e) => setUpvotes(e.target.value)}
+          />
+        </Label>
+        <Label className="gap-1 text-xs text-muted-foreground">
+          Comments
+          <Input
+            type="number"
+            min={0}
+            value={comments}
+            disabled={busy}
+            onChange={(e) => setComments(e.target.value)}
+          />
+        </Label>
+      </div>
+      <Button
+        type="button"
+        variant={cardDirty ? "default" : "outline"}
+        disabled={busy || !cardDirty || !title.trim()}
+        onClick={() =>
+          void run(() =>
+            updateRedditCard(reel._id ?? reel.id ?? "", {
+              title: title.trim(),
+              subreddit,
+              cardUsername,
+              ageHours: parseOptionalInt(ageHours),
+              upvotes: parseOptionalInt(upvotes),
+              comments: parseOptionalInt(comments),
+            }),
+          )
+        }
+      >
+        {cardDirty ? "Save title card" : "Saved"}
+      </Button>
+
+      <PanelTitle className="mt-2 text-foreground">Gameplay clip</PanelTitle>
+      <Label className="gap-1 text-xs text-muted-foreground">
+        Background
+        <Select
+          disabled={busy}
+          value={gameplayKey}
+          onChange={(e) => {
+            const next = e.target.value;
+            setGameplayKey(next);
+            void run(() =>
+              updateReelSettings(reel._id ?? reel.id ?? "", {
+                gameplayKey: next || undefined,
+              }),
+            );
+          }}
+        >
+          <option value="">Random from S3 pool</option>
+          {clips.map((clip) => (
+            <option key={clip.key} value={clip.key}>
+              {clip.filename}
+            </option>
+          ))}
+        </Select>
+      </Label>
     </div>
   );
 }
@@ -1265,6 +1458,7 @@ function SceneCard({
   total,
   busy,
   disabled,
+  isGameplay,
   run,
   requestConfirm,
 }: {
@@ -1274,13 +1468,15 @@ function SceneCard({
   total: number;
   busy: boolean;
   disabled: boolean;
+  isGameplay: boolean;
   run: (a: () => Promise<Reel>) => Promise<void>;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [narration, setNarration] = useState(scene.narration);
   const [visualPrompt, setVisualPrompt] = useState(scene.visualPrompt);
-  const dirty =
-    narration !== scene.narration || visualPrompt !== scene.visualPrompt;
+  const dirty = isGameplay
+    ? narration !== scene.narration
+    : narration !== scene.narration || visualPrompt !== scene.visualPrompt;
 
   useEffect(() => {
     setNarration(scene.narration);
@@ -1304,12 +1500,14 @@ function SceneCard({
               alt={`Scene ${scene.index + 1}`}
               className="h-full w-full object-cover"
             />
+          ) : isGameplay ? (
+            <span className="px-2 text-center text-[10px] leading-snug">Gameplay bg</span>
           ) : (
             <ImageIcon size={20} />
           )}
         </div>
         <span className="text-center text-[11px] font-medium text-muted-foreground/80">
-          Scene {scene.index + 1}/{total}
+          {isGameplay ? `Sentence ${scene.index + 1}/${total}` : `Scene ${scene.index + 1}/${total}`}
         </span>
         {audioUrl ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -1331,36 +1529,40 @@ function SceneCard({
             onChange={(e) => setNarration(e.target.value)}
           />
         </Label>
-        <Label className="gap-1 text-xs text-muted-foreground">
-          Visual prompt
-          <Textarea
-            rows={2}
-            value={visualPrompt}
-            disabled={disableAll}
-            onChange={(e) => setVisualPrompt(e.target.value)}
-          />
-        </Label>
+        {!isGameplay ? (
+          <Label className="gap-1 text-xs text-muted-foreground">
+            Visual prompt
+            <Textarea
+              rows={2}
+              value={visualPrompt}
+              disabled={disableAll}
+              onChange={(e) => setVisualPrompt(e.target.value)}
+            />
+          </Label>
+        ) : null}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Select
-            className="h-8 w-full text-xs sm:w-auto"
-            disabled={disableAll}
-            value={scene.motion.type}
-            onChange={(e) =>
-              void run(() =>
-                updateScene(reelId, scene.index, {
-                  motion: {
-                    ...scene.motion,
-                    type: e.target.value as Scene["motion"]["type"],
-                  },
-                }),
-              )
-            }
-          >
-            <option value="ken_burns">Ken Burns</option>
-            <option value="parallax">Parallax</option>
-            <option value="static">Static</option>
-            <option value="ai_motion">AI motion</option>
-          </Select>
+          {!isGameplay ? (
+            <Select
+              className="h-8 w-full text-xs sm:w-auto"
+              disabled={disableAll}
+              value={scene.motion.type}
+              onChange={(e) =>
+                void run(() =>
+                  updateScene(reelId, scene.index, {
+                    motion: {
+                      ...scene.motion,
+                      type: e.target.value as Scene["motion"]["type"],
+                    },
+                  }),
+                )
+              }
+            >
+              <option value="ken_burns">Ken Burns</option>
+              <option value="parallax">Parallax</option>
+              <option value="static">Static</option>
+              <option value="ai_motion">AI motion</option>
+            </Select>
+          ) : null}
           <Button
             type="button"
             size="default"
@@ -1368,62 +1570,70 @@ function SceneCard({
             disabled={disableAll || !dirty}
             onClick={() =>
               void run(() =>
-                updateScene(reelId, scene.index, { narration, visualPrompt }),
+                updateScene(
+                  reelId,
+                  scene.index,
+                  isGameplay ? { narration } : { narration, visualPrompt },
+                ),
               )
             }
           >
             {dirty ? "Save" : "Saved"}
           </Button>
-          <Button
-            type="button"
-            size="default"
-            variant="outline"
-            className="border-border bg-secondary text-foreground hover:bg-accent"
-            disabled={disableAll}
-            title="Regenerate this scene's image"
-            onClick={() =>
-              requestConfirm({
-                title: `Regenerate image for scene ${scene.index + 1}?`,
-                body: "This makes one new OpenRouter image request, then rebuilds the preview video with existing narration and other scene assets.",
-                details: [
-                  "Costs image generation for this scene only.",
-                  "Keeps every other scene image.",
-                  "Keeps all narration audio.",
-                  "Re-burns captions/render output so the preview reflects the new image.",
-                ],
-                confirmLabel: "Regenerate image",
-                onConfirm: () =>
-                  run(() => regenerateScene(reelId, scene.index, ["image"])),
-              })
-            }
-          >
-            <ImageIcon size={13} /> Image
-          </Button>
-          <Button
-            type="button"
-            size="default"
-            variant="outline"
-            className="border-border bg-secondary text-foreground hover:bg-accent"
-            disabled={disableAll}
-            title="Regenerate this scene's narration audio"
-            onClick={() =>
-              requestConfirm({
-                title: `Regenerate narration for scene ${scene.index + 1}?`,
-                body: "This makes one new OpenRouter TTS request, then rebuilds the preview video with existing images and other scene audio.",
-                details: [
-                  "Costs narration generation for this scene only.",
-                  "Keeps every scene image.",
-                  "Keeps other scenes' narration audio.",
-                  "Caption timing is rebuilt from the new audio duration.",
-                ],
-                confirmLabel: "Regenerate audio",
-                onConfirm: () =>
-                  run(() => regenerateScene(reelId, scene.index, ["audio"])),
-              })
-            }
-          >
-            <Play size={13} /> Audio
-          </Button>
+          {!isGameplay ? (
+            <>
+              <Button
+                type="button"
+                size="default"
+                variant="outline"
+                className="border-border bg-secondary text-foreground hover:bg-accent"
+                disabled={disableAll}
+                title="Regenerate this scene's image"
+                onClick={() =>
+                  requestConfirm({
+                    title: `Regenerate image for scene ${scene.index + 1}?`,
+                    body: "This makes one new OpenRouter image request, then rebuilds the preview video with existing narration and other scene assets.",
+                    details: [
+                      "Costs image generation for this scene only.",
+                      "Keeps every other scene image.",
+                      "Keeps all narration audio.",
+                      "Re-burns captions/render output so the preview reflects the new image.",
+                    ],
+                    confirmLabel: "Regenerate image",
+                    onConfirm: () =>
+                      run(() => regenerateScene(reelId, scene.index, ["image"])),
+                  })
+                }
+              >
+                <ImageIcon size={13} /> Image
+              </Button>
+              <Button
+                type="button"
+                size="default"
+                variant="outline"
+                className="border-border bg-secondary text-foreground hover:bg-accent"
+                disabled={disableAll}
+                title="Regenerate this scene's narration audio"
+                onClick={() =>
+                  requestConfirm({
+                    title: `Regenerate narration for scene ${scene.index + 1}?`,
+                    body: "This makes one new OpenRouter TTS request, then rebuilds the preview video with existing images and other scene audio.",
+                    details: [
+                      "Costs narration generation for this scene only.",
+                      "Keeps every scene image.",
+                      "Keeps other scenes' narration audio.",
+                      "Caption timing is rebuilt from the new audio duration.",
+                    ],
+                    confirmLabel: "Regenerate audio",
+                    onConfirm: () =>
+                      run(() => regenerateScene(reelId, scene.index, ["audio"])),
+                  })
+                }
+              >
+                <Play size={13} /> Audio
+              </Button>
+            </>
+          ) : null}
           {total > 1 ? (
             <Button
               type="button"
@@ -1433,9 +1643,11 @@ function SceneCard({
               disabled={disableAll}
               onClick={() =>
                 requestConfirm({
-                  title: `Remove scene ${scene.index + 1}?`,
-                  body: "This removes the scene from the reel plan. It does not call OpenRouter by itself.",
-                  confirmLabel: "Remove scene",
+                  title: `Remove ${isGameplay ? "sentence" : "scene"} ${scene.index + 1}?`,
+                  body: isGameplay
+                    ? "This removes the sentence from the spoken body. It does not call OpenRouter by itself."
+                    : "This removes the scene from the reel plan. It does not call OpenRouter by itself.",
+                  confirmLabel: isGameplay ? "Remove sentence" : "Remove scene",
                   variant: "destructive",
                   onConfirm: () => run(() => removeScene(reelId, scene.index)),
                 })
@@ -1723,6 +1935,7 @@ function RegeneratePanel({
   const canRegen = reel.status === "completed" || reel.status === "failed";
   if (!canRegen) return null;
   const isFailed = reel.status === "failed";
+  const isGameplay = reel.strategy === "gameplay_overlay";
   return (
     <div className="grid gap-2">
       <PanelTitle className="text-foreground">Render Queue</PanelTitle>
@@ -1733,7 +1946,10 @@ function RegeneratePanel({
           disabled={busy}
           onClick={() => void run(() => resumeFailedReel(reelKey))}
         >
-          <RefreshCw size={15} /> Resume failed job (reuse assets — free)
+          <RefreshCw size={15} />{" "}
+          {isGameplay
+            ? "Resume failed job (re-run TTS + render)"
+            : "Resume failed job (reuse assets — free)"}
         </Button>
       ) : (
         <Button
@@ -1743,33 +1959,38 @@ function RegeneratePanel({
           disabled={busy}
           onClick={() => void run(() => regenerateReel(reelKey, "render_only"))}
         >
-          <RefreshCw size={15} /> Re-render (reuse assets — free)
+          <RefreshCw size={15} />{" "}
+          {isGameplay
+            ? "Re-render (re-runs TTS + gameplay composite)"
+            : "Re-render (reuse assets — free)"}
         </Button>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
-        disabled={busy}
-        onClick={() =>
-          requestConfirm({
-            title: "Regenerate all assets?",
-            body: "This regenerates every scene image and narration clip into a local draft preview.",
-            details: [
-              "Costs OpenRouter image generation for every scene.",
-              "Costs OpenRouter TTS for every scene.",
-              "Rebuilds a local preview video without uploading it to S3.",
-              "Save uploads the accepted assets; discard deletes the local draft.",
-              "Use resume/re-render instead for caption, edit FX, outro, or layout-only changes.",
-            ],
-            confirmLabel: "Regenerate all assets",
-            variant: "destructive",
-            onConfirm: () => run(() => regenerateReel(reelKey, "assets")),
-          })
-        }
-      >
-        <Wand2 size={15} /> Regenerate all assets ($)
-      </Button>
+      {!isGameplay ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
+          disabled={busy}
+          onClick={() =>
+            requestConfirm({
+              title: "Regenerate all assets?",
+              body: "This regenerates every scene image and narration clip into a local draft preview.",
+              details: [
+                "Costs OpenRouter image generation for every scene.",
+                "Costs OpenRouter TTS for every scene.",
+                "Rebuilds a local preview video without uploading it to S3.",
+                "Save uploads the accepted assets; discard deletes the local draft.",
+                "Use resume/re-render instead for caption, edit FX, outro, or layout-only changes.",
+              ],
+              confirmLabel: "Regenerate all assets",
+              variant: "destructive",
+              onConfirm: () => run(() => regenerateReel(reelKey, "assets")),
+            })
+          }
+        >
+          <Wand2 size={15} /> Regenerate all assets ($)
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -2235,6 +2456,7 @@ function CaptionEditor({
     return () => ro.disconnect();
   }, []);
 
+  // Image reels use a scene still; gameplay has no stills — solid black fallback.
   const bg = reel.scenes?.find((s) => s.assetUrl)?.assetUrl;
   const set = <K extends keyof typeof style>(k: K, v: (typeof style)[K]) =>
     setStyle((s) => ({ ...s, [k]: v }));
@@ -2489,7 +2711,12 @@ function CaptionEditor({
           })
         }
       >
-        <RefreshCw size={15} /> Apply captions{reel.outputUrl ? " & re-render" : ""}
+        <RefreshCw size={15} />{" "}
+        {reel.outputUrl
+          ? reel.strategy === "gameplay_overlay"
+            ? "Apply captions & re-render (re-TTS)"
+            : "Apply captions & re-render"
+          : "Apply captions"}
       </Button>
     </div>
   );
