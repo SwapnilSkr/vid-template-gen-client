@@ -66,18 +66,10 @@ import { ConfirmDialog, type ConfirmDialogAction } from "@/components/ui/confirm
 import { Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { REEL_ACTIVE_STATUSES, reelNeedsPolling } from "@/utils/reel";
 
 const route = getRouteApi("/studio/$id/thumbnail");
 
-const ACTIVE: Reel["status"][] = [
-  "pending",
-  "planning",
-  "generating_assets",
-  "generating_audio",
-  "aligning",
-  "rendering",
-  "uploading",
-];
 
 const AI_PROMPT_CHIPS = [
   "close-up face, shocked expression",
@@ -148,11 +140,16 @@ export function ThumbnailStudioScreen() {
     void refresh();
   }, [refresh]);
 
+  const needsPoll = reelNeedsPolling(reel);
   useEffect(() => {
-    if (!reel || !ACTIVE.includes(reel.status)) return;
-    const t = setInterval(() => void refresh(), 4000);
-    return () => clearInterval(t);
-  }, [reel, refresh]);
+    if (needsPoll) {
+      void refresh();
+      const t = setInterval(() => void refresh(), 4000);
+      return () => clearInterval(t);
+    }
+    const settle = setTimeout(() => void refresh(), 2000);
+    return () => clearTimeout(settle);
+  }, [needsPoll, refresh]);
 
   // ---- fonts: inject @font-face so the canvas matches the bundled faces ----
   useEffect(() => {
@@ -215,7 +212,11 @@ export function ThumbnailStudioScreen() {
       }
     }
 
-    const fresh = defaultDoc("16:9", defaultTitleText(reel));
+    // Gameplay / Shorts reels default to vertical — 16:9 customs are often
+    // replaced by YouTube's auto 4:5 crop on mobile browse surfaces.
+    const defaultAspect: ThumbAspect =
+      reel.strategy === "gameplay_overlay" ? "9:16" : "16:9";
+    const fresh = defaultDoc(defaultAspect, defaultTitleText(reel));
     if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
       fresh.background.sourceType = "frame";
     }
@@ -558,7 +559,7 @@ export function ThumbnailStudioScreen() {
     );
   }
 
-  const isGenerating = ACTIVE.includes(reel.status);
+  const isGenerating = REEL_ACTIVE_STATUSES.includes(reel.status);
   const hasDraft = Boolean(reel.thumbnailDraft);
   const savedThumbnailUrl = reel.review?.thumbnailUrl;
   const disableEdits = busy || isGenerating;
@@ -910,8 +911,8 @@ export function ThumbnailStudioScreen() {
                       history.commit({ ...doc, aspectRatio: event.target.value as ThumbAspect })
                     }
                   >
-                    <option value="16:9">16:9 — YouTube</option>
-                    <option value="9:16">9:16 — Shorts</option>
+                    <option value="9:16">9:16 — Shorts shelf / search</option>
+                    <option value="16:9">16:9 — classic YouTube</option>
                     <option value="1:1">1:1 — Square</option>
                   </Select>
                 </div>

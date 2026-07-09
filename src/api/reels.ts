@@ -170,6 +170,8 @@ export interface Reel {
     channelLabel?: string;
     thumbnailStatus?: "pending" | "uploaded" | "missing" | "failed";
     thumbnailError?: string;
+    /** Whether Shorts vertical cover (oar2) changed after custom thumb upload. */
+    shortsCoverStatus?: "applied" | "unchanged" | "unknown";
     publishedAt?: string;
   };
   seriesId?: string;

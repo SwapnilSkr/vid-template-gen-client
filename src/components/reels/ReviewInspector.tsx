@@ -704,10 +704,20 @@ function ReviewInspectorForm({
                     <div>
                       Thumbnail:{" "}
                       {reel.youtube.thumbnailStatus === "uploaded"
-                        ? "uploaded"
+                        ? "custom image uploaded"
                         : reel.youtube.thumbnailStatus === "failed"
                           ? "not uploaded"
                           : reel.youtube.thumbnailStatus}
+                    </div>
+                  ) : null}
+                  {reel.youtube.shortsCoverStatus ? (
+                    <div>
+                      Shorts cover:{" "}
+                      {reel.youtube.shortsCoverStatus === "applied"
+                        ? "vertical shelf updated"
+                        : reel.youtube.shortsCoverStatus === "unchanged"
+                          ? "auto frame kept — set cover in YouTube Studio"
+                          : "unverified"}
                     </div>
                   ) : null}
                   {reel.youtube.thumbnailError ? (
