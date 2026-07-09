@@ -224,6 +224,7 @@ export interface RedditStoryPayload {
   genre?: string;
   subreddit?: string;
   author?: string;
+  cardUsername?: string;
   upvotes?: number;
   comments?: number;
   ageHours?: number;
@@ -561,6 +562,11 @@ export async function listFonts(): Promise<FontOption[]> {
   return request<FontOption[]>("/fonts");
 }
 
+/** Absolute URL to a bundled font file (for @font-face in Thumbnail Studio). */
+export function fontFileUrl(file: string): string {
+  return apiUrl(`/fonts/${encodeURIComponent(file)}`);
+}
+
 export interface CustomThumbnailInput {
   atSeconds: number;
   sourceType?: "frame" | "scene";
@@ -678,6 +684,7 @@ export interface ReelSettingsInput {
   imageModel?: string;
   horrorAudioKey?: string;
   horrorReferenceId?: string;
+  gameplayKey?: string;
   outroChannelId?: string;
   outro?: OutroSettings;
   voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
@@ -691,6 +698,20 @@ export async function updateReelSettings(id: string, patch: ReelSettingsInput): 
 
 export async function updateCaptions(id: string, patch: CaptionStyle): Promise<Reel> {
   return request<Reel>(`/reels/${id}/captions`, { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export interface RedditCardInput {
+  title?: string;
+  subreddit?: string;
+  cardUsername?: string;
+  author?: string;
+  ageHours?: number;
+  upvotes?: number;
+  comments?: number;
+}
+
+export async function updateRedditCard(id: string, patch: RedditCardInput): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/reddit-card`, { method: "PUT", body: JSON.stringify(patch) });
 }
 
 /** Re-render with caption style, upload to S3, and delete the previous output video. */
