@@ -15,6 +15,8 @@ interface VoiceVariantsPanelProps {
   reel: Reel;
   reelId: string;
   onRefresh: () => void | Promise<void>;
+  /** Optional: preview a ready variant in the program monitor without promoting. */
+  onPreviewVariant?: (videoUrl: string | undefined) => void;
 }
 
 /** Compare re-narrated voice takes (different OpenRouter TTS model/voice, same
@@ -23,6 +25,7 @@ export function VoiceVariantsPanel({
   reel,
   reelId,
   onRefresh,
+  onPreviewVariant,
 }: VoiceVariantsPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -55,6 +58,7 @@ export function VoiceVariantsPanel({
     setBusy(true);
     try {
       await promoteVoiceVariant(reelId, variantId);
+      onPreviewVariant?.(undefined);
       await onRefresh();
     } catch (err) {
       setError(
@@ -110,60 +114,78 @@ export function VoiceVariantsPanel({
 
       <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
         Re-narrate the full video with up to five voices, compare previews, then
-        promote the take you want. Per-scene audio changes use the Audio button
-        on each scene card.
+        click <span className="font-medium text-foreground">Use in studio</span>{" "}
+        to replace the program monitor output. Per-scene audio changes use the
+        Audio button on each scene card.
       </p>
 
       {variants.length ? (
         <div className="grid gap-2">
-          {variants.map((variant) => (
-            <div
-              key={variant.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/60 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-medium text-foreground">
-                  {variant.label ||
-                    `${variant.model.split("/").pop()} / ${variant.voice}`}
+          {variants.map((variant) => {
+            const isActive =
+              variant.status === "ready" &&
+              Boolean(variant.videoUrl) &&
+              reel.outputUrl === variant.videoUrl;
+            return (
+              <div
+                key={variant.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/60 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-medium text-foreground">
+                    {variant.label ||
+                      `${variant.model.split("/").pop()} / ${variant.voice}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground/80">
+                    {variant.status === "pending" && "Rendering…"}
+                    {variant.status === "ready" &&
+                      (isActive ? "Active in studio" : "Ready — not applied yet")}
+                    {variant.status === "failed" && (variant.error || "Failed")}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground/80">
-                  {variant.status === "pending" && "Rendering…"}
-                  {variant.status === "ready" &&
-                    (reel.outputUrl === variant.videoUrl ? "Active" : "Ready")}
-                  {variant.status === "failed" && (variant.error || "Failed")}
+                <div className="flex flex-wrap items-center gap-2">
+                  {variant.status === "pending" ? (
+                    <Loader2 className="animate-spin text-muted-foreground" size={16} />
+                  ) : null}
+                  {variant.status === "ready" && variant.videoUrl ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => onPreviewVariant?.(variant.videoUrl)}
+                      aria-label="Preview voice variant in studio"
+                    >
+                      <Play size={14} />
+                      Preview
+                    </Button>
+                  ) : null}
+                  {variant.status === "ready" && !isActive ? (
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void promoteVariant(variant.id)}
+                    >
+                      {busy ? (
+                        <Loader2 className="animate-spin" size={14} />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                      Use in studio
+                    </Button>
+                  ) : null}
+                  {isActive ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-success/40 bg-success/10 px-2 py-1 text-xs font-medium text-success">
+                      <CheckCircle2 size={12} />
+                      In studio
+                    </span>
+                  ) : null}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {variant.status === "pending" ? (
-                  <Loader2 className="animate-spin text-muted-foreground" size={16} />
-                ) : null}
-                {variant.status === "ready" && variant.videoUrl ? (
-                  <a
-                    href={variant.videoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="grid size-8 place-items-center rounded-md border border-border bg-secondary text-foreground hover:bg-accent"
-                    aria-label="Preview voice variant"
-                  >
-                    <Play size={14} />
-                  </a>
-                ) : null}
-                {variant.status === "ready" &&
-                reel.outputUrl !== variant.videoUrl ? (
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="icon"
-                    disabled={busy}
-                    onClick={() => void promoteVariant(variant.id)}
-                    aria-label="Use this voice"
-                  >
-                    <CheckCircle2 size={14} />
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
