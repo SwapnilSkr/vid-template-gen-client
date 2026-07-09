@@ -705,6 +705,11 @@ export async function regenerateReel(id: string, mode: "render_only" | "assets")
   return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
 }
 
+/** Resume a failed produce job — reuses S3 scene assets, re-runs render→upload. */
+export async function resumeFailedReel(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/resume`, { method: "POST" });
+}
+
 export async function saveEditDraft(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/edit-draft/save`, { method: "POST" });
 }

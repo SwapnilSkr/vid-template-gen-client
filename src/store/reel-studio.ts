@@ -15,6 +15,7 @@ import {
   promoteVoiceVariant,
   purgeFailedReels,
   publishReel,
+  resumeFailedReel,
   revoiceReel,
   startYouTubeChannelConnect,
   updateReview,
@@ -69,6 +70,7 @@ interface ReelStudioState {
   deleteSelected: () => Promise<void>;
   deleteById: (id: string) => Promise<void>;
   purgeFailed: () => Promise<void>;
+  resumeFailed: (id?: string) => Promise<void>;
   revoice: (variants: RevoiceVariantInput[]) => Promise<void>;
   promoteVariant: (variantId: string) => Promise<void>;
   setPreviewTimeSeconds: (seconds: number) => void;
@@ -300,6 +302,27 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to purge failed reels", loading: false });
     }
+  },
+
+  async resumeFailed(id) {
+    const targetId = id ?? get().selectedId;
+    if (!targetId) return;
+    set({ loading: true, error: undefined });
+    try {
+      const updated = await resumeFailedReel(targetId);
+      set((state) => ({
+        loading: false,
+        reels: state.reels.map((item) => (reelId(item) === targetId ? updated : item)),
+        selectedId: targetId,
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to resume reel",
+        loading: false,
+      });
+      return;
+    }
+    await get().pollSelected();
   },
 
   async revoice(variants) {

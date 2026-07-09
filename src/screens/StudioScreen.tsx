@@ -42,6 +42,7 @@ import {
   regenerateScene,
   removeScene,
   replanReel,
+  resumeFailedReel,
   discardEditDraft,
   saveEditDraft,
   updateCaptions,
@@ -374,6 +375,31 @@ export function StudioScreen() {
       ) : null}
 
       <EditDraftBanner reel={reel} busy={busy} run={run} />
+
+      {reel.status === "failed" ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="min-w-0">
+            <div className="font-semibold">Produce failed</div>
+            <div className="text-xs text-destructive/80">
+              {reel.error?.trim() || "Unknown error."} Scene images and narration
+              already on S3 are kept — resume re-runs render only.
+            </div>
+          </div>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(() => resumeFailedReel(id))}
+            className="shrink-0"
+          >
+            {busy ? (
+              <Loader2 className="animate-spin" size={15} />
+            ) : (
+              <RefreshCw size={15} />
+            )}
+            Resume (reuse assets)
+          </Button>
+        </div>
+      ) : null}
 
       <GateBanner
         reel={reel}
@@ -1696,18 +1722,30 @@ function RegeneratePanel({
   const reelKey = reel._id ?? reel.id ?? "";
   const canRegen = reel.status === "completed" || reel.status === "failed";
   if (!canRegen) return null;
+  const isFailed = reel.status === "failed";
   return (
     <div className="grid gap-2">
       <PanelTitle className="text-foreground">Render Queue</PanelTitle>
-      <Button
-        type="button"
-        variant="outline"
-        className="border-border bg-secondary text-foreground hover:bg-accent"
-        disabled={busy}
-        onClick={() => void run(() => regenerateReel(reelKey, "render_only"))}
-      >
-        <RefreshCw size={15} /> Re-render (reuse assets — free)
-      </Button>
+      {isFailed ? (
+        <Button
+          type="button"
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          disabled={busy}
+          onClick={() => void run(() => resumeFailedReel(reelKey))}
+        >
+          <RefreshCw size={15} /> Resume failed job (reuse assets — free)
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="border-border bg-secondary text-foreground hover:bg-accent"
+          disabled={busy}
+          onClick={() => void run(() => regenerateReel(reelKey, "render_only"))}
+        >
+          <RefreshCw size={15} /> Re-render (reuse assets — free)
+        </Button>
+      )}
       <Button
         type="button"
         variant="outline"
@@ -1722,7 +1760,7 @@ function RegeneratePanel({
               "Costs OpenRouter TTS for every scene.",
               "Rebuilds a local preview video without uploading it to S3.",
               "Save uploads the accepted assets; discard deletes the local draft.",
-              "Use re-render instead for caption, edit FX, outro, or layout-only changes.",
+              "Use resume/re-render instead for caption, edit FX, outro, or layout-only changes.",
             ],
             confirmLabel: "Regenerate all assets",
             variant: "destructive",

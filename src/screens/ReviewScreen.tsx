@@ -1,5 +1,5 @@
 import { getRouteApi } from "@tanstack/react-router";
-import { Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Reel } from "@/api/reels";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -73,6 +73,8 @@ export function ReviewScreen() {
   );
   const review = draftReview ?? selected?.review;
   const failedCount = reels.filter((reel) => reel.status === "failed").length;
+  const resumeFailed = useReelStudio((state) => state.resumeFailed);
+  const selectedFailed = selected?.status === "failed";
 
   return (
     <section className="min-w-0 overflow-x-clip px-4 py-4 sm:px-5 lg:px-6">
@@ -87,29 +89,43 @@ export function ReviewScreen() {
       {status === "rejected" && failedCount > 0 ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5">
           <span className="text-xs font-medium text-destructive">
-            {failedCount} failed reel{failedCount === 1 ? "" : "s"} can be
-            deleted with recorded S3 assets.
+            {failedCount} failed reel{failedCount === 1 ? "" : "s"}
+            {selectedFailed
+              ? " — resume reuses paid assets; purge deletes everything."
+              : " can be resumed (reuse assets) or purged."}
           </span>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={loading}
-            onClick={() =>
-              setConfirmAction({
-                title: "Purge failed reels?",
-                body: "Delete all failed reels and their recorded S3 assets.",
-                details: [
-                  "Global gameplay clips and voice samples will not be touched.",
-                ],
-                confirmLabel: "Purge failed",
-                variant: "destructive",
-                onConfirm: () => purgeFailed(),
-              })
-            }
-          >
-            <Trash2 size={16} />
-            Purge Failed
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedFailed && selectedId ? (
+              <Button
+                type="button"
+                disabled={loading}
+                onClick={() => void resumeFailed(selectedId)}
+              >
+                <RefreshCw size={16} />
+                Resume selected
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={loading}
+              onClick={() =>
+                setConfirmAction({
+                  title: "Purge failed reels?",
+                  body: "Delete all failed reels and their recorded S3 assets.",
+                  details: [
+                    "Global gameplay clips and voice samples will not be touched.",
+                  ],
+                  confirmLabel: "Purge failed",
+                  variant: "destructive",
+                  onConfirm: () => purgeFailed(),
+                })
+              }
+            >
+              <Trash2 size={16} />
+              Purge Failed
+            </Button>
+          </div>
         </div>
       ) : null}
 
