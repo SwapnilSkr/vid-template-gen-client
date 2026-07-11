@@ -1171,11 +1171,22 @@ function ConfirmModal({
     await action.onConfirm();
     onClose();
   };
+  const costLabel =
+    action.costTone === "free"
+      ? "Free · no OpenRouter spend"
+      : action.costTone === "paid"
+        ? "Uses OpenRouter credits"
+        : action.costTone === "warm"
+          ? "Local compute only"
+          : undefined;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4">
       <div className="grid w-full max-w-md gap-3 rounded-lg border border-border bg-card p-4 shadow-pop">
         <div className="flex items-start justify-between gap-3">
-          <div className="grid gap-1">
+          <div className="grid gap-1.5">
+            {costLabel && action.costTone ? (
+              <CostChip label={costLabel} tone={action.costTone} />
+            ) : null}
             <strong className="text-base text-foreground">{action.title}</strong>
             <p className="m-0 text-sm leading-relaxed text-muted-foreground">
               {action.body}
@@ -1433,6 +1444,7 @@ function RedditSourcePanel({
           : missing > 0
             ? `Spend credits (~${missing} TTS) & re-render`
             : "Re-render title card",
+        costTone: freeComposite || missing === 0 ? "free" : "paid",
         onConfirm: () =>
           run(async () => {
             await updateRedditCard(reelKey, {
@@ -1465,16 +1477,22 @@ function RedditSourcePanel({
     );
   }
 
+  const titleChangedPreview = title.trim() !== (story?.title ?? reel.title ?? "").trim();
+  const bakeIntent = !titleChangedPreview && gameplayNarrationCacheReady(reel) ? "composite" : "full";
+
   return (
     <div className="grid gap-3">
       <PanelTitle className="text-foreground">Title card</PanelTitle>
       <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
-        Shown over gameplay while the title is spoken. Sentence scenes below are the spoken body.
-        Saving only updates metadata — bake into the video with re-render.
+        Shown over gameplay while the title is spoken. Saving metadata is free —
+        baking into the video reuses cached narration when possible.
       </p>
+
+      <RenderCacheStatus reel={reel} intent={bakeIntent} />
 
       <Label className="gap-1 text-xs text-muted-foreground">
         Title
+        <span className="ml-1 font-normal text-muted-foreground/70">(spoken · may cost TTS if changed)</span>
         <Input
           value={title}
           disabled={busy}
@@ -1484,6 +1502,7 @@ function RedditSourcePanel({
       <div className="grid grid-cols-2 gap-2">
         <Label className="gap-1 text-xs text-muted-foreground">
           Subreddit
+          <span className="ml-1 font-normal text-muted-foreground/70">(visual only)</span>
           <Input
             value={subreddit}
             disabled={busy}
@@ -1493,6 +1512,7 @@ function RedditSourcePanel({
         </Label>
         <Label className="gap-1 text-xs text-muted-foreground">
           Username
+          <span className="ml-1 font-normal text-muted-foreground/70">(visual only)</span>
           <Input
             value={cardUsername}
             disabled={busy}
@@ -1533,6 +1553,9 @@ function RedditSourcePanel({
           />
         </Label>
       </div>
+      <p className="m-0 text-[10px] text-muted-foreground/70">
+        Age, upvotes, and comments are visual-only — baking them never re-TTS.
+      </p>
       <div className="grid gap-2">
         <Button
           type="button"
@@ -1557,10 +1580,10 @@ function RedditSourcePanel({
             {cardDirty
               ? title.trim() === (story?.title ?? reel.title ?? "").trim() &&
                 gameplayNarrationCacheReady(reel)
-                ? "Save & bake card (free)"
+                ? "Save & bake card · free"
                 : "Save & re-render video"
               : gameplayNarrationCacheReady(reel)
-                ? "Re-bake title card (free)"
+                ? "Re-bake title card · free"
                 : "Re-render title card into video"}
           </Button>
         ) : null}
@@ -2214,9 +2237,15 @@ function RegeneratePanel({
   const isFailed = reel.status === "failed";
   const isGameplay = reel.strategy === "gameplay_overlay";
   const costsCredits = gameplayRerenderCostsCredits(reel);
+  const fullCost = describeRenderCost(reel, "full");
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2.5">
       <PanelTitle className="text-foreground">Render Queue</PanelTitle>
+      <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+        Edits are free until you bake. Caches below decide whether a bake spends
+        credits or only local compute.
+      </p>
+      <RenderCacheStatus reel={reel} intent="full" />
       {isFailed ? (
         <Button
           type="button"
@@ -2225,26 +2254,21 @@ function RegeneratePanel({
           onClick={() =>
             requestConfirm({
               title: "Resume failed job?",
-              body: costsCredits
-                ? "Re-runs TTS for uncached segments + gameplay composite."
-                : "Reuses cached narration / scene assets, then re-renders.",
+              body: fullCost.detail,
               details: costsCredits
                 ? [
-                    "OpenRouter narration credits will be charged for missing segments.",
+                    `About ${gameplayMissingTtsSegmentCount(reel)} narration segment(s) may be charged.`,
                     "Spend is added to this reel's cost breakdown when the job finishes.",
                   ]
                 : ["No new image/TTS spend if assets are already on S3."],
-              confirmLabel: "Resume",
+              confirmLabel: costsCredits ? "Resume · spend credits" : "Resume · free",
+              costTone: fullCost.tone,
               onConfirm: () => run(() => resumeFailedReel(reelKey), { requireFfmpeg: true }),
             })
           }
         >
           <RefreshCw size={15} />{" "}
-          {isGameplay
-            ? costsCredits
-              ? "Resume failed job (TTS + render)"
-              : "Resume failed job (reuse narration)"
-            : "Resume failed job (reuse assets — free)"}
+          {costsCredits ? "Resume failed job · credits" : "Resume failed job · free"}
         </Button>
       ) : (
         <Button
@@ -2255,30 +2279,40 @@ function RegeneratePanel({
           onClick={() =>
             requestConfirm({
               title: costsCredits ? "Re-render gameplay reel?" : "Re-render reel?",
-              body: costsCredits
-                ? "Uncached narration segments will spend OpenRouter TTS, then the reel is re-composited."
-                : "Reuses existing narration/images (no OpenRouter spend), then re-renders locally.",
+              body: fullCost.detail,
               details: costsCredits
                 ? [
-                    "OpenRouter narration credits will be charged for missing segments only.",
-                    "Spend is added to this reel's cost breakdown when the job finishes.",
-                    "A job already in progress cannot be stacked — wait for it to finish.",
+                    `About ${gameplayMissingTtsSegmentCount(reel)} narration segment(s) may be charged.`,
+                    "After this run, caption/card/outro edits can stay free.",
                   ]
                 : [
-                    "Free unless look/voice changes cleared assets (then those regenerate).",
-                    "A job already in progress cannot be stacked — wait for it to finish.",
+                    "OpenRouter image/TTS spend is skipped.",
+                    "A job already in progress cannot be stacked.",
                   ],
-              confirmLabel: costsCredits ? "Spend credits & re-render" : "Re-render",
-              onConfirm: () => run(() => regenerateReel(reelKey, "render_only"), { requireFfmpeg: true }),
+              confirmLabel: costsCredits
+                ? `Spend credits (~${gameplayMissingTtsSegmentCount(reel)} TTS)`
+                : "Re-render · free",
+              costTone: fullCost.tone,
+              onConfirm: () =>
+                run(
+                  () =>
+                    regenerateReel(
+                      reelKey,
+                      canCompositeOnlyRerender(reel) ? "composite_only" : "render_only"
+                    ),
+                  { requireFfmpeg: true }
+                ),
             })
           }
         >
           <RefreshCw size={15} />{" "}
-          {isGameplay
-            ? costsCredits
-              ? "Re-render (TTS for uncached + composite)"
-              : "Re-render (reuse narration — free)"
-            : "Re-render (reuse assets — free)"}
+          {costsCredits
+            ? `Re-render · ~${gameplayMissingTtsSegmentCount(reel)} TTS`
+            : isGameplay
+              ? "Re-render · free (narration cached)"
+              : canCompositeOnlyRerender(reel)
+                ? "Re-render · free (assembly cached)"
+                : "Re-render · free (assets cached)"}
         </Button>
       )}
       {!isGameplay ? (
