@@ -74,6 +74,7 @@ import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { EditEffectsControls } from "@/components/reels/EditEffectsControls";
 import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
+import { CostChip, RenderCacheStatus, describeRenderCost } from "@/components/reels/RenderCostHint";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -92,6 +93,10 @@ import {
 } from "@/utils/caption-ass";
 import {
   gameplayRerenderCostsCredits,
+  canOutroOnlyRerender,
+  canCompositeOnlyRerender,
+  gameplayMissingTtsSegmentCount,
+  gameplayNarrationCacheReady,
   REEL_ACTIVE_STATUSES,
   reelNeedsPolling,
   reelStudioLocked,
@@ -160,6 +165,8 @@ interface ConfirmAction {
   details?: string[];
   confirmLabel: string;
   variant?: "default" | "destructive";
+  /** Free / credits / compute — shown as a chip on the confirm modal. */
+  costTone?: "free" | "paid" | "warm";
   onConfirm: () => void | Promise<void>;
 }
 
@@ -320,11 +327,14 @@ export function StudioScreen() {
   // A look/voice change (art, image model, narration voice, voice FX) clears the
   // affected assets so the next produce regenerates them — deferred by design, so
   // it's easy to miss. Surface it on an already-produced reel with a one-click apply.
-  // Gameplay reels never store per-scene stills/narration URLs (TTS is inline at
-  // render), so missing assetUrl/audioUrl is normal — not a pending look change.
+  // Image reels: missing still/audio means look/voice cleared assets.
+  // Gameplay: sentence audioUrls are cached after the first successful produce —
+  // missing ones mean TTS will run for those segments on the next render.
   const clearedImages =
     !isGameplay && scenes.some((s) => !s.assetUrl && !s.isHero);
-  const clearedAudio = !isGameplay && scenes.some((s) => !s.audioUrl);
+  const clearedAudio = isGameplay
+    ? gameplayRerenderCostsCredits(reel)
+    : scenes.some((s) => !s.audioUrl);
   const pendingRegen =
     !isGameplay &&
     !isGenerating &&
@@ -454,13 +464,17 @@ export function StudioScreen() {
                 setConfirmAction({
                   title: "Resume failed job?",
                   body: isGameplay
-                    ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
+                    ? gameplayRerenderCostsCredits(reel)
+                      ? "Re-runs TTS for uncached segments + gameplay composite."
+                      : "Reuses cached narration, then re-composites over gameplay."
                     : "Reuses scene images and narration already on S3, then re-renders.",
                   details: isGameplay
-                    ? [
-                        "Gameplay reels re-narrate every sentence on each produce run.",
-                        "Cost is added to this reel's cost breakdown when the job finishes.",
-                      ]
+                    ? gameplayRerenderCostsCredits(reel)
+                      ? [
+                          "OpenRouter narration credits will be charged for missing segments.",
+                          "After this run, later re-renders reuse cached audio.",
+                        ]
+                      : ["Narration audio is already cached — no OpenRouter TTS."]
                     : ["No new image/TTS spend if assets are already on S3."],
                   confirmLabel: "Resume",
                   onConfirm: () => run(() => resumeFailedReel(id), { requireFfmpeg: true }),
@@ -1388,16 +1402,37 @@ function RedditSourcePanel({
     reel.status === "completed" || reel.status === "failed";
 
   async function saveTitleCard(andRerender: boolean) {
+    const titleChanged = title.trim() !== (story?.title ?? reel.title ?? "").trim();
+    const visualOnly = cardDirty && !titleChanged;
+    const freeComposite = visualOnly && gameplayNarrationCacheReady(reel);
+
     if (andRerender) {
+      const missing = titleChanged
+        ? Math.max(1, gameplayMissingTtsSegmentCount({ ...reel, titleAudioUrl: undefined }))
+        : gameplayMissingTtsSegmentCount(reel);
       requestConfirm({
-        title: "Save title card & re-render?",
-        body: "Gameplay re-renders re-run OpenRouter TTS for the title and every sentence, then rebuild the video.",
-        details: [
-          "OpenRouter narration credits will be charged.",
-          "Spend is added to this reel's cost breakdown when the job finishes.",
-          "A job already in progress cannot be stacked.",
-        ],
-        confirmLabel: "Spend credits & re-render",
+        title: freeComposite ? "Bake title card (free)?" : "Save title card & re-render?",
+        body: freeComposite
+          ? "Visual card fields only. Reuses cached narration — no OpenRouter TTS."
+          : gameplayRerenderCostsCredits(reel) || titleChanged
+            ? `Re-composites the gameplay reel. About ${missing} narration segment(s) may spend OpenRouter TTS.`
+            : "Reuses cached title and sentence narration. Only the Reddit card overlay and composite are rebuilt.",
+        details: freeComposite
+          ? [
+              "Subreddit, username, upvotes, comments, and age do not re-TTS.",
+              "Spoken title text is unchanged.",
+            ]
+          : titleChanged
+            ? [
+                "Title text changed — title narration will be regenerated.",
+                "Unchanged sentence audio is reused when cached.",
+              ]
+            : ["Narration audio is already cached on this reel."],
+        confirmLabel: freeComposite
+          ? "Bake card (free)"
+          : missing > 0
+            ? `Spend credits (~${missing} TTS) & re-render`
+            : "Re-render title card",
         onConfirm: () =>
           run(async () => {
             await updateRedditCard(reelKey, {
@@ -1408,7 +1443,12 @@ function RedditSourcePanel({
               upvotes: parseOptionalInt(upvotes),
               comments: parseOptionalInt(comments),
             });
-            return regenerateReel(reelKey, "render_only");
+            return regenerateReel(
+              reelKey,
+              freeComposite || (!titleChanged && gameplayNarrationCacheReady(reel))
+                ? "composite_only"
+                : "render_only"
+            );
           }),
       });
       return;
@@ -1515,8 +1555,13 @@ function RedditSourcePanel({
               <RefreshCw size={15} />
             )}
             {cardDirty
-              ? "Save & re-render video"
-              : "Re-render title card into video"}
+              ? title.trim() === (story?.title ?? reel.title ?? "").trim() &&
+                gameplayNarrationCacheReady(reel)
+                ? "Save & bake card (free)"
+                : "Save & re-render video"
+              : gameplayNarrationCacheReady(reel)
+                ? "Re-bake title card (free)"
+                : "Re-render title card into video"}
           </Button>
         ) : null}
       </div>
@@ -2181,11 +2226,11 @@ function RegeneratePanel({
             requestConfirm({
               title: "Resume failed job?",
               body: costsCredits
-                ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
-                : "Reuses scene images and narration already on S3, then re-renders.",
+                ? "Re-runs TTS for uncached segments + gameplay composite."
+                : "Reuses cached narration / scene assets, then re-renders.",
               details: costsCredits
                 ? [
-                    "Gameplay reels re-narrate every sentence on each produce run.",
+                    "OpenRouter narration credits will be charged for missing segments.",
                     "Spend is added to this reel's cost breakdown when the job finishes.",
                   ]
                 : ["No new image/TTS spend if assets are already on S3."],
@@ -2196,7 +2241,9 @@ function RegeneratePanel({
         >
           <RefreshCw size={15} />{" "}
           {isGameplay
-            ? "Resume failed job (re-run TTS + render)"
+            ? costsCredits
+              ? "Resume failed job (TTS + render)"
+              : "Resume failed job (reuse narration)"
             : "Resume failed job (reuse assets — free)"}
         </Button>
       ) : (
@@ -2209,11 +2256,11 @@ function RegeneratePanel({
             requestConfirm({
               title: costsCredits ? "Re-render gameplay reel?" : "Re-render reel?",
               body: costsCredits
-                ? "This re-runs OpenRouter TTS for the title + every sentence, then composites over gameplay."
-                : "Reuses existing scene images and narration (no OpenRouter spend), then re-renders locally.",
+                ? "Uncached narration segments will spend OpenRouter TTS, then the reel is re-composited."
+                : "Reuses existing narration/images (no OpenRouter spend), then re-renders locally.",
               details: costsCredits
                 ? [
-                    "OpenRouter narration credits will be charged.",
+                    "OpenRouter narration credits will be charged for missing segments only.",
                     "Spend is added to this reel's cost breakdown when the job finishes.",
                     "A job already in progress cannot be stacked — wait for it to finish.",
                   ]
@@ -2228,7 +2275,9 @@ function RegeneratePanel({
         >
           <RefreshCw size={15} />{" "}
           {isGameplay
-            ? "Re-render (re-runs TTS + gameplay composite)"
+            ? costsCredits
+              ? "Re-render (TTS for uncached + composite)"
+              : "Re-render (reuse narration — free)"
             : "Re-render (reuse assets — free)"}
         </Button>
       )}
@@ -2462,16 +2511,23 @@ function EffectsPanel({
         onClick={() =>
           requestConfirm({
             title: "Apply effects & re-render?",
-            body: "Render-only pass over the existing video. No OpenRouter image/TTS spend.",
+            body: canCompositeOnlyRerender(reel)
+              ? "Re-applies captions + effects from the cached assembly (skips Ken Burns). No OpenRouter spend."
+              : "Render-only pass. Reuses scene stills and narration; first run builds the assembly cache.",
             details: [
-              "Reuses every scene still and narration clip.",
+              canCompositeOnlyRerender(reel)
+                ? "Uses assemblyVideoUrl — no scene re-assembly."
+                : "Reuses every scene still and narration clip.",
               "A job already in progress cannot be stacked.",
             ],
             confirmLabel: "Re-render (free)",
             onConfirm: () =>
               run(async () => {
                 await updateReelSettings(reelKey, { editEffects: fx });
-                return regenerateReel(reelKey, "render_only");
+                return regenerateReel(
+                  reelKey,
+                  canCompositeOnlyRerender(reel) ? "composite_only" : "render_only"
+                );
               }),
           })
         }
@@ -2479,8 +2535,9 @@ function EffectsPanel({
         <RefreshCw size={15} /> Apply &amp; re-render (free)
       </Button>
       <p className="text-[11px] text-muted-foreground/80">
-        A cinematic finish over the whole reel. Render-only — reuses every
-        asset, no generation spend.
+        {canCompositeOnlyRerender(reel)
+          ? "Assembly cache hit — caption/FX pass only, then outro reuse."
+          : "A cinematic finish over the whole reel. Render-only — reuses every asset, no generation spend."}
       </p>
     </div>
   );
@@ -2643,28 +2700,40 @@ function OutroPanel({
         onClick={() =>
           requestConfirm({
             title: "Render outro draft?",
-            body: gameplayRerenderCostsCredits(reel)
-              ? "Gameplay re-render re-runs OpenRouter TTS for the whole reel (not just the outro), then rebuilds the video."
-              : "Rebuilds the outro narration/card and preview. Scene stills and body narration are reused.",
-            details: gameplayRerenderCostsCredits(reel)
+            body: canOutroOnlyRerender(reel)
+              ? "Appends a new outro onto the cached body video. Body narration is not rebuilt."
+              : gameplayRerenderCostsCredits(reel)
+                ? "No body cache yet — this rebuilds the reel. Missing narration segments will spend OpenRouter TTS."
+                : "Rebuilds the outro narration/card and preview. Scene stills and body narration are reused.",
+            details: canOutroOnlyRerender(reel)
               ? [
-                  "OpenRouter narration credits will be charged for the full gameplay re-TTS.",
-                  "Spend is added to this reel's cost breakdown when the job finishes.",
+                  "Only the branded outro clip is regenerated.",
+                  "Outro spoken line spends TTS only if that line (or brand) changed.",
                 ]
-              : [
-                  "Outro spoken line may spend a small OpenRouter TTS amount.",
-                  "Body scene assets are kept.",
-                ],
-            confirmLabel: gameplayRerenderCostsCredits(reel)
-              ? "Spend credits & re-render"
-              : "Render outro",
+              : gameplayRerenderCostsCredits(reel)
+                ? [
+                    "OpenRouter narration credits may be charged for uncached gameplay segments.",
+                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                  ]
+                : [
+                    "Outro spoken line may spend a small OpenRouter TTS amount.",
+                    "Body scene assets are kept.",
+                  ],
+            confirmLabel: canOutroOnlyRerender(reel)
+              ? "Render outro"
+              : gameplayRerenderCostsCredits(reel)
+                ? "Spend credits & re-render"
+                : "Render outro",
             onConfirm: () =>
               run(async () => {
                 await updateReelSettings(reelKey, {
                   outroChannelId,
                   outro: compactOutroSettings(outro),
                 });
-                return regenerateReel(reelKey, "render_only");
+                return regenerateReel(
+                  reelKey,
+                  canOutroOnlyRerender(reel) ? "outro_only" : "render_only"
+                );
               }),
           })
         }
@@ -2672,9 +2741,11 @@ function OutroPanel({
         <RefreshCw size={15} /> Render outro draft
       </Button>
       <p className="text-[11px] text-muted-foreground/80">
-        {gameplayRerenderCostsCredits(reel)
-          ? "Gameplay path re-narrates the full reel on re-render (OpenRouter TTS)."
-          : "Reuses all scene stills and narration. Only the outro narration, outro card, and preview video are rebuilt."}
+        {canOutroOnlyRerender(reel)
+          ? "Uses the cached body video — only the outro is rebuilt."
+          : gameplayRerenderCostsCredits(reel)
+            ? "Narration cache incomplete — first re-render may spend TTS, then later edits are cheap."
+            : "Reuses cached narration. Only the outro narration, outro card, and preview video are rebuilt."}
       </p>
     </div>
   );
@@ -3060,20 +3131,30 @@ function CaptionEditor({
             return;
           }
           const costsCredits = gameplayRerenderCostsCredits(reel);
+          const missing = gameplayMissingTtsSegmentCount(reel);
+          const freeComposite = canCompositeOnlyRerender(reel);
           requestConfirm({
             title: costsCredits
               ? "Apply captions & re-render (TTS)?"
               : "Apply captions & re-render?",
-            body: costsCredits
-              ? "Gameplay caption apply re-runs OpenRouter TTS for the full reel, then rebuilds captions."
-              : "Re-burns captions onto the existing video. Scene images and narration are reused.",
-            details: costsCredits
-              ? [
-                  "OpenRouter narration credits will be charged.",
-                  "Spend is added to this reel's cost breakdown when the job finishes.",
-                ]
-              : ["No OpenRouter image/TTS spend for image reels when assets already exist."],
-            confirmLabel: costsCredits ? "Spend credits & apply" : "Apply & re-render",
+            body: freeComposite
+              ? reel.strategy === "gameplay_overlay"
+                ? "Reuses cached narration and rebuilds captions over gameplay."
+                : "Re-burns captions from the cached assembly (skips Ken Burns). No OpenRouter spend."
+              : costsCredits
+                ? `Uncached narration segments will spend OpenRouter TTS (~${missing} segment(s)), then captions are rebuilt.`
+                : "Re-burns captions onto the existing video. Narration and images are reused.",
+            details: freeComposite
+              ? ["No OpenRouter image/TTS spend."]
+              : costsCredits
+                ? [
+                    `About ${missing} narration segment(s) may be charged.`,
+                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                  ]
+                : ["No OpenRouter image/TTS spend when narration/images already exist."],
+            confirmLabel: costsCredits
+              ? `Spend credits (~${missing} TTS) & apply`
+              : "Apply & re-render",
             onConfirm: () =>
               run(async () => {
                 const next = await applyCaptions(reelKey, burnStyle);
@@ -3085,9 +3166,11 @@ function CaptionEditor({
       >
         <RefreshCw size={15} />{" "}
         {reel.outputUrl
-          ? reel.strategy === "gameplay_overlay"
-            ? "Apply captions & re-render (re-TTS)"
-            : "Apply captions & re-render"
+          ? gameplayRerenderCostsCredits(reel)
+            ? `Apply captions & re-render (~${gameplayMissingTtsSegmentCount(reel)} TTS)`
+            : canCompositeOnlyRerender(reel)
+              ? "Apply captions & re-render (free)"
+              : "Apply captions & re-render"
           : "Apply captions"}
       </Button>
     </div>
