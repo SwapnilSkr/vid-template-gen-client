@@ -13,6 +13,10 @@ export function ConfirmModal({
   onClose: () => void;
 }) {
   if (!action) return null;
+  const dismiss = () => {
+    action.onCancel?.();
+    onClose();
+  };
   const confirm = async () => {
     await action.onConfirm();
     onClose();
@@ -43,7 +47,7 @@ export function ConfirmModal({
             size="icon"
             variant="ghost"
             disabled={busy}
-            onClick={onClose}
+            onClick={dismiss}
             className="text-muted-foreground hover:bg-accent"
           >
             <X size={16} />
@@ -64,7 +68,7 @@ export function ConfirmModal({
             type="button"
             variant="outline"
             disabled={busy}
-            onClick={onClose}
+            onClick={dismiss}
           >
             Cancel
           </Button>

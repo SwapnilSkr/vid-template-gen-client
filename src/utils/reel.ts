@@ -106,7 +106,7 @@ export function gameplayMissingTtsSegmentCount(reel?: Reel | null): number {
   }
   const partNumber = reel.partNumber ?? reel.redditStory?.partNumber ?? 1;
   const partCount = reel.partCount ?? reel.redditStory?.partCount ?? 1;
-  if (partNumber < partCount && !reel.partOutroAudioUrl) missing += 1;
+  if (partNumber < partCount && !reel.skipPartOutro && !reel.partOutroAudioUrl) missing += 1;
   return missing;
 }
 

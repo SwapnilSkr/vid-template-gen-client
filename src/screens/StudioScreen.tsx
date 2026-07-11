@@ -392,6 +392,8 @@ export function StudioScreen() {
       <GateBanner
         reel={reel}
         busy={studioLocked}
+        run={run}
+        requestConfirm={setConfirmAction}
         onApprove={() =>
           setConfirmAction({
             title:
@@ -402,9 +404,19 @@ export function StudioScreen() {
             details: [
               "Generates missing scene images with OpenRouter.",
               "Generates missing narration audio with OpenRouter TTS.",
-              "Renders captions, horror mix, edit FX, outro, and preview video after assets are ready.",
+              reel.skipPartOutro
+                ? "Part teaser skipped."
+                : reel.strategy === "gameplay_overlay" &&
+                    (reel.partNumber ?? reel.redditStory?.partNumber ?? 1) <
+                      (reel.partCount ?? reel.redditStory?.partCount ?? 1)
+                  ? "Includes part teaser (“Stay tuned…”)."
+                  : "",
+              reel.skipBrandedOutro
+                ? "Branded outro skipped."
+                : "Includes branded outro (channel card + subscribe TTS).",
+              "Renders captions, horror mix, edit FX, and preview video after assets are ready.",
               "Spend is recorded on this reel's cost breakdown when the job finishes.",
-            ],
+            ].filter(Boolean),
             confirmLabel: "Generate",
             onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
           })

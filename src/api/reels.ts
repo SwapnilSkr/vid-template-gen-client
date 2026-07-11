@@ -194,6 +194,10 @@ export interface Reel {
   horrorAudioKey?: string;
   outroChannelId?: string;
   outro?: OutroSettings;
+  /** Skip multi-part "Stay tuned for part N" (Reddit mid-series only). */
+  skipPartOutro?: boolean;
+  /** Skip branded channel end card + subscribe TTS. */
+  skipBrandedOutro?: boolean;
   imageModelOverride?: string;
   artStyleId?: string;
   presetId?: string;
@@ -874,6 +878,8 @@ export interface ReelSettingsInput {
   gameplayKey?: string;
   outroChannelId?: string;
   outro?: OutroSettings;
+  skipPartOutro?: boolean;
+  skipBrandedOutro?: boolean;
   voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   audioPost?: AudioPost;
   editEffects?: EditEffects;

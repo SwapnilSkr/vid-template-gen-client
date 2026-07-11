@@ -19,6 +19,8 @@ export interface ConfirmAction {
   /** Free / credits / compute — shown as a chip on the confirm modal. */
   costTone?: "free" | "paid" | "warm";
   onConfirm: () => void | Promise<void>;
+  /** Called when the modal is dismissed without confirming. */
+  onCancel?: () => void;
 }
 
 export type StudioRun = (
