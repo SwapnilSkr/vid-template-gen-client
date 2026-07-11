@@ -322,7 +322,7 @@ function ReviewInspectorForm({
                   value={draft?.description ?? ""}
                   disabled={!completed}
                   rows={5}
-                  maxLength={500}
+                  maxLength={5000}
                   onChange={(event) =>
                     updateDraft((current) => ({
                       ...current,
@@ -331,7 +331,7 @@ function ReviewInspectorForm({
                   }
                 />
                 <small className="justify-self-end text-xs text-muted-foreground">
-                  {draft?.description?.length ?? 0}/500
+                  {draft?.description?.length ?? 0}/5,000
                 </small>
               </Label>
 
