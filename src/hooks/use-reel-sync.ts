@@ -1,9 +1,13 @@
 import { useEffect } from "react";
 import { useReelStudio } from "@/store/reel-studio";
-import { reelId, reelNeedsPolling } from "@/utils/reel";
-
-const POLL_MS = 3000;
-const SETTLE_MS = 2000;
+import {
+  isAssetStreamingStatus,
+  reelId,
+  reelNeedsPolling,
+  REEL_ASSET_POLL_MS,
+  REEL_POLL_MS,
+  REEL_SETTLE_MS,
+} from "@/utils/reel";
 
 export function useReelSync() {
   const load = useReelStudio((state) => state.load);
@@ -14,6 +18,7 @@ export function useReelSync() {
     state.reels.find((reel) => reelId(reel) === state.selectedId),
   );
   const needsPoll = reelNeedsPolling(selected);
+  const assetStreaming = isAssetStreamingStatus(selected?.status);
 
   useEffect(() => {
     void load();
@@ -26,10 +31,13 @@ export function useReelSync() {
     if (!selectedId) return;
     if (needsPoll) {
       void pollSelected();
-      const timer = window.setInterval(() => void pollSelected(), POLL_MS);
+      const timer = window.setInterval(
+        () => void pollSelected(),
+        assetStreaming ? REEL_ASSET_POLL_MS : REEL_POLL_MS,
+      );
       return () => window.clearInterval(timer);
     }
-    const settle = window.setTimeout(() => void pollSelected(), SETTLE_MS);
+    const settle = window.setTimeout(() => void pollSelected(), REEL_SETTLE_MS);
     return () => window.clearTimeout(settle);
-  }, [selectedId, needsPoll, pollSelected]);
+  }, [selectedId, needsPoll, pollSelected, assetStreaming]);
 }

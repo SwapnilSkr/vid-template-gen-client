@@ -1,10 +1,6 @@
 import type { ReelStatus } from "@/api/reels";
 import { cn } from "@/lib/utils";
-
-export function reelStatusLabel(status: ReelStatus): string {
-  if (status === "plan_review") return "awaiting review";
-  return status.replace(/_/g, " ");
-}
+import { reelStatusLabel } from "@/utils/reel";
 
 function reelStatusTone(status: ReelStatus): string {
   if (status === "completed") {

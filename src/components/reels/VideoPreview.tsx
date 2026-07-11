@@ -3,19 +3,41 @@ import {
   ChevronRight,
   ExternalLink,
   Film,
+  Loader2,
   MoreVertical,
 } from "lucide-react";
-import type { Reel } from "@/api/reels";
+import { mediaUrl, type Reel, type Scene } from "@/api/reels";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { Panel, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { useReelStudio } from "@/store/reel-studio";
-import { formatLabel, reelId } from "@/utils/reel";
+import {
+  formatLabel,
+  reelId,
+  reelProgressLabel,
+  REEL_ACTIVE_STATUSES,
+} from "@/utils/reel";
 
 interface VideoPreviewProps {
   reel?: Reel;
   reels?: Reel[];
   selectedId?: string;
+}
+
+function reelOptionLabel(item: Reel, index: number) {
+  const partLabel =
+    (item.partCount ?? 1) > 1
+      ? ` · Part ${item.partNumber ?? index + 1}/${item.partCount}`
+      : "";
+  return `${String(index + 1).padStart(2, "0")} · ${item.title || item.topic || "Untitled reel"} · ${formatLabel(item.genre)}${partLabel}`;
+}
+
+function previewStatusCopy(reel: Reel, isGenerating: boolean): string {
+  if (reel.status === "plan_review") {
+    return "Plan ready — open Studio to review, then generate.";
+  }
+  if (isGenerating) return "Assets appear here as each scene finishes.";
+  return "Completed reels appear here for review.";
 }
 
 export function VideoPreview({
@@ -31,14 +53,23 @@ export function VideoPreview({
   const hasNavigator = reels.length > 1 && selectedIndex >= 0;
   const previousReel = hasNavigator ? reels[selectedIndex - 1] : undefined;
   const nextReel = hasNavigator ? reels[selectedIndex + 1] : undefined;
+  const isGenerating = reel
+    ? REEL_ACTIVE_STATUSES.includes(reel.status)
+    : false;
 
-  function reelOptionLabel(item: Reel, index: number) {
-    const partLabel =
-      (item.partCount ?? 1) > 1
-        ? ` · Part ${item.partNumber ?? index + 1}/${item.partCount}`
-        : "";
-    return `${String(index + 1).padStart(2, "0")} · ${item.title || item.topic || "Untitled reel"} · ${formatLabel(item.genre)}${partLabel}`;
+  let sceneAssetCount = 0;
+  let audioReady = 0;
+  const sceneAssets: Scene[] = [];
+  if (reel?.scenes) {
+    for (const scene of reel.scenes) {
+      if (scene.audioUrl) audioReady += 1;
+      if (scene.assetUrl && !scene.isHero) {
+        sceneAssetCount += 1;
+        sceneAssets.push(scene);
+      }
+    }
   }
+  const sceneTotal = reel?.scenes?.length ?? 0;
 
   return (
     <Panel className="grid h-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
@@ -133,16 +164,57 @@ export function VideoPreview({
                 setPreviewTimeSeconds(event.currentTarget.currentTime)
               }
             />
+          ) : sceneAssets.length > 0 && reel ? (
+            <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-2 p-2">
+              <div className="grid min-h-0 grid-cols-2 content-start gap-1.5 overflow-y-auto sm:grid-cols-3">
+                {sceneAssets.map((scene) => {
+                  const src = mediaUrl(scene.assetUrl);
+                  if (!src) return null;
+                  return (
+                    <div
+                      key={scene.index}
+                      className="relative aspect-9/16 overflow-hidden rounded border border-border/70 bg-black/40"
+                    >
+                      <img
+                        src={src}
+                        alt={`Scene ${scene.index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[10px] text-white">
+                        {scene.index + 1}
+                        {scene.audioUrl ? " · ♪" : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid gap-0.5 px-1 pb-1 text-center text-[12px] text-muted-foreground">
+                <strong className="inline-flex items-center justify-center gap-1.5 text-foreground">
+                  {isGenerating ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : null}
+                  {reel.currentStep ?? `${reel.progress}% generated`}
+                </strong>
+                <span>
+                  {sceneAssetCount}/{sceneTotal || "?"} stills
+                  {audioReady > 0 ? ` · ${audioReady} narration` : ""}
+                </span>
+              </div>
+            </div>
           ) : (
             <div className="grid h-full place-items-center gap-2 px-4 text-center text-muted-foreground">
-              <Film size={46} />
+              {isGenerating ? (
+                <Loader2 size={40} className="animate-spin text-primary" />
+              ) : (
+                <Film size={46} />
+              )}
               <strong className="text-foreground">
-                {reel
-                  ? `${reel.progress}% generated`
-                  : "Select or create a reel"}
+                {reel ? reelProgressLabel(reel) : "Select or create a reel"}
               </strong>
               <span className="text-[13px] text-muted-foreground">
-                Completed reels appear here for review.
+                {reel
+                  ? previewStatusCopy(reel, isGenerating)
+                  : "Completed reels appear here for review."}
               </span>
             </div>
           )}

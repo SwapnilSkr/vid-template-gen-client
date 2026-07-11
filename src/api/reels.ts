@@ -87,6 +87,7 @@ export interface ReelReview {
   tags: string[];
   thumbnailUrl?: string;
   thumbnailPrompt?: string;
+  thumbnailEditorState?: Record<string, unknown>;
   visibilityNotes?: string;
   status: "draft" | "ready" | "approved";
   updatedAt?: string;
@@ -154,6 +155,8 @@ export interface Reel {
   hook?: string;
   status: ReelStatus;
   progress: number;
+  /** Live pipeline step from the worker (e.g. "Image 3/9"). */
+  currentStep?: string;
   outputUrl?: string;
   bodyVideoUrl?: string;
   assemblyVideoUrl?: string;
