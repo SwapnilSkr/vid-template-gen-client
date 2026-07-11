@@ -1,7 +1,7 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import { CreateReelForm } from "@/components/reels/CreateReelForm";
+import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
 import { useReelStudio } from "@/store/reel-studio";
 
 /** Dedicated reel-creation page — kept off the main review dashboard so the
@@ -10,6 +10,8 @@ import { useReelStudio } from "@/store/reel-studio";
 export function CreateReelScreen() {
   const navigate = useNavigate();
   const error = useReelStudio((state) => state.error);
+  const ffmpegBlock = useReelStudio((state) => state.ffmpegBlock);
+  const clearFfmpegBlock = useReelStudio((state) => state.clearFfmpegBlock);
 
   return (
     <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
@@ -37,6 +39,8 @@ export function CreateReelScreen() {
       <div className="mx-auto max-w-5xl">
         <CreateReelForm onCreated={() => void navigate({ to: "/", search: { status: undefined } })} />
       </div>
+
+      <FfmpegBlockModal capability={ffmpegBlock} onClose={clearFfmpegBlock} />
     </section>
   );
 }

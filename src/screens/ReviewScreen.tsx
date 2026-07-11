@@ -12,6 +12,7 @@ import { GenerationTimeline } from "@/components/reels/GenerationTimeline";
 import { RecentReelsList } from "@/components/reels/RecentReelsList";
 import { ReviewInspector } from "@/components/reels/ReviewInspector";
 import { VideoPreview } from "@/components/reels/VideoPreview";
+import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
 import { useReelSync } from "@/hooks/use-reel-sync";
 import { useReelStudio } from "@/store/reel-studio";
 import { reelId } from "@/utils/reel";
@@ -55,6 +56,8 @@ export function ReviewScreen() {
   const selectedId = useReelStudio((state) => state.selectedId);
   const draftReview = useReelStudio((state) => state.draftReview);
   const error = useReelStudio((state) => state.error);
+  const ffmpegBlock = useReelStudio((state) => state.ffmpegBlock);
+  const clearFfmpegBlock = useReelStudio((state) => state.clearFfmpegBlock);
   const loading = useReelStudio((state) => state.loading);
   const purgeFailed = useReelStudio((state) => state.purgeFailed);
   const [confirmAction, setConfirmAction] = useState<
@@ -158,6 +161,7 @@ export function ReviewScreen() {
         busy={loading}
         onClose={() => setConfirmAction(undefined)}
       />
+      <FfmpegBlockModal capability={ffmpegBlock} onClose={clearFfmpegBlock} />
     </section>
   );
 }

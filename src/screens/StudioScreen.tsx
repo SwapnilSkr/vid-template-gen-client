@@ -57,6 +57,7 @@ import {
   type ArtStyleOption,
   type CaptionStyle,
   type EditEffects,
+  type FfmpegCapability,
   type FontOption,
   type GameplayClip,
   type ImageModelOption,
@@ -66,9 +67,12 @@ import {
   type StylePreset,
   type TtsVoiceOption,
   type YouTubeChannelOption,
+  assertFfmpegReady,
+  ffmpegBlockFromError,
 } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { EditEffectsControls } from "@/components/reels/EditEffectsControls";
+import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -158,6 +162,11 @@ interface ConfirmAction {
   onConfirm: () => void | Promise<void>;
 }
 
+type StudioRun = (
+  action: () => Promise<Reel>,
+  opts?: { requireFfmpeg?: boolean }
+) => Promise<void>;
+
 export function StudioScreen() {
   const { id } = route.useParams();
   const [reel, setReel] = useState<Reel | undefined>();
@@ -168,6 +177,7 @@ export function StudioScreen() {
   const [confirmAction, setConfirmAction] = useState<
     ConfirmAction | undefined
   >();
+  const [ffmpegBlock, setFfmpegBlock] = useState<FfmpegCapability | undefined>();
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("source");
   /** Temporary program-monitor override for a ready voice variant (before promote). */
@@ -255,12 +265,16 @@ export function StudioScreen() {
   }, [reel?._id, reel?.id, reel?.editDraft]);
 
   // Run an edit action, reflect the returned reel, surface errors.
-  const run = useCallback(async (action: () => Promise<Reel>) => {
+  // Paid generate/regenerate paths preflight FFmpeg so users get a modal before spend.
+  const run = useCallback<StudioRun>(async (action, opts) => {
     setBusy(true);
     setError(undefined);
     try {
+      if (opts?.requireFfmpeg) await assertFfmpegReady();
       setReel(await action());
     } catch (err) {
+      const block = ffmpegBlockFromError(err);
+      if (block) setFfmpegBlock(block);
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(false);
@@ -416,10 +430,16 @@ export function StudioScreen() {
       {reel.status === "failed" ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <div className="min-w-0">
-            <div className="font-semibold">Produce failed</div>
+            <div className="font-semibold">
+              {/caption burn|ffmpeg/i.test(reel.error ?? "")
+                ? "Caption burn / FFmpeg failed"
+                : "Produce failed"}
+            </div>
             <div className="text-xs text-destructive/80">
-              {reel.error?.trim() || "Unknown error."} Scene images and narration
-              already on S3 are kept — resume re-runs render only.
+              {reel.error?.trim() || reel.captionBurnError?.trim() || "Unknown error."}{" "}
+              {reel.scenes?.some((s) => s.assetUrl || s.audioUrl)
+                ? "Scene images and narration already on S3 are kept — resume re-runs render only (no new AI spend)."
+                : "No scene assets were saved yet — resume will regenerate from the start."}
             </div>
           </div>
           <Button
@@ -438,7 +458,7 @@ export function StudioScreen() {
                     ]
                   : ["No new image/TTS spend if assets are already on S3."],
                 confirmLabel: "Resume",
-                onConfirm: () => run(() => resumeFailedReel(id)),
+                onConfirm: () => run(() => resumeFailedReel(id), { requireFfmpeg: true }),
               })
             }
             className="shrink-0"
@@ -470,7 +490,7 @@ export function StudioScreen() {
               "Spend is recorded on this reel's cost breakdown when the job finishes.",
             ],
             confirmLabel: "Generate",
-            onConfirm: () => run(() => approvePlan(id)),
+            onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
           })
         }
       />
@@ -509,7 +529,7 @@ export function StudioScreen() {
                   "Spend is added to this reel's cost breakdown when the job finishes.",
                 ].filter(Boolean),
                 confirmLabel: "Re-render",
-                onConfirm: () => run(() => regenerateReel(id, "render_only")),
+                onConfirm: () => run(() => regenerateReel(id, "render_only"), { requireFfmpeg: true }),
               })
             }
             className="shrink-0"
@@ -602,6 +622,10 @@ export function StudioScreen() {
         action={confirmAction}
         busy={busy}
         onClose={() => setConfirmAction(undefined)}
+      />
+      <FfmpegBlockModal
+        capability={ffmpegBlock}
+        onClose={() => setFfmpegBlock(undefined)}
       />
     </section>
   );
@@ -814,7 +838,7 @@ function TimelinePanel({
   busy: boolean;
   disabled: boolean;
   onAddScene: () => void;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
 }) {
   const totalDuration = scenes.reduce((sum, scene) => sum + Math.max(scene.duration || 0, 0), 0);
   // Clip width tracks real duration so the timeline reads like an NLE — clamped
@@ -957,7 +981,7 @@ function InspectorPanel({
   reel: Reel;
   busy: boolean;
   isGameplay: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const tabs = isGameplay
@@ -1078,7 +1102,7 @@ function EditDraftBanner({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
 }) {
   if (!reel.editDraft) return null;
   const reelKey = reel._id ?? reel.id ?? "";
@@ -1311,7 +1335,7 @@ function RedditSourcePanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -1538,7 +1562,7 @@ function StoryPanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [script, setScript] = useState(reel.providedScript ?? "");
@@ -1672,7 +1696,7 @@ function SceneCard({
   busy: boolean;
   disabled: boolean;
   isGameplay: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [narration, setNarration] = useState(scene.narration);
@@ -1873,7 +1897,7 @@ function PresetsPanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const [artStyles, setArtStyles] = useState<ArtStyleOption[]>([]);
@@ -2131,7 +2155,7 @@ function RegeneratePanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -2161,7 +2185,7 @@ function RegeneratePanel({
                   ]
                 : ["No new image/TTS spend if assets are already on S3."],
               confirmLabel: "Resume",
-              onConfirm: () => run(() => resumeFailedReel(reelKey)),
+              onConfirm: () => run(() => resumeFailedReel(reelKey), { requireFfmpeg: true }),
             })
           }
         >
@@ -2193,7 +2217,7 @@ function RegeneratePanel({
                     "A job already in progress cannot be stacked — wait for it to finish.",
                   ],
               confirmLabel: costsCredits ? "Spend credits & re-render" : "Re-render",
-              onConfirm: () => run(() => regenerateReel(reelKey, "render_only")),
+              onConfirm: () => run(() => regenerateReel(reelKey, "render_only"), { requireFfmpeg: true }),
             })
           }
         >
@@ -2222,7 +2246,7 @@ function RegeneratePanel({
               ],
               confirmLabel: "Regenerate all assets",
               variant: "destructive",
-              onConfirm: () => run(() => regenerateReel(reelKey, "assets")),
+              onConfirm: () => run(() => regenerateReel(reelKey, "assets"), { requireFfmpeg: true }),
             })
           }
         >
@@ -2289,7 +2313,7 @@ function PublishPanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -2415,7 +2439,7 @@ function EffectsPanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -2481,7 +2505,7 @@ function OutroPanel({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -2736,7 +2760,7 @@ function CaptionEditor({
 }: {
   reel: Reel;
   busy: boolean;
-  run: (a: () => Promise<Reel>) => Promise<void>;
+  run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
@@ -3050,7 +3074,7 @@ function CaptionEditor({
                 const next = await applyCaptions(reelKey, burnStyle);
                 styleDirtyRef.current = false;
                 return next;
-              }),
+              }, { requireFfmpeg: true }),
           });
         }}
       >
