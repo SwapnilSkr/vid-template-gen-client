@@ -1,6 +1,7 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  Clapperboard,
   Download,
   Image as ImageIcon,
   Loader2,
@@ -262,6 +263,17 @@ export function StudioScreen() {
           <Link
             to="/studio/$id/thumbnail"
             params={{ id }}
+            search={{ mode: "shorts" }}
+            className={cn(buttonClassName("outline"), "no-underline")}
+            title="Open Shorts Cover Studio"
+          >
+            <Clapperboard size={14} />
+            <span className="hidden sm:inline">Shorts cover</span>
+          </Link>
+          <Link
+            to="/studio/$id/thumbnail"
+            params={{ id }}
+            search={{ mode: undefined }}
             className={cn(buttonClassName("outline"), "no-underline")}
             title="Open Thumbnail Studio"
           >
@@ -527,4 +539,3 @@ export function StudioScreen() {
     </section>
   );
 }
-

@@ -210,6 +210,18 @@ export interface Reel {
   voiceVariants?: VoiceVariant[];
   editDraft?: ReelEditDraft;
   thumbnailDraft?: ThumbnailDraft;
+  shortsCover?: {
+    imageUrl?: string;
+    sourceType: "reddit_title_card" | "scene" | "video_frame";
+    sceneIndex?: number;
+    atSeconds?: number;
+    placement: "opening" | "source_scene";
+    holdSeconds?: number;
+    editorState?: Record<string, unknown>;
+    sourceFingerprint?: string;
+    updatedAt?: string;
+  };
+  thumbnailSceneIndex?: number;
 }
 
 export type YouTubePublishStatus = NonNullable<Reel["youtube"]>;
@@ -785,6 +797,23 @@ export async function discardThumbnailDraft(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/thumbnail-draft/discard`, { method: "POST" });
 }
 
+export async function saveShortsCover(id: string, payload: {
+  imageDataUrl: string;
+  sourceType: "reddit_title_card" | "scene" | "video_frame";
+  sceneIndex?: number;
+  atSeconds?: number;
+  placement?: "opening" | "source_scene";
+  holdSeconds?: number;
+  editorState?: Record<string, unknown>;
+  sourceFingerprint?: string;
+}): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/shorts-cover`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export async function clearShortsCover(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/shorts-cover`, { method: "DELETE" });
+}
+
 // ---- Studio editing (co-creation) ----
 
 export async function listStylePresets(niche?: string): Promise<StylePreset[]> {
@@ -833,6 +862,7 @@ export async function reorderScenes(id: string, order: number[]): Promise<Reel> 
 }
 
 export interface ReelSettingsInput {
+  thumbnailSceneIndex?: number;
   artStyleId?: string;
   motionMode?: MotionMode;
   imageModel?: string;

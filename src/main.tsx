@@ -56,6 +56,9 @@ export const studioRoute = createRoute({
 export const thumbnailStudioRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/studio/$id/thumbnail",
+  validateSearch: (search: Record<string, unknown>) => ({
+    mode: search.mode === "shorts" ? ("shorts" as const) : undefined,
+  }),
   component: ThumbnailStudioScreen,
 });
 

@@ -1,10 +1,11 @@
-import { Image as ImageIcon, Loader2, Play, Trash2, Wand2 } from "lucide-react";
+import { Image as ImageIcon, Loader2, Play, Star, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   mediaUrl,
   regenerateScene,
   removeScene,
   updateScene,
+  updateReelSettings,
   type Reel,
   type Scene,
 } from "@/api/reels";
@@ -146,6 +147,19 @@ export function SceneCard({
           </Button>
           {!isGameplay ? (
             <>
+              {reel.niche.startsWith("horror") ? (
+                <Button
+                  type="button"
+                  size="default"
+                  variant={reel.thumbnailSceneIndex === scene.index ? "default" : "outline"}
+                  disabled={disableAll || reel.thumbnailSceneIndex === scene.index}
+                  title="Use this existing scene still as the Shorts cover source — no AI credits"
+                  onClick={() => void run(() => updateReelSettings(reelId, { thumbnailSceneIndex: scene.index }))}
+                >
+                  <Star size={14} />
+                  {reel.thumbnailSceneIndex === scene.index ? "Cover candidate" : "Make cover"}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 size="default"
@@ -225,4 +239,3 @@ export function SceneCard({
     </div>
   );
 }
-

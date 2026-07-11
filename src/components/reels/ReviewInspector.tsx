@@ -421,6 +421,7 @@ function ReviewInspectorForm({
                   <Link
                     to="/studio/$id/thumbnail"
                     params={{ id: reel._id ?? reel.id ?? "" }}
+                    search={{ mode: undefined }}
                     className={buttonClassName("default")}
                   >
                     <Sparkles size={16} />
@@ -826,4 +827,3 @@ function ReviewInspectorForm({
     </>
   );
 }
-

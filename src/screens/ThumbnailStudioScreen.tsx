@@ -28,7 +28,9 @@ import {
   listFonts,
   mediaUrl,
   regenerateThumbnail,
+  regenerateReel,
   saveThumbnailDraft,
+  saveShortsCover,
   stageThumbnailDraftImage,
   type FontOption,
   type Reel,
@@ -82,6 +84,8 @@ const route = getRouteApi("/studio/$id/thumbnail");
 
 export function ThumbnailStudioScreen() {
   const { id } = route.useParams();
+  const { mode } = route.useSearch();
+  const isShorts = mode === "shorts";
 
   const [reel, setReel] = useState<Reel | undefined>();
   const [loading, setLoading] = useState(true);
@@ -91,7 +95,7 @@ export function ThumbnailStudioScreen() {
   const [fonts, setFonts] = useState<FontOption[]>([]);
   const [fontsVersion, setFontsVersion] = useState(0);
 
-  const history = useDocHistory(defaultDoc("16:9", ""));
+  const history = useDocHistory(defaultDoc(isShorts ? "9:16" : "16:9", ""));
   const { doc } = history;
   // Synchronously-current doc so patch helpers never act on a stale closure
   // (e.g. two mutations in the same tick, or fast repeated clicks).
@@ -176,8 +180,9 @@ export function ThumbnailStudioScreen() {
     if (!reel || initializedRef.current === id) return;
     initializedRef.current = id;
 
+    const cacheKey = `${sessionDocKey(id)}${isShorts ? ":shorts" : ""}`;
     try {
-      const raw = sessionStorage.getItem(sessionDocKey(id));
+      const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
         const revived = reviveDoc(JSON.parse(raw));
         if (revived) {
@@ -189,9 +194,9 @@ export function ThumbnailStudioScreen() {
       /* corrupted session cache — fall through */
     }
 
-    const draftInput = reel.thumbnailDraft?.input;
+    const draftInput = isShorts ? reel.shortsCover?.editorState : reel.thumbnailDraft?.input;
     if (draftInput) {
-      const aspect = (reel.thumbnailDraft?.aspectRatio ?? "16:9") as ThumbAspect;
+      const aspect = (isShorts ? "9:16" : (reel.thumbnailDraft?.aspectRatio ?? "16:9")) as ThumbAspect;
       const revived = reviveDoc(draftInput) ?? docFromLegacyDraftInput(draftInput, aspect);
       if (revived) {
         history.replaceAll(revived);
@@ -202,27 +207,29 @@ export function ThumbnailStudioScreen() {
 
     // Gameplay / Shorts reels default to vertical — 16:9 customs are often
     // replaced by YouTube's auto 4:5 crop on mobile browse surfaces.
-    const defaultAspect: ThumbAspect =
-      reel.strategy === "gameplay_overlay" ? "9:16" : "16:9";
+    const defaultAspect: ThumbAspect = isShorts || reel.strategy === "gameplay_overlay" ? "9:16" : "16:9";
     const fresh = defaultDoc(defaultAspect, defaultTitleText(reel));
     if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
       fresh.background.sourceType = "frame";
+    } else if (isShorts && reel.thumbnailSceneIndex !== undefined) {
+      fresh.background.sourceType = "scene";
+      fresh.background.sceneIndex = reel.thumbnailSceneIndex;
     }
     history.replaceAll(fresh);
-  }, [reel, id, history]);
+  }, [reel, id, history, isShorts]);
 
   // ---- persist the doc across navigations within the session ----
   useEffect(() => {
     if (initializedRef.current !== id) return;
     const t = window.setTimeout(() => {
       try {
-        sessionStorage.setItem(sessionDocKey(id), JSON.stringify(doc));
+        sessionStorage.setItem(`${sessionDocKey(id)}${isShorts ? ":shorts" : ""}`, JSON.stringify(doc));
       } catch {
         /* quota / private mode */
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [doc, id]);
+  }, [doc, id, isShorts]);
 
   useEffect(() => {
     if (!reel?.review?.thumbnailPrompt) return;
@@ -516,6 +523,26 @@ export function ThumbnailStudioScreen() {
     [id, run, stageDraft]
   );
 
+  const uploadShortsCover = useCallback(() => run(async () => {
+    const saved = await saveShortsCover(id, {
+    imageDataUrl: exportDataUrl(),
+    sourceType: isGameplay ? "video_frame" : "scene",
+    sceneIndex: isGameplay ? undefined : bg.sceneIndex,
+    atSeconds: isGameplay ? bg.atSeconds : undefined,
+    placement: "opening",
+    holdSeconds: 0.75,
+    editorState: doc as unknown as Record<string, unknown>,
+    sourceFingerprint: isGameplay
+      ? `reddit:${reel?.redditStory?.title ?? reel?.title ?? ""}:${bg.atSeconds.toFixed(1)}`
+      : `scene:${bg.sceneIndex ?? "none"}:${sceneStills.find((item) => item.scene.index === bg.sceneIndex)?.url ?? ""}`,
+    });
+    // A completed Reddit reel can apply the cover immediately using only
+    // cached narration + FFmpeg. Planned horror reels simply retain it until produce.
+    return saved.outputUrl && (isGameplay || saved.assemblyVideoUrl)
+      ? regenerateReel(id, "composite_only")
+      : saved;
+  }), [bg.atSeconds, bg.sceneIndex, doc, exportDataUrl, id, isGameplay, reel?.redditStory?.title, reel?.title, run, sceneStills]);
+
   const downloadPng = useCallback(() => {
     try {
       const a = document.createElement("a");
@@ -581,7 +608,7 @@ export function ThumbnailStudioScreen() {
           </Link>
           <div className="min-w-0">
             <h1 className="m-0 min-w-0 truncate text-sm font-semibold tracking-normal text-foreground">
-              Thumbnail studio · {reel.title || "Untitled reel"}
+              {isShorts ? "Shorts Cover Studio" : "Thumbnail studio"} · {reel.title || "Untitled reel"}
             </h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {reel.niche} · <ReelStatusChip status={reel.status} size="sm" />
@@ -900,8 +927,8 @@ export function ThumbnailStudioScreen() {
                     }
                   >
                     <option value="9:16">9:16 — Shorts shelf / search</option>
-                    <option value="16:9">16:9 — classic YouTube</option>
-                    <option value="1:1">1:1 — Square</option>
+                    {!isShorts ? <option value="16:9">16:9 — classic YouTube</option> : null}
+                    {!isShorts ? <option value="1:1">1:1 — Square</option> : null}
                   </Select>
                 </div>
               </div>
@@ -963,9 +990,9 @@ export function ThumbnailStudioScreen() {
               </div>
             </StudioPanel>
 
-            <StudioPanel title="Export" icon={<Save size={15} />}>
+            <StudioPanel title={isShorts ? "Save Shorts cover" : "Export"} icon={<Save size={15} />}>
               <div className="grid gap-2 sm:grid-cols-3">
-                <Button
+                {!isShorts ? <Button
                   type="button"
                   variant="outline"
                   className="border-border bg-secondary text-foreground hover:bg-accent"
@@ -973,8 +1000,8 @@ export function ThumbnailStudioScreen() {
                   onClick={downloadPng}
                 >
                   <Download size={15} /> Download PNG
-                </Button>
-                <Button
+                </Button> : null}
+                {!isShorts ? <Button
                   type="button"
                   variant="outline"
                   className="border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
@@ -982,14 +1009,14 @@ export function ThumbnailStudioScreen() {
                   onClick={() => void run(stageDraft)}
                 >
                   <Save size={15} /> {draftStale ? "Re-save draft" : "Save draft (local)"}
-                </Button>
+                </Button> : null}
                 <Button
                   type="button"
                   disabled={disableEdits || !canCompose}
-                  onClick={() => void uploadFinal()}
+                  onClick={() => void (isShorts ? uploadShortsCover() : uploadFinal())}
                 >
                   {busy ? <Loader2 className="animate-spin" size={15} /> : <CloudUpload size={15} />}
-                  Upload to S3
+                  {isShorts ? "Save cover (zero AI)" : "Upload to S3"}
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground/80">
@@ -1036,7 +1063,7 @@ export function ThumbnailStudioScreen() {
               </StudioPanel>
             )}
 
-            <StudioPanel title="AI thumbnail" icon={<Sparkles size={15} />}>
+            {!isShorts ? <StudioPanel title="AI thumbnail" icon={<Sparkles size={15} />}>
               <Label className="text-xs text-muted-foreground">
                 Prompt
                 <Textarea
@@ -1107,7 +1134,7 @@ export function ThumbnailStudioScreen() {
                 AI renders a full thumbnail and saves it to S3. Pull it back onto the canvas to
                 stack your own headline, stickers, and grading on top.
               </p>
-            </StudioPanel>
+            </StudioPanel> : null}
           </div>
         </div>
       </div>
@@ -1116,4 +1143,3 @@ export function ThumbnailStudioScreen() {
     </section>
   );
 }
-

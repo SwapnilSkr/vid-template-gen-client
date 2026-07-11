@@ -35,6 +35,7 @@ export function ThumbnailPanel({ reel }: { reel: Reel }) {
       <Link
         to="/studio/$id/thumbnail"
         params={{ id: reelKey }}
+        search={{ mode: undefined }}
         className={cn(buttonClassName("default"), "no-underline")}
       >
         <ImageIcon size={15} /> Open Thumbnail Studio
@@ -49,4 +50,3 @@ export function ThumbnailPanel({ reel }: { reel: Reel }) {
 }
 
 // ---- Live caption editor ----
-
