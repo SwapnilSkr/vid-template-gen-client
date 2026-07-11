@@ -2537,24 +2537,25 @@ function EffectsPanel({
   return (
     <div className="grid gap-2.5">
       <PanelTitle className="text-foreground">Edit Effects</PanelTitle>
+      <RenderCacheStatus reel={reel} intent="effects" />
       <EditEffectsControls value={fx} onChange={setFx} disabled={busy} />
       <Button
         type="button"
         variant="default"
         disabled={busy}
-        onClick={() =>
+        onClick={() => {
+          const cost = describeRenderCost(reel, "effects");
           requestConfirm({
             title: "Apply effects & re-render?",
-            body: canCompositeOnlyRerender(reel)
-              ? "Re-applies captions + effects from the cached assembly (skips Ken Burns). No OpenRouter spend."
-              : "Render-only pass. Reuses scene stills and narration; first run builds the assembly cache.",
+            body: cost.detail,
             details: [
-              canCompositeOnlyRerender(reel)
-                ? "Uses assemblyVideoUrl — no scene re-assembly."
-                : "Reuses every scene still and narration clip.",
+              cost.tone === "free"
+                ? "Uses the cached assembly — no scene re-assembly."
+                : "First bake builds the assembly cache for later free FX passes.",
               "A job already in progress cannot be stacked.",
             ],
-            confirmLabel: "Re-render (free)",
+            confirmLabel: cost.tone === "free" ? "Apply · free" : "Apply & rebuild",
+            costTone: cost.tone,
             onConfirm: () =>
               run(async () => {
                 await updateReelSettings(reelKey, { editEffects: fx });
@@ -2563,15 +2564,15 @@ function EffectsPanel({
                   canCompositeOnlyRerender(reel) ? "composite_only" : "render_only"
                 );
               }),
-          })
-        }
+          });
+        }}
       >
-        <RefreshCw size={15} /> Apply &amp; re-render (free)
+        <RefreshCw size={15} />{" "}
+        {canCompositeOnlyRerender(reel) ? "Apply & re-render · free" : "Apply & re-render"}
       </Button>
       <p className="text-[11px] text-muted-foreground/80">
-        {canCompositeOnlyRerender(reel)
-          ? "Assembly cache hit — caption/FX pass only, then outro reuse."
-          : "A cinematic finish over the whole reel. Render-only — reuses every asset, no generation spend."}
+        Cinematic finish over the reel body. Never spends image/TTS credits — only
+        local ffmpeg (and a one-time assembly build if the cache is empty).
       </p>
     </div>
   );
@@ -2627,6 +2628,11 @@ function OutroPanel({
   return (
     <div className="grid gap-2.5">
       <PanelTitle className="text-foreground">Outro</PanelTitle>
+      <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+        Branded end card appended after the reel body. When the body is cached,
+        only this outro is rebuilt.
+      </p>
+      <RenderCacheStatus reel={reel} intent="outro" />
 
       <Label className="text-xs text-muted-foreground">
         Brand channel
@@ -2672,6 +2678,7 @@ function OutroPanel({
 
       <Label className="text-xs text-muted-foreground">
         Spoken outro line
+        <span className="ml-1 font-normal text-muted-foreground/70">(TTS if changed)</span>
         <Textarea
           rows={2}
           disabled={busy}
@@ -2688,6 +2695,7 @@ function OutroPanel({
       <div className="grid gap-2 sm:grid-cols-2">
         <Label className="text-xs text-muted-foreground">
           Card title
+          <span className="ml-1 font-normal text-muted-foreground/70">(visual)</span>
           <Input
             disabled={busy}
             value={outro.title ?? ""}
@@ -2697,6 +2705,7 @@ function OutroPanel({
         </Label>
         <Label className="text-xs text-muted-foreground">
           Card subtitle
+          <span className="ml-1 font-normal text-muted-foreground/70">(visual)</span>
           <Input
             disabled={busy}
             value={outro.subtitle ?? ""}
@@ -2731,33 +2740,31 @@ function OutroPanel({
         type="button"
         variant="default"
         disabled={busy}
-        onClick={() =>
+        onClick={() => {
+          const cost = describeRenderCost(reel, "outro");
           requestConfirm({
-            title: "Render outro draft?",
-            body: canOutroOnlyRerender(reel)
-              ? "Appends a new outro onto the cached body video. Body narration is not rebuilt."
-              : gameplayRerenderCostsCredits(reel)
-                ? "No body cache yet — this rebuilds the reel. Missing narration segments will spend OpenRouter TTS."
-                : "Rebuilds the outro narration/card and preview. Scene stills and body narration are reused.",
+            title: canOutroOnlyRerender(reel) ? "Render outro only?" : "Render outro draft?",
+            body: cost.detail,
             details: canOutroOnlyRerender(reel)
               ? [
                   "Only the branded outro clip is regenerated.",
-                  "Outro spoken line spends TTS only if that line (or brand) changed.",
+                  "Spoken line spends TTS only if that line or brand changed.",
                 ]
               : gameplayRerenderCostsCredits(reel)
                 ? [
-                    "OpenRouter narration credits may be charged for uncached gameplay segments.",
-                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                    `About ${gameplayMissingTtsSegmentCount(reel)} narration segment(s) may be charged.`,
+                    "This first bake also builds the body cache for later outro-only edits.",
                   ]
                 : [
-                    "Outro spoken line may spend a small OpenRouter TTS amount.",
-                    "Body scene assets are kept.",
+                    "Scene stills and body narration are reused.",
+                    "Body cache will be saved for cheaper outro edits next time.",
                   ],
             confirmLabel: canOutroOnlyRerender(reel)
-              ? "Render outro"
+              ? "Render outro · free body"
               : gameplayRerenderCostsCredits(reel)
-                ? "Spend credits & re-render"
+                ? `Spend credits (~${gameplayMissingTtsSegmentCount(reel)} TTS)`
                 : "Render outro",
+            costTone: cost.tone,
             onConfirm: () =>
               run(async () => {
                 await updateReelSettings(reelKey, {
@@ -2769,17 +2776,20 @@ function OutroPanel({
                   canOutroOnlyRerender(reel) ? "outro_only" : "render_only"
                 );
               }),
-          })
-        }
+          });
+        }}
       >
-        <RefreshCw size={15} /> Render outro draft
+        <RefreshCw size={15} />{" "}
+        {canOutroOnlyRerender(reel)
+          ? "Render outro · body cached"
+          : gameplayRerenderCostsCredits(reel)
+            ? `Render outro · ~${gameplayMissingTtsSegmentCount(reel)} TTS`
+            : "Render outro draft"}
       </Button>
       <p className="text-[11px] text-muted-foreground/80">
         {canOutroOnlyRerender(reel)
-          ? "Uses the cached body video — only the outro is rebuilt."
-          : gameplayRerenderCostsCredits(reel)
-            ? "Narration cache incomplete — first re-render may spend TTS, then later edits are cheap."
-            : "Reuses cached narration. Only the outro narration, outro card, and preview video are rebuilt."}
+          ? "Fast path: new outro clip concatenated onto the cached body video."
+          : "Body cache missing — this bake rebuilds the reel once, then outro edits stay cheap."}
       </p>
     </div>
   );
@@ -2984,6 +2994,7 @@ function CaptionEditor({
   return (
     <div className="grid gap-2.5">
       <PanelTitle className="text-foreground">Captions</PanelTitle>
+      <RenderCacheStatus reel={reel} intent="captions" />
 
       <div
         ref={previewRef}
@@ -3167,6 +3178,7 @@ function CaptionEditor({
           const costsCredits = gameplayRerenderCostsCredits(reel);
           const missing = gameplayMissingTtsSegmentCount(reel);
           const freeComposite = canCompositeOnlyRerender(reel);
+          const cost = describeRenderCost(reel, "captions");
           requestConfirm({
             title: costsCredits
               ? "Apply captions & re-render (TTS)?"
@@ -3183,12 +3195,13 @@ function CaptionEditor({
               : costsCredits
                 ? [
                     `About ${missing} narration segment(s) may be charged.`,
-                    "Spend is added to this reel's cost breakdown when the job finishes.",
+                    "After this run, later caption edits can stay free.",
                   ]
                 : ["No OpenRouter image/TTS spend when narration/images already exist."],
             confirmLabel: costsCredits
               ? `Spend credits (~${missing} TTS) & apply`
-              : "Apply & re-render",
+              : "Apply & re-render · free",
+            costTone: cost.tone,
             onConfirm: () =>
               run(async () => {
                 const next = await applyCaptions(reelKey, burnStyle);
@@ -3201,9 +3214,9 @@ function CaptionEditor({
         <RefreshCw size={15} />{" "}
         {reel.outputUrl
           ? gameplayRerenderCostsCredits(reel)
-            ? `Apply captions & re-render (~${gameplayMissingTtsSegmentCount(reel)} TTS)`
+            ? `Apply captions · ~${gameplayMissingTtsSegmentCount(reel)} TTS`
             : canCompositeOnlyRerender(reel)
-              ? "Apply captions & re-render (free)"
+              ? "Apply captions · free"
               : "Apply captions & re-render"
           : "Apply captions"}
       </Button>
