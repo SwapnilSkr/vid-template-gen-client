@@ -12,6 +12,7 @@ import { GenerationTimeline } from "@/components/reels/GenerationTimeline";
 import { RecentReelsList } from "@/components/reels/RecentReelsList";
 import { ReviewInspector } from "@/components/reels/ReviewInspector";
 import { VideoPreview } from "@/components/reels/VideoPreview";
+import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
 import { useReelSync } from "@/hooks/use-reel-sync";
 import { useReelStudio } from "@/store/reel-studio";
@@ -108,6 +109,7 @@ export function ReviewScreen() {
                 Resume selected
               </Button>
             ) : null}
+            <CaptionSmokeButton size="sm" variant="outline" label="Test captions" />
             <Button
               type="button"
               variant="destructive"

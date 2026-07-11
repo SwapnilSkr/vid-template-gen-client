@@ -2,6 +2,7 @@ import { useNavigate, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { CreateReelForm } from "@/components/reels/CreateReelForm";
 import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
+import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { useReelStudio } from "@/store/reel-studio";
 
 /** Dedicated reel-creation page — kept off the main review dashboard so the
@@ -24,10 +25,13 @@ export function CreateReelScreen() {
           <ArrowLeft size={15} /> Back to dashboard
         </Link>
         <h1 className="m-0 text-lg leading-tight text-foreground">Create New Reel</h1>
-        <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
-          Set the niche, genre, source, tier, and background, then generate — you'll be taken to the
-          dashboard to watch it render.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
+            Set the niche, genre, source, tier, and background, then generate — you'll be taken to the
+            dashboard to watch it render.
+          </p>
+          <CaptionSmokeButton size="sm" variant="ghost" label="Test captions" />
+        </div>
       </header>
 
       {error ? (

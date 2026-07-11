@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import {
   DEFAULT_FFMPEG_FIX_HINTS,
   type FfmpegCapability,
@@ -53,7 +54,8 @@ export function FfmpegBlockModal({
             </div>
           ))}
         </div>
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <CaptionSmokeButton size="sm" variant="outline" label="Run smoke test" />
           <Button type="button" variant="destructive" onClick={onClose}>
             Got it
           </Button>

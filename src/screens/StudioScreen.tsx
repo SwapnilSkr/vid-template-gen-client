@@ -72,6 +72,7 @@ import {
 } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { EditEffectsControls } from "@/components/reels/EditEffectsControls";
+import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { FfmpegBlockModal } from "@/components/reels/FfmpegBlockModal";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
@@ -442,34 +443,38 @@ export function StudioScreen() {
                 : "No scene assets were saved yet — resume will regenerate from the start."}
             </div>
           </div>
-          <Button
-            type="button"
-            disabled={studioLocked}
-            onClick={() =>
-              setConfirmAction({
-                title: "Resume failed job?",
-                body: isGameplay
-                  ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
-                  : "Reuses scene images and narration already on S3, then re-renders.",
-                details: isGameplay
-                  ? [
-                      "Gameplay reels re-narrate every sentence on each produce run.",
-                      "Cost is added to this reel's cost breakdown when the job finishes.",
-                    ]
-                  : ["No new image/TTS spend if assets are already on S3."],
-                confirmLabel: "Resume",
-                onConfirm: () => run(() => resumeFailedReel(id), { requireFfmpeg: true }),
-              })
-            }
-            className="shrink-0"
-          >
-            {busy ? (
-              <Loader2 className="animate-spin" size={15} />
-            ) : (
-              <RefreshCw size={15} />
-            )}
-            Resume (reuse assets)
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {/caption burn|ffmpeg/i.test(reel.error ?? "") || reel.captionBurnError ? (
+              <CaptionSmokeButton size="sm" variant="outline" label="Test captions" />
+            ) : null}
+            <Button
+              type="button"
+              disabled={studioLocked}
+              onClick={() =>
+                setConfirmAction({
+                  title: "Resume failed job?",
+                  body: isGameplay
+                    ? "Re-runs TTS + gameplay composite. This spends OpenRouter narration credits again."
+                    : "Reuses scene images and narration already on S3, then re-renders.",
+                  details: isGameplay
+                    ? [
+                        "Gameplay reels re-narrate every sentence on each produce run.",
+                        "Cost is added to this reel's cost breakdown when the job finishes.",
+                      ]
+                    : ["No new image/TTS spend if assets are already on S3."],
+                  confirmLabel: "Resume",
+                  onConfirm: () => run(() => resumeFailedReel(id), { requireFfmpeg: true }),
+                })
+              }
+            >
+              {busy ? (
+                <Loader2 className="animate-spin" size={15} />
+              ) : (
+                <RefreshCw size={15} />
+              )}
+              Resume (reuse assets)
+            </Button>
+          </div>
         </div>
       ) : null}
 

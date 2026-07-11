@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Download, Plus } from "lucide-react";
+import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export function PageHeader({ downloadUrl }: PageHeaderProps) {
         </p>
       </div>
       <div className="flex items-center gap-2">
+        <CaptionSmokeButton size="sm" variant="ghost" label="Test captions" />
         {downloadUrl ? (
           <a
             className={cn(buttonClassName("outline"), "no-underline")}
