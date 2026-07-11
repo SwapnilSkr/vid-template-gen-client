@@ -19,6 +19,8 @@ import {
   revoiceReel,
   startYouTubeChannelConnect,
   updateReview,
+  assertFfmpegReady,
+  ffmpegBlockFromError,
   type ArtStyleOption,
   type CreateReelInput,
   type GameplayClip,
@@ -29,6 +31,7 @@ import {
   type RevoiceVariantInput,
   type TtsVoiceOption,
   type YouTubeChannelOption,
+  type FfmpegCapability,
 } from "@/api/reels";
 import { reelId } from "@/utils/reel";
 
@@ -37,6 +40,7 @@ interface ReelStudioState {
   selectedId?: string;
   loading: boolean;
   error?: string;
+  ffmpegBlock?: FfmpegCapability;
   draftReview?: ReelReview;
   gameplayClips: GameplayClip[];
   horrorAudios: HorrorAudioOption[];
@@ -63,6 +67,7 @@ interface ReelStudioState {
   removeYouTubeChannel: (id: string) => Promise<void>;
   select: (id: string) => Promise<void>;
   create: (input: CreateReelInput) => Promise<boolean>;
+  clearFfmpegBlock: () => void;
   pollSelected: () => Promise<void>;
   saveReview: (review: ReelReview) => Promise<void>;
   approveReview: () => Promise<void>;
@@ -79,6 +84,7 @@ interface ReelStudioState {
 export const useReelStudio = create<ReelStudioState>((set, get) => ({
   reels: [],
   loading: false,
+  ffmpegBlock: undefined,
   gameplayClips: [],
   horrorAudios: [],
   imageModels: [],
@@ -199,17 +205,26 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   },
 
   async create(input) {
-    set({ loading: true, error: undefined });
+    set({ loading: true, error: undefined, ffmpegBlock: undefined });
     try {
+      await assertFfmpegReady();
       const result = await createReel(input);
       await get().load();
       await get().select(result.id);
       set({ loading: false });
       return true;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Failed to create reel", loading: false });
+      set({
+        error: error instanceof Error ? error.message : "Failed to create reel",
+        loading: false,
+        ffmpegBlock: ffmpegBlockFromError(error),
+      });
       return false;
     }
+  },
+
+  clearFfmpegBlock() {
+    set({ ffmpegBlock: undefined });
   },
 
   async pollSelected() {
@@ -307,8 +322,9 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   async resumeFailed(id) {
     const targetId = id ?? get().selectedId;
     if (!targetId) return;
-    set({ loading: true, error: undefined });
+    set({ loading: true, error: undefined, ffmpegBlock: undefined });
     try {
+      await assertFfmpegReady();
       const updated = await resumeFailedReel(targetId);
       set((state) => ({
         loading: false,
@@ -319,6 +335,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       set({
         error: error instanceof Error ? error.message : "Failed to resume reel",
         loading: false,
+        ffmpegBlock: ffmpegBlockFromError(error),
       });
       return;
     }

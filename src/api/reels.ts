@@ -156,6 +156,9 @@ export interface Reel {
   progress: number;
   outputUrl?: string;
   subtitlesUrl?: string;
+  /** False when FFmpeg caption burn soft-failed (video has no burned-in text). */
+  captionsBurned?: boolean;
+  captionBurnError?: string;
   thumbnailMode?: "frame" | "ai";
   costUsd?: number;
   costBreakdown?: ReelCostBreakdown;
@@ -361,6 +364,95 @@ interface ApiResponse<T> {
   data: T;
   error?: string;
   message?: string;
+  code?: string;
+}
+
+export const FFMPEG_UNAVAILABLE = "FFMPEG_UNAVAILABLE";
+
+const FFMPEG_UNAVAILABLE_RE =
+  /ffmpeg is not installed|missing libass|bundled caption fonts|ffmpeg required|ffmpeg is not available/i;
+
+export const DEFAULT_FFMPEG_FIX_HINTS = [
+  "Install FFmpeg (macOS: brew install ffmpeg).",
+  "Or set FFMPEG_PATH in server/.env, then restart the API server.",
+] as const;
+
+export interface FfmpegCapability {
+  ok: boolean;
+  code?: string;
+  ffmpegPath: string;
+  ffmpegOk: boolean;
+  hasAssFilter: boolean;
+  fontsOk: boolean;
+  fontCount: number;
+  fontsDir: string;
+  version?: string;
+  message: string;
+  fixHints: string[];
+}
+
+export class ApiError extends Error {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+  }
+}
+
+/** Carries the capability snapshot so UI can show the modal without a second round-trip. */
+export class FfmpegUnavailableApiError extends ApiError {
+  readonly capability: FfmpegCapability;
+  constructor(capability: FfmpegCapability) {
+    super(capability.message, capability.code ?? FFMPEG_UNAVAILABLE);
+    this.name = "FfmpegUnavailableApiError";
+    this.capability = capability;
+  }
+}
+
+export function isFfmpegUnavailableError(error: unknown): boolean {
+  return (
+    error instanceof FfmpegUnavailableApiError ||
+    (error instanceof ApiError && error.code === FFMPEG_UNAVAILABLE) ||
+    (error instanceof Error && FFMPEG_UNAVAILABLE_RE.test(error.message))
+  );
+}
+
+/** Prefer the capability attached to the error; otherwise build a minimal fallback. */
+export function ffmpegBlockFromError(error: unknown): FfmpegCapability | undefined {
+  if (!isFfmpegUnavailableError(error)) return undefined;
+  if (error instanceof FfmpegUnavailableApiError) return error.capability;
+  return {
+    ok: false,
+    code: FFMPEG_UNAVAILABLE,
+    ffmpegPath: "ffmpeg",
+    ffmpegOk: false,
+    hasAssFilter: false,
+    fontsOk: false,
+    fontCount: 0,
+    fontsDir: "",
+    message: error instanceof Error ? error.message : "FFmpeg is not available on this device",
+    fixHints: [...DEFAULT_FFMPEG_FIX_HINTS],
+  };
+}
+
+function throwApiFailure(json: ApiResponse<unknown>, status: number): never {
+  const message = json.error ?? `Request failed: ${status}`;
+  if (json.code === FFMPEG_UNAVAILABLE) {
+    throw new FfmpegUnavailableApiError({
+      ok: false,
+      code: FFMPEG_UNAVAILABLE,
+      ffmpegPath: "ffmpeg",
+      ffmpegOk: false,
+      hasAssFilter: false,
+      fontsOk: false,
+      fontCount: 0,
+      fontsDir: "",
+      message,
+      fixHints: [...DEFAULT_FFMPEG_FIX_HINTS],
+    });
+  }
+  throw new ApiError(message, json.code);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -370,11 +462,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
     const json = (await res.json()) as ApiResponse<T>;
-    if (!res.ok || !json.success) {
-      throw new Error(json.error ?? `Request failed: ${res.status}`);
-    }
+    if (!res.ok || !json.success) throwApiFailure(json, res.status);
     return json.data;
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.message !== "Failed to fetch") throw error;
     throw new Error(`API unavailable at ${API_BASE}. Start the server or set VITE_API_BASE_URL.`);
   }
@@ -787,6 +878,62 @@ export async function regenerateReel(id: string, mode: "render_only" | "assets")
 /** Resume a failed produce job — reuses S3 scene assets, re-runs render→upload. */
 export async function resumeFailedReel(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/resume`, { method: "POST" });
+}
+
+export interface CaptionSmokeCheck {
+  id: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface CaptionSmokeResult {
+  success: boolean;
+  checks: CaptionSmokeCheck[];
+  outputPath?: string;
+  filterPreview?: string;
+  message: string;
+}
+
+/**
+ * Front→backend sample: burn ASS captions onto a test clip and verify pixels.
+ * Hits GET /api/maintenance/caption-smoke (same checks as `bun run smoke:captions`).
+ */
+export async function runCaptionSmokeTest(opts?: {
+  keepOutput?: boolean;
+}): Promise<CaptionSmokeResult> {
+  const q = opts?.keepOutput ? "?keepOutput=1" : "";
+  const res = await fetch(`${API_BASE}/maintenance/caption-smoke${q}`);
+  const json = (await res.json()) as {
+    success: boolean;
+    message: string;
+    result: CaptionSmokeResult;
+  };
+  if (!res.ok) {
+    throw new Error(json.message || `Caption smoke failed: ${res.status}`);
+  }
+  return json.result;
+}
+
+/** Lightweight preflight — call before create / generate / regenerate / resume. */
+export async function getFfmpegStatus(): Promise<FfmpegCapability> {
+  const res = await fetch(`${API_BASE}/ffmpeg`);
+  const json = (await res.json()) as {
+    success: boolean;
+    data: FfmpegCapability;
+    error?: string;
+    code?: string;
+  };
+  if (!json.data) {
+    throw new ApiError(json.error ?? "Could not check FFmpeg status", json.code);
+  }
+  return json.data;
+}
+
+/** Throws {@link FfmpegUnavailableApiError} when the server cannot burn captions. */
+export async function assertFfmpegReady(): Promise<FfmpegCapability> {
+  const status = await getFfmpegStatus();
+  if (!status.ok) throw new FfmpegUnavailableApiError(status);
+  return status;
 }
 
 export async function saveEditDraft(id: string): Promise<Reel> {
