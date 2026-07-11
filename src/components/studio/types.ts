@@ -2,6 +2,7 @@ import type { Reel } from "@/api/reels";
 
 export type InspectorTab =
   | "source"
+  | "voice"
   | "look"
   | "effects"
   | "outro"

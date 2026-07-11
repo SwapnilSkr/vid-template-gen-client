@@ -1,11 +1,10 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   listArtStyles,
   listGameplay,
   listImageModels,
   listStylePresets,
-  listTtsVoices,
   updateCaptions,
   updateReelSettings,
   type ArtStyleOption,
@@ -13,10 +12,8 @@ import {
   type ImageModelOption,
   type Reel,
   type StylePreset,
-  type TtsVoiceOption,
 } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
-import { VOICE_POST_PROFILES } from "@/components/studio/constants";
 import type { ConfirmAction, StudioRun } from "@/components/studio/types";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -38,7 +35,6 @@ export function PresetsPanel({
 }) {
   const [artStyles, setArtStyles] = useState<ArtStyleOption[]>([]);
   const [imageModels, setImageModels] = useState<ImageModelOption[]>([]);
-  const [voices, setVoices] = useState<TtsVoiceOption[]>([]);
   const [presets, setPresets] = useState<StylePreset[]>([]);
   const reelKey = reel._id ?? reel.id ?? "";
 
@@ -49,16 +45,10 @@ export function PresetsPanel({
     void listImageModels()
       .then(setImageModels)
       .catch(() => undefined);
-    void listTtsVoices()
-      .then(setVoices)
-      .catch(() => undefined);
     void listStylePresets(reel.niche)
       .then(setPresets)
       .catch(() => setPresets([]));
   }, [reel.niche]);
-
-  const currentVoice =
-    reel.voiceOverride?.voice ?? reel.narrationVoice?.voice ?? "";
 
   const applyPreset = (preset: StylePreset) =>
     requestConfirm({
@@ -84,7 +74,7 @@ export function PresetsPanel({
 
   return (
     <div className="grid gap-2.5">
-      <PanelTitle className="text-foreground">Look & Voice</PanelTitle>
+      <PanelTitle className="text-foreground">Look</PanelTitle>
 
       {presets.length ? (
         <div className="grid gap-2 rounded-md border border-border bg-card p-2.5">
@@ -203,83 +193,10 @@ export function PresetsPanel({
         </Select>
       </Label>
 
-      <Label className="text-xs text-muted-foreground">
-        Narration voice
-        <Select
-          disabled={busy}
-          value={currentVoice}
-          onChange={(e) => {
-            const v = voices.find((o) => o.voice === e.target.value);
-            if (!v) return;
-            requestConfirm({
-              title: "Change narration voice?",
-              body: "This clears existing scene narration audio so the selected voice can be generated.",
-              details: [
-                "No OpenRouter call happens immediately.",
-                "The next asset produce run regenerates narration audio.",
-                "Scene images are kept.",
-              ],
-              confirmLabel: "Change voice",
-              onConfirm: () =>
-                run(() =>
-                  updateReelSettings(reelKey, {
-                    voice: { model: v.model, voice: v.voice, format: v.format },
-                  }),
-                ),
-            });
-          }}
-        >
-          <option value="">Default</option>
-          {voices.map((v) => (
-            <option key={`${v.model}/${v.voice}`} value={v.voice}>
-              {v.label}
-            </option>
-          ))}
-        </Select>
-      </Label>
-
-      <Label className="text-xs text-muted-foreground">
-        Voice post-processing
-        <Select
-          disabled={busy}
-          value={reel.audioPost?.voiceProfile ?? "horror"}
-          onChange={(e) => {
-            const voiceProfile = e.target.value as NonNullable<
-              Reel["audioPost"]
-            >["voiceProfile"];
-            requestConfirm({
-              title: "Change voice post-processing?",
-              body: "Voice FX are baked into the scene narration MP3s, so existing narration audio must be regenerated.",
-              details: [
-                "No OpenRouter call happens immediately.",
-                "The next asset produce run regenerates narration audio with the selected treatment.",
-                "Scene images are kept.",
-              ],
-              confirmLabel: "Change voice FX",
-              onConfirm: () =>
-                run(() =>
-                  updateReelSettings(reelKey, {
-                    audioPost: {
-                      ...reel.audioPost,
-                      voiceProfile,
-                    },
-                  }),
-                ),
-            });
-          }}
-        >
-          {VOICE_POST_PROFILES.map((profile) => (
-            <option key={profile.value} value={profile.value}>
-              {profile.label}
-            </option>
-          ))}
-        </Select>
-      </Label>
       <p className="text-[11px] text-muted-foreground/80">
-        Changing art/image model clears stills; changing voice or voice FX
-        clears narration. Re-render below to apply.
+        Changing art or image model clears stills. Narration controls now live
+        in the dedicated Voice tab.
       </p>
     </div>
   );
 }
-

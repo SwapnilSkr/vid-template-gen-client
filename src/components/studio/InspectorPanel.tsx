@@ -48,6 +48,9 @@ const StoryPanel = lazy(() =>
     default: m.StoryPanel,
   })),
 );
+const VoicePanel = lazy(() =>
+  import("@/components/studio/panels/VoicePanel").then((m) => ({ default: m.VoicePanel })),
+);
 
 function InspectorTabFallback() {
   return (
@@ -128,6 +131,9 @@ export function InspectorPanel({
                 requestConfirm={requestConfirm}
               />
             )
+          ) : null}
+          {tab === "voice" ? (
+            <VoicePanel reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} />
           ) : null}
           {tab === "look" && !isGameplay ? (
             <PresetsPanel

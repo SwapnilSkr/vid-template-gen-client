@@ -15,6 +15,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOTION_MODES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
+import { isAssetStreamingStatus, producingSceneIndex } from "@/utils/reel";
 
 export function SceneCard({
   reelId,
@@ -54,11 +55,18 @@ export function SceneCard({
   );
   const imageUrl = mediaUrl(draftAsset?.assetUrl) ?? scene.assetUrl;
   const audioUrl = mediaUrl(draftAsset?.audioUrl) ?? scene.audioUrl;
+  const generatingThisScene =
+    isAssetStreamingStatus(reel.status) &&
+    producingSceneIndex(reel.currentStep) === scene.index;
+  const generatingAudio =
+    generatingThisScene && reel.status === "generating_audio";
+  const generatingImage =
+    generatingThisScene && reel.status === "generating_assets";
 
   return (
     <div className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3 md:grid-cols-[120px_minmax(0,1fr)]">
       <div className="grid gap-1.5">
-        <div className="grid aspect-9/16 w-full place-items-center overflow-hidden rounded-md border border-border bg-black/45 text-muted-foreground/80">
+        <div className="relative grid aspect-9/16 w-full place-items-center overflow-hidden rounded-md border border-border bg-black/45 text-muted-foreground/80">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -67,9 +75,16 @@ export function SceneCard({
             />
           ) : isGameplay ? (
             <span className="px-2 text-center text-[10px] leading-snug">Gameplay bg</span>
+          ) : generatingImage ? (
+            <Loader2 size={20} className="animate-spin text-primary" />
           ) : (
             <ImageIcon size={20} />
           )}
+          {generatingThisScene ? (
+            <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[10px] text-white">
+              {generatingAudio ? "Narrating…" : "Generating…"}
+            </span>
+          ) : null}
         </div>
         <span className="text-center text-[11px] font-medium text-muted-foreground/80">
           {isGameplay ? `Sentence ${scene.index + 1}/${total}` : `Scene ${scene.index + 1}/${total}`}
@@ -79,7 +94,12 @@ export function SceneCard({
           <audio src={audioUrl} controls className="h-7 w-full" />
         ) : (
           <span className="inline-flex items-center justify-center gap-1 text-[11px] text-muted-foreground/80">
-            <Play size={11} /> no audio
+            {generatingAudio ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <Play size={11} />
+            )}
+            {generatingAudio ? "generating…" : "no audio"}
           </span>
         )}
       </div>

@@ -39,8 +39,12 @@ import { Button, buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   gameplayRerenderCostsCredits,
+  isAssetStreamingStatus,
   REEL_ACTIVE_STATUSES,
+  REEL_ASSET_POLL_MS,
+  REEL_SETTLE_MS,
   reelNeedsPolling,
+  reelProgressLabel,
   reelStudioLocked,
 } from "@/utils/reel";
 
@@ -109,6 +113,8 @@ export function StudioScreen() {
   }, [reel]);
 
   const needsPoll = reelNeedsPolling(reel);
+  const assetStreaming = isAssetStreamingStatus(reel?.status);
+  const pollMs = assetStreaming ? REEL_ASSET_POLL_MS : 2500;
 
   // Poll while produce / revoice / YouTube publish (or any other in-flight job) may
   // still mutate the reel. Publish + revoice leave status=completed, so status-only
@@ -118,12 +124,12 @@ export function StudioScreen() {
   useEffect(() => {
     if (needsPoll) {
       void refresh();
-      const t = setInterval(() => void refresh(), 2500);
+      const t = setInterval(() => void refresh(), pollMs);
       return () => clearInterval(t);
     }
-    const settle = setTimeout(() => void refresh(), 2000);
+    const settle = setTimeout(() => void refresh(), REEL_SETTLE_MS);
     return () => clearTimeout(settle);
-  }, [needsPoll, refresh]);
+  }, [needsPoll, refresh, pollMs]);
 
   useEffect(() => {
     if (!reel?.editDraft) return;
@@ -251,6 +257,7 @@ export function StudioScreen() {
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
               <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
+              {reel.currentStep ? ` · ${reel.currentStep}` : ""}
             </p>
           </div>
         </div>
@@ -319,7 +326,7 @@ export function StudioScreen() {
       {studioLocked && !busy ? (
         <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
           {isGenerating
-            ? `Job in progress (${reel.status.replace(/_/g, " ")}) — edits and re-renders are locked.`
+            ? `Job in progress (${reelProgressLabel(reel)}) — edits and re-renders are locked. Scene stills and narration appear as each one finishes.`
             : reel.voiceVariants?.some((v) => v.status === "pending")
               ? "Revoice in progress — edits and re-renders are locked."
               : "YouTube publish in progress — edits and re-renders are locked."}

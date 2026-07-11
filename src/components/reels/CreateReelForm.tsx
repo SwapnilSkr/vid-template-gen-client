@@ -9,7 +9,7 @@ import { panelClassName } from "@/components/ui/panel";
 import { MOTION_MODES, NICHE_GENRES, NICHES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 import { useReelStudio } from "@/store/reel-studio";
-import { formatLabel, parsePartsValue } from "@/utils/reel";
+import { formatLabel, parsePartsValue, createReelLoadingHint, createReelLoadingLabel } from "@/utils/reel";
 import { EditEffectsControls } from "./EditEffectsControls";
 import { VoicePickerList } from "./VoicePickerList";
 
@@ -222,10 +222,18 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           </Button>
           <Button type="submit" variant="default" disabled={loading}>
             {loading ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
-            Create Reel
+            {loading
+              ? createReelLoadingLabel({ niche: form.niche, parts: form.parts })
+              : "Create Reel"}
           </Button>
         </div>
       </div>
+
+      {loading ? (
+        <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground">
+          {createReelLoadingHint({ niche: form.niche, parts: form.parts })}
+        </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(130px,1fr))]">
         <Label>

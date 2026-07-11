@@ -3,6 +3,7 @@ import {
   Captions,
   Image as ImageIcon,
   Layers,
+  Mic2,
   Palette,
   Settings2,
   SlidersHorizontal,
@@ -55,6 +56,7 @@ export const INSPECTOR_TABS: {
   icon: ReactNode;
 }[] = [
   { id: "source", label: "Source", icon: <Layers size={15} /> },
+  { id: "voice", label: "Voice", icon: <Mic2 size={15} /> },
   { id: "look", label: "Look", icon: <Palette size={15} /> },
   { id: "effects", label: "Effects", icon: <SlidersHorizontal size={15} /> },
   { id: "outro", label: "Outro", icon: <Youtube size={15} /> },
