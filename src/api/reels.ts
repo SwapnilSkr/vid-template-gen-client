@@ -155,10 +155,15 @@ export interface Reel {
   status: ReelStatus;
   progress: number;
   outputUrl?: string;
+  bodyVideoUrl?: string;
+  assemblyVideoUrl?: string;
   subtitlesUrl?: string;
   /** False when FFmpeg caption burn soft-failed (video has no burned-in text). */
   captionsBurned?: boolean;
   captionBurnError?: string;
+  titleAudioUrl?: string;
+  partOutroAudioUrl?: string;
+  outroAudioUrl?: string;
   thumbnailMode?: "frame" | "ai";
   costUsd?: number;
   costBreakdown?: ReelCostBreakdown;
@@ -871,7 +876,10 @@ export async function applyCaptions(id: string, patch: CaptionStyle): Promise<Re
   });
 }
 
-export async function regenerateReel(id: string, mode: "render_only" | "assets"): Promise<Reel> {
+export async function regenerateReel(
+  id: string,
+  mode: "render_only" | "assets" | "outro_only" | "composite_only"
+): Promise<Reel> {
   return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
 }
 

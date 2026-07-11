@@ -39,9 +39,46 @@ export function reelStudioLocked(reel?: Reel | null): boolean {
   return reelNeedsPolling(reel);
 }
 
-/** Whether a gameplay re-render will spend OpenRouter TTS credits. */
+/** Whether a gameplay re-render will spend OpenRouter TTS credits.
+ *  Once title + sentence audio are cached on the reel, render-only is free TTS. */
 export function gameplayRerenderCostsCredits(reel?: Reel | null): boolean {
-  return reel?.strategy === "gameplay_overlay";
+  if (reel?.strategy !== "gameplay_overlay") return false;
+  return !gameplayNarrationCacheReady(reel);
+}
+
+/** True when Reddit narration segments are cached and can be reused. */
+export function gameplayNarrationCacheReady(reel?: Reel | null): boolean {
+  if (!reel || reel.strategy !== "gameplay_overlay") return false;
+  if (!reel.titleAudioUrl) return false;
+  const scenes = reel.scenes ?? [];
+  if (!scenes.length) return false;
+  return scenes.every((scene) => Boolean(scene.audioUrl));
+}
+
+/** Prefer outro-only when a body-without-outro artifact exists. */
+export function canOutroOnlyRerender(reel?: Reel | null): boolean {
+  return Boolean(reel?.bodyVideoUrl);
+}
+
+/** Prefer composite-only (no TTS / no Ken Burns) when caches allow. */
+export function canCompositeOnlyRerender(reel?: Reel | null): boolean {
+  if (!reel) return false;
+  if (reel.strategy === "gameplay_overlay") return gameplayNarrationCacheReady(reel);
+  return Boolean(reel.assemblyVideoUrl);
+}
+
+/** How many gameplay TTS segments are still missing (title + sentences + part-outro). */
+export function gameplayMissingTtsSegmentCount(reel?: Reel | null): number {
+  if (!reel || reel.strategy !== "gameplay_overlay") return 0;
+  let missing = 0;
+  if (!reel.titleAudioUrl) missing += 1;
+  for (const scene of reel.scenes ?? []) {
+    if (!scene.audioUrl) missing += 1;
+  }
+  const partNumber = reel.partNumber ?? reel.redditStory?.partNumber ?? 1;
+  const partCount = reel.partCount ?? reel.redditStory?.partCount ?? 1;
+  if (partNumber < partCount && !reel.partOutroAudioUrl) missing += 1;
+  return missing;
 }
 
 export function formatLabel(value?: string) {
