@@ -20,6 +20,9 @@ export interface LayerBox {
 
 export interface RenderOptions {
   backgroundImage?: HTMLImageElement | undefined;
+  /** Export foreground layers/effects over alpha while the editor can still
+   * preview them against a reference frame. Used for live Reddit gameplay. */
+  transparentBackground?: boolean;
   /** Layer being inline-edited on the stage — skipped so the DOM editor replaces it. */
   skipLayerId?: string;
 }
@@ -33,10 +36,18 @@ export function renderThumbDoc(
 ): LayerBox[] {
   ctx.save();
   ctx.clearRect(0, 0, outW, outH);
-  ctx.fillStyle = "#0a0a0c";
-  ctx.fillRect(0, 0, outW, outH);
+  if (!options.transparentBackground) {
+    ctx.fillStyle = "#0a0a0c";
+    ctx.fillRect(0, 0, outW, outH);
+  }
 
-  drawBackground(ctx, doc.background, outW, outH, options.backgroundImage);
+  drawBackground(
+    ctx,
+    doc.background,
+    outW,
+    outH,
+    options.transparentBackground ? undefined : options.backgroundImage,
+  );
 
   const boxes: LayerBox[] = [];
   for (const layer of doc.layers) {
@@ -535,13 +546,14 @@ export function exportThumbPng(
   doc: ThumbDoc,
   outW: number,
   outH: number,
-  backgroundImage: HTMLImageElement | undefined
+  backgroundImage: HTMLImageElement | undefined,
+  options: { transparentBackground?: boolean } = {},
 ): string {
   const canvas = document.createElement("canvas");
   canvas.width = outW;
   canvas.height = outH;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D unavailable");
-  renderThumbDoc(ctx, doc, outW, outH, { backgroundImage });
+  renderThumbDoc(ctx, doc, outW, outH, { backgroundImage, ...options });
   return canvas.toDataURL("image/png");
 }

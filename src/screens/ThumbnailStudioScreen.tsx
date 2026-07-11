@@ -180,12 +180,14 @@ export function ThumbnailStudioScreen() {
     if (!reel || initializedRef.current === id) return;
     initializedRef.current = id;
 
-    const cacheKey = `${sessionDocKey(id)}${isShorts ? ":shorts" : ""}`;
+    const cacheKey = `${sessionDocKey(id)}${isShorts ? (reel.strategy === "gameplay_overlay" ? ":shorts-overlay-v2" : ":shorts") : ""}`;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
         const revived = reviveDoc(JSON.parse(raw));
-        if (revived) {
+        // An early Reddit-overlay build seeded an empty layer stack. Do not let
+        // that migration artifact hide the user's authored thumbnail layers.
+        if (revived && !(isShorts && reel.strategy === "gameplay_overlay" && revived.layers.length === 0)) {
           history.replaceAll(revived);
           return;
         }
@@ -198,10 +200,28 @@ export function ThumbnailStudioScreen() {
     if (draftInput) {
       const aspect = (isShorts ? "9:16" : (reel.thumbnailDraft?.aspectRatio ?? "16:9")) as ThumbAspect;
       const revived = reviveDoc(draftInput) ?? docFromLegacyDraftInput(draftInput, aspect);
-      if (revived) {
+      if (revived && !(isShorts && reel.strategy === "gameplay_overlay" && revived.layers.length === 0)) {
         history.replaceAll(revived);
         stagedJsonRef.current = JSON.stringify(revived);
         return;
+      }
+    }
+
+    // Reddit Shorts are a live-background rendering of the normal thumbnail
+    // composition. Import that editor document, but export only its foreground
+    // layers/effects so gameplay remains animated underneath.
+    if (isShorts && reel.strategy === "gameplay_overlay") {
+      try {
+        const normalThumbnailDoc = sessionStorage.getItem(sessionDocKey(id));
+        const revived = normalThumbnailDoc
+          ? reviveDoc(JSON.parse(normalThumbnailDoc))
+          : reviveDoc(reel.review?.thumbnailEditorState);
+        if (revived?.layers.length) {
+          history.replaceAll({ ...revived, aspectRatio: "9:16" });
+          return;
+        }
+      } catch {
+        /* no usable conventional-thumbnail editor state */
       }
     }
 
@@ -223,13 +243,16 @@ export function ThumbnailStudioScreen() {
     if (initializedRef.current !== id) return;
     const t = window.setTimeout(() => {
       try {
-        sessionStorage.setItem(`${sessionDocKey(id)}${isShorts ? ":shorts" : ""}`, JSON.stringify(doc));
+        sessionStorage.setItem(
+          `${sessionDocKey(id)}${isShorts ? (reel?.strategy === "gameplay_overlay" ? ":shorts-overlay-v2" : ":shorts") : ""}`,
+          JSON.stringify(doc),
+        );
       } catch {
         /* quota / private mode */
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [doc, id, isShorts]);
+  }, [doc, id, isShorts, reel?.strategy]);
 
   useEffect(() => {
     if (!reel?.review?.thumbnailPrompt) return;
@@ -500,8 +523,10 @@ export function ThumbnailStudioScreen() {
   const out = outputSize(doc.aspectRatio);
 
   const exportDataUrl = useCallback((): string => {
-    return exportThumbPng(doc, out.width, out.height, bgImage);
-  }, [bgImage, doc, out.height, out.width]);
+    return exportThumbPng(doc, out.width, out.height, bgImage, {
+      transparentBackground: isShorts && isGameplay,
+    });
+  }, [bgImage, doc, isGameplay, isShorts, out.height, out.width]);
 
   const stageDraft = useCallback(async (): Promise<Reel> => {
     const imageDataUrl = exportDataUrl();
@@ -645,6 +670,12 @@ export function ThumbnailStudioScreen() {
         {error ? (
           <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
+          </div>
+        ) : null}
+
+        {isShorts && isGameplay ? (
+          <div className="mb-3 rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-primary">
+            <strong>Live gameplay overlay:</strong> the gameplay frame is preview-only and is not saved into the cover PNG. The rendered gameplay keeps moving underneath; the existing Reddit title card remains, and only layers or transparent overlay effects added here are composited above it.
           </div>
         ) : null}
 
