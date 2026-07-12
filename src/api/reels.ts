@@ -186,6 +186,15 @@ export interface Reel {
     shortsCoverStatus?: "applied" | "unchanged" | "unknown";
     publishedAt?: string;
   };
+  instagram?: Array<{
+    channelId: string;
+    channelLabel?: string;
+    status: "pending" | "uploading" | "published" | "failed";
+    mediaId?: string;
+    url?: string;
+    error?: string;
+    publishedAt?: string;
+  }>;
   seriesId?: string;
   partNumber?: number;
   partCount?: number;
@@ -353,6 +362,18 @@ export interface YouTubeChannelOption {
   isDefault: boolean;
   source: "env" | "database";
   status?: "active" | "needs_reauth" | "disabled";
+  lastError?: string;
+}
+
+export interface InstagramChannelOption {
+  id: string;
+  label: string;
+  instagramUserId: string;
+  username?: string;
+  name?: string;
+  profilePictureUrl?: string;
+  niches?: string[];
+  status: "active" | "needs_reauth" | "disabled";
   lastError?: string;
 }
 
@@ -527,6 +548,17 @@ export async function startYouTubeChannelConnect(input: {
 
 export async function deleteYouTubeChannel(id: string): Promise<void> {
   await request(`/youtube/channels/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listInstagramChannels(): Promise<InstagramChannelOption[]> {
+  return request<InstagramChannelOption[]>("/instagram/channels");
+}
+export async function startInstagramChannelConnect(input: { label: string; channelKey?: string; niches?: string[] }): Promise<{ authUrl: string }> {
+  return request<{ authUrl: string }>("/instagram/connect/start", { method: "POST", body: JSON.stringify(input) });
+}
+export async function deleteInstagramChannel(id: string): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "DELETE" }); }
+export async function distributeReel(id: string, input: { youtubeChannelIds?: string[]; instagramChannelIds?: string[] }): Promise<void> {
+  await request(`/reels/${id}/distribute`, { method: "POST", body: JSON.stringify(input) });
 }
 
 export async function createReel(input: CreateReelInput): Promise<{ id: string; parts: Reel[] }> {
