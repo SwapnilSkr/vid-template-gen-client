@@ -1,8 +1,24 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { motion, AnimatePresence } from "framer-motion";
+import {
   ArrowLeft,
   Clapperboard,
   Download,
+  ExternalLink,
+  GripVertical,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -184,6 +200,22 @@ export function StudioScreen() {
     if (count === 0) return;
     setSelectedSceneIndex((index) => Math.min(Math.max(index, 0), count - 1));
   }, [reel?.scenes?.length]);
+
+  const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.currentTarget;
+    const currentTime = video.currentTime;
+    const scenesList = reel?.scenes ?? [];
+    if (!scenesList.length) return;
+
+    let accumulatedTime = 0;
+    for (let i = 0; i < scenesList.length; i++) {
+      accumulatedTime += Math.max(scenesList[i].duration || 0, 0);
+      if (currentTime <= accumulatedTime) {
+        setSelectedSceneIndex((prev) => (prev !== i ? i : prev));
+        break;
+      }
+    }
+  }, [reel?.scenes]);
 
   if (loading) {
     return (
