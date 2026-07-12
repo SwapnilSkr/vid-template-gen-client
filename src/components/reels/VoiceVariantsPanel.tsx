@@ -144,12 +144,7 @@ export function VoiceVariantsPanel({
         </span>
       </div>
 
-      <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
-        Re-narrate the full video with up to five voices, compare previews, then
-        click <span className="font-medium text-foreground">Use in studio</span>{" "}
-        to replace the program monitor output. Per-scene audio changes use the
-        Audio button on each scene card.
-      </p>
+
 
       {variants.length ? (
         <div className="grid gap-2">
@@ -220,11 +215,7 @@ export function VoiceVariantsPanel({
           })}
         </div>
       ) : (
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground/80">
-          No voice variants yet. Preview and pick up to 5 voices below,
-          generate, then promote the take you like best — the gameplay clip and
-          story stay the same, only the narration changes.
-        </p>
+
       )}
 
       {error ? (

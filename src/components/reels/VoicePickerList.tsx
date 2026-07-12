@@ -127,11 +127,7 @@ export function VoicePickerList({
                     {selected ? "Selected: " : ""}
                     {voiceLabel(option.label)}
                   </span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {option.priceLabel ?? "usage-priced"}
-                    {option.unitPriceLabel ? ` · ${option.unitPriceLabel}` : ""}
-                    {option.recommendedFor?.length ? ` · ${option.recommendedFor.join(", ")}` : ""}
-                  </span>
+
                 </span>
                 <button
                   type="button"
