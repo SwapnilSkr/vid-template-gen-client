@@ -1076,7 +1076,7 @@ export function ThumbnailStudioScreen() {
                       history.commit({ ...doc, aspectRatio: event.target.value as ThumbAspect })
                     }
                   >
-                    <option value="9:16">9:16 — Shorts shelf / search</option>
+                    <option value="9:16">9:16 — Vertical Cover (Reels + Shorts)</option>
                     {!isShorts ? <option value="16:9">16:9 — classic YouTube</option> : null}
                     {!isShorts ? <option value="1:1">1:1 — Square</option> : null}
                   </Select>

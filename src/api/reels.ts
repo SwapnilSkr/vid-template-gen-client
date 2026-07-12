@@ -195,6 +195,7 @@ export interface Reel {
     error?: string;
     publishedAt?: string;
   }>;
+  instagramSettings?: { caption?: string; shareToFeed?: boolean };
   seriesId?: string;
   partNumber?: number;
   partCount?: number;
@@ -549,6 +550,7 @@ export async function startYouTubeChannelConnect(input: {
 export async function deleteYouTubeChannel(id: string): Promise<void> {
   await request(`/youtube/channels/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+export async function updateYouTubeChannel(id: string, input: { label?: string; privacyStatus?: "private" | "unlisted" | "public"; categoryId?: string; niches?: string[] }): Promise<void> { await request(`/youtube/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
 
 export async function listInstagramChannels(): Promise<InstagramChannelOption[]> {
   return request<InstagramChannelOption[]>("/instagram/channels");
@@ -557,6 +559,7 @@ export async function startInstagramChannelConnect(input: { label: string; chann
   return request<{ authUrl: string }>("/instagram/connect/start", { method: "POST", body: JSON.stringify(input) });
 }
 export async function deleteInstagramChannel(id: string): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "DELETE" }); }
+export async function updateInstagramChannel(id: string, input: { label?: string; niches?: string[] }): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
 export async function distributeReel(id: string, input: { youtubeChannelIds?: string[]; instagramChannelIds?: string[] }): Promise<void> {
   await request(`/reels/${id}/distribute`, { method: "POST", body: JSON.stringify(input) });
 }
@@ -921,6 +924,7 @@ export interface ReelSettingsInput {
   voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
   audioPost?: AudioPost;
   editEffects?: EditEffects;
+  instagram?: { caption?: string; shareToFeed?: boolean };
 }
 
 export async function updateReelSettings(id: string, patch: ReelSettingsInput): Promise<Reel> {

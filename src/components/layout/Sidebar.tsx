@@ -10,6 +10,7 @@ import {
   Play,
   Send,
   TrendingUp,
+  UsersRound,
   Youtube,
 } from "lucide-react";
 import type { Reel } from "@/api/reels";
@@ -135,6 +136,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       })}
 
       <SectionLabel>Library</SectionLabel>
+      <Link to="/accounts" onClick={onNavigate} className={navLinkClass(pathname === "/accounts")}>
+        <UsersRound size={15} />
+        <span>Accounts</span>
+      </Link>
       <Link
         to="/youtube"
         onClick={onNavigate}
