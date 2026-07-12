@@ -747,7 +747,7 @@ export function ThumbnailStudioScreen() {
           </Link>
           <div className="min-w-0">
             <h1 className="m-0 min-w-0 truncate text-sm font-semibold tracking-normal text-foreground">
-              {isShorts ? "Shorts Cover Studio" : "Thumbnail studio"} · {reel.title || "Untitled reel"}
+              {isShorts ? "Vertical Cover Studio" : "Thumbnail studio"} · {reel.title || "Untitled reel"}
             </h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {reel.niche} · <ReelStatusChip status={reel.status} size="sm" />
@@ -757,7 +757,7 @@ export function ThumbnailStudioScreen() {
         <div className="flex items-center gap-1.5">
           {isShorts && shortsDirty ? (
             <span className="rounded-full border border-warning/60 bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
-              Unsaved Shorts edits
+              Unsaved Vertical Cover edits
             </span>
           ) : null}
           {hasDraft ? (
@@ -1140,7 +1140,7 @@ export function ThumbnailStudioScreen() {
               </div>
             </StudioPanel>
 
-            <StudioPanel title={isShorts ? "Save Shorts cover" : "Export"} icon={<Save size={15} />}>
+            <StudioPanel title={isShorts ? "Save Vertical Cover" : "Export"} icon={<Save size={15} />}>
               {isShorts ? (
                 <div className="mb-2 flex flex-wrap gap-2">
                   <Button
@@ -1161,7 +1161,7 @@ export function ThumbnailStudioScreen() {
                       disabled={disableEdits}
                       onClick={() =>
                         setConfirmAction({
-                          title: "Remove saved Shorts cover?",
+                          title: "Remove saved Vertical Cover?",
                           body: "Deletes the saved cover PNG from S3 and resets the editor to a fresh default.",
                           details: [
                             "The next render will not include an opening cover unless you save again.",
@@ -1202,7 +1202,7 @@ export function ThumbnailStudioScreen() {
                   onClick={() => void (isShorts ? uploadShortsCover() : uploadFinal())}
                 >
                   {busy ? <Loader2 className="animate-spin" size={15} /> : <CloudUpload size={15} />}
-                  {isShorts ? "Save cover (zero AI)" : "Upload to S3"}
+                  {isShorts ? "Save Vertical Cover" : "Upload to S3"}
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground/80">

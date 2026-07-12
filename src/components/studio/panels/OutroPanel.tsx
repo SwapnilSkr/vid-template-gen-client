@@ -2,11 +2,13 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   listYouTubeChannels,
+  listInstagramChannels,
   regenerateReel,
   updateReelSettings,
   type OutroSettings,
   type Reel,
   type YouTubeChannelOption,
+  type InstagramChannelOption,
 } from "@/api/reels";
 import { RenderCacheStatus, describeRenderCost } from "@/components/reels/RenderCostHint";
 import {
@@ -44,21 +46,26 @@ export function OutroPanel({
   const reelKey = reel._id ?? reel.id ?? "";
   const isPlanReview = reel.status === "plan_review";
   const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
+  const [instagramChannels, setInstagramChannels] = useState<InstagramChannelOption[]>([]);
   const [outroChannelId, setOutroChannelId] = useState(reel.outroChannelId ?? "");
+  const [outroInstagramChannelId, setOutroInstagramChannelId] = useState(reel.outroInstagramChannelId ?? "");
   const [outro, setOutro] = useState<OutroSettings>(reel.outro ?? {});
 
   useEffect(() => {
-    void listYouTubeChannels()
-      .then(setChannels)
-      .catch(() => setChannels([]));
+    void Promise.allSettled([listYouTubeChannels(), listInstagramChannels()]).then(([yt, ig]) => {
+      setChannels(yt.status === "fulfilled" ? yt.value : []);
+      setInstagramChannels(ig.status === "fulfilled" ? ig.value : []);
+    });
   }, []);
 
   useEffect(() => {
     setOutroChannelId(reel.outroChannelId ?? "");
+    setOutroInstagramChannelId(reel.outroInstagramChannelId ?? "");
     setOutro(reel.outro ?? {});
   }, [reel.outro, reel.outroChannelId]);
 
   const selected = channels.find((channel) => channel.id === outroChannelId);
+  const selectedInstagram = instagramChannels.find((channel) => channel.id === outroInstagramChannelId);
   const patchOutro = (patch: Partial<OutroSettings>) =>
     setOutro((current) => ({ ...current, ...patch }));
   const showPartTeaser = hasPartTeaser(reel);
@@ -86,16 +93,21 @@ export function OutroPanel({
 
       <div className={cn("grid gap-2.5", !brandedEnabled && "pointer-events-none opacity-50")}>
         <Label className="text-xs text-muted-foreground">
-          Brand channel
+          Brand account
           <Select
             disabled={busy || !brandedEnabled}
-            value={outroChannelId}
-            onChange={(event) => setOutroChannelId(event.target.value)}
+            value={outroInstagramChannelId ? `instagram:${outroInstagramChannelId}` : outroChannelId}
+            onChange={(event) => { const value = event.target.value; if (value.startsWith("instagram:")) { setOutroInstagramChannelId(value.slice("instagram:".length)); setOutroChannelId(""); } else { setOutroChannelId(value); setOutroInstagramChannelId(""); } }}
           >
             <option value="">Auto by niche</option>
             {channels.map((channel) => (
               <option key={channel.id} value={channel.id}>
                 {channelDisplayName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
+              </option>
+            ))}
+            {instagramChannels.map((channel) => (
+              <option key={`instagram:${channel.id}`} value={`instagram:${channel.id}`}>
+                Instagram · {channel.username ? `@${channel.username}` : channel.label}
               </option>
             ))}
           </Select>
@@ -106,6 +118,7 @@ export function OutroPanel({
             The outro will use {channelDisplayName(selected)} unless you override the display name below.
           </div>
         ) : null}
+        {selectedInstagram ? <div className="rounded-md border border-pink-500/20 bg-pink-500/[0.04] px-3 py-2 text-xs text-muted-foreground">The outro will use @{selectedInstagram.username ?? selectedInstagram.label}, including its Instagram profile image.</div> : null}
 
         <Label className="text-xs text-muted-foreground">
           Display name override
@@ -203,6 +216,7 @@ export function OutroPanel({
             void run(() =>
               updateReelSettings(reelKey, {
                 outroChannelId,
+                outroInstagramChannelId,
                 outro: compactOutroSettings(outro),
                 skipPartOutro,
                 skipBrandedOutro,
@@ -262,6 +276,7 @@ export function OutroPanel({
                   run(async () => {
                     await updateReelSettings(reelKey, {
                       outroChannelId,
+                      outroInstagramChannelId,
                       outro: compactOutroSettings(outro),
                       skipPartOutro,
                       skipBrandedOutro,
