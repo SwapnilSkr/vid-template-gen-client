@@ -260,9 +260,13 @@ export function StudioScreen() {
               {reel.title || "Untitled reel"}
             </h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
-              <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
-              {reel.currentStep ? ` · ${reel.currentStep}` : ""}
+              {reel.niche} · {reel.genre ?? "no genre"}
+              {reel.status !== "completed" && (
+                <>
+                  {" "}· <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
+                  {reel.currentStep ? ` · ${reel.currentStep}` : ""}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -477,19 +481,7 @@ export function StudioScreen() {
         </div>
       ) : null}
 
-      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
-        <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)]">
-          <ProjectPanel
-            reel={reel}
-            seriesReels={seriesReels}
-            currentId={id}
-            scenes={scenes}
-            selectedSceneIndex={selectedSceneIndex}
-            onSelectScene={selectScene}
-          />
-        </aside>
-
-        <main className="grid min-w-0 content-start gap-3">
+      <main className="grid min-w-0 content-start gap-3">
           <div className="grid gap-3 xl:grid-cols-2">
             <ProgramMonitor
               reel={reel}
@@ -536,7 +528,6 @@ export function StudioScreen() {
             />
           </div>
         </main>
-      </div>
       </div>
       <ConfirmModal
         action={confirmAction}

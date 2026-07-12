@@ -1,5 +1,7 @@
 import {
   CheckCircle2,
+  ChevronDown,
+  Clapperboard,
   ExternalLink,
   GitBranch,
   Image as ImageIcon,
@@ -92,6 +94,7 @@ function ReviewInspectorForm({
   const [channelConnectMessage, setChannelConnectMessage] = useState("");
   const [hasUnsavedReviewEdits, setHasUnsavedReviewEdits] = useState(false);
   const [activePanel, setActivePanel] = useState<InspectorPanel>("review");
+  const [costExpanded, setCostExpanded] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     ConfirmDialogAction | undefined
   >();
@@ -778,41 +781,56 @@ function ReviewInspectorForm({
 
               {costBreakdown ? (
                 <div className="grid gap-2 rounded-lg border border-border bg-muted/40 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCostExpanded(!costExpanded)}
+                    className="flex w-full items-center justify-between gap-3 text-left focus:outline-none cursor-pointer"
+                  >
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                       <ReceiptText size={16} />
                       Generation Cost
+                      <ChevronDown
+                        size={14}
+                        className={cn(
+                          "text-muted-foreground transition-transform duration-200",
+                          costExpanded && "rotate-180",
+                        )}
+                      />
                     </span>
                     <span className="text-sm font-semibold text-foreground">
                       ${costBreakdown.totalUsd.toFixed(4)}
                     </span>
-                  </div>
-                  <div className="grid gap-1.5">
-                    {costBreakdown.lines.map((line) => (
-                      <div
-                        key={`${line.label}-${line.model ?? line.unit}`}
-                        className="grid gap-0.5 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium text-foreground">
-                            {line.label}
-                          </span>
-                          <span className="font-medium text-foreground">
-                            ${line.costUsd.toFixed(4)}
-                          </span>
-                        </div>
-                        <span className="truncate text-muted-foreground">
-                          {line.units} {line.unit} x $
-                          {line.unitCostUsd.toFixed(5)}
-                          {line.model ? ` · ${line.model}` : ""}
-                        </span>
+                  </button>
+                  {costExpanded ? (
+                    <>
+                      <div className="grid gap-1.5 pt-2 border-t border-border/50">
+                        {costBreakdown.lines.map((line) => (
+                          <div
+                            key={`${line.label}-${line.model ?? line.unit}`}
+                            className="grid gap-0.5 text-xs"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-medium text-foreground">
+                                {line.label}
+                              </span>
+                              <span className="font-medium text-foreground">
+                                ${line.costUsd.toFixed(4)}
+                              </span>
+                            </div>
+                            <span className="truncate text-muted-foreground">
+                              {line.units} {line.unit} x $
+                              {line.unitCostUsd.toFixed(5)}
+                              {line.model ? ` · ${line.model}` : ""}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  {costBreakdown.note ? (
-                    <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                      {costBreakdown.note}
-                    </p>
+                      {costBreakdown.note ? (
+                        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                          {costBreakdown.note}
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               ) : null}
