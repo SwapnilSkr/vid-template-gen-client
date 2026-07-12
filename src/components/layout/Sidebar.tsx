@@ -1,62 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  CheckCircle2,
-  CircleAlert,
-  CircleCheck,
-  Clock3,
   Home,
-  Layers3,
-  ListVideo,
   Play,
-  Send,
   TrendingUp,
   UsersRound,
   Youtube,
 } from "lucide-react";
-import type { Reel } from "@/api/reels";
 import { cn } from "@/lib/utils";
-import { useReelStudio } from "@/store/reel-studio";
 
-type QueueFilter = "intake" | "in_progress" | "review" | "approved" | "published" | "rejected";
 
-const IN_PROGRESS_STATUSES: Reel["status"][] = [
-  "planning",
-  "generating_assets",
-  "generating_audio",
-  "aligning",
-  "rendering",
-  "uploading",
-];
 
-function countByFilter(reels: Reel[], filter: QueueFilter): number {
-  switch (filter) {
-    case "intake":
-      return reels.filter((r) => r.status === "pending").length;
-    case "in_progress":
-      return reels.filter((r) => IN_PROGRESS_STATUSES.includes(r.status)).length;
-    case "review":
-      return reels.filter((r) => r.status === "completed").length;
-    case "approved":
-      return reels.filter((r) => r.status === "completed" && r.review?.status === "approved").length;
-    case "published":
-      return reels.filter((r) => r.youtube?.status === "published").length;
-    case "rejected":
-      return reels.filter((r) => r.status === "failed").length;
-  }
-}
 
-const queueNav: { name: string; icon: typeof Home; filter: QueueFilter }[] = [
-  { name: "Intake", icon: Layers3, filter: "intake" },
-  { name: "In Progress", icon: Clock3, filter: "in_progress" },
-  { name: "Review", icon: CheckCircle2, filter: "review" },
-  { name: "Approved", icon: CircleCheck, filter: "approved" },
-  { name: "Published", icon: Send, filter: "published" },
-  { name: "Rejected", icon: CircleAlert, filter: "rejected" },
-];
-
-/** Library sections without a backing screen yet — shown but disabled instead
- * of a dead "#" link, so it's honest about what's actually built. */
-const comingSoonLibraryNav = ["Templates", "Assets", "Voices"] as const;
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -70,7 +24,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search as { status?: string } });
-  const reels = useReelStudio((state) => state.reels);
 
   const navLinkClass = (isActive: boolean) =>
     cn(
@@ -113,27 +66,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         <Home size={15} />
         <span>Overview</span>
       </Link>
-      {queueNav.map(({ name, icon: Icon, filter }) => {
-        const count = countByFilter(reels, filter);
-        const isActive = pathname === "/" && search.status === filter;
-        return (
-          <Link
-            key={name}
-            to="/"
-            search={{ status: filter }}
-            onClick={onNavigate}
-            className={navLinkClass(isActive)}
-          >
-            <Icon size={15} />
-            <span>{name}</span>
-            {count > 0 ? (
-              <em className="min-w-5 rounded px-1 text-right text-xs font-normal not-italic tabular-nums text-muted-foreground">
-                {count}
-              </em>
-            ) : null}
-          </Link>
-        );
-      })}
+
 
       <SectionLabel>Library</SectionLabel>
       <Link to="/accounts" onClick={onNavigate} className={navLinkClass(pathname === "/accounts")}>
@@ -148,26 +81,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
         <Youtube size={15} />
         <span>YouTube Import</span>
       </Link>
-      <Link
-        to="/"
-        search={{ status: undefined }}
-        onClick={onNavigate}
-        className={navLinkClass(false)}
-      >
-        <ListVideo size={15} />
-        <span>Reels</span>
-      </Link>
-      {comingSoonLibraryNav.map((item) => (
-        <div
-          key={item}
-          aria-disabled="true"
-          className="grid min-h-8 cursor-not-allowed grid-cols-[16px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground/40"
-        >
-          <ListVideo size={15} />
-          <span>{item}</span>
-          <em className="text-[10px] font-medium not-italic uppercase tracking-wide text-muted-foreground/40">Soon</em>
-        </div>
-      ))}
+
     </nav>
   );
 }
