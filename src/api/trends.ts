@@ -24,6 +24,7 @@ export interface TrendReference {
 
 export interface TrendTopPerformer {
   title?: string;
+  description?: string;
   thumbnailUrl?: string;
   channelTitle?: string;
   sourceUrl: string;
