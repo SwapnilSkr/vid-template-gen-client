@@ -7,7 +7,7 @@ import { useReelStudio } from "@/store/reel-studio";
 
 /** Dedicated reel-creation page — kept off the main review dashboard so the
  * form has room to breathe and the dashboard stays focused on reviewing
- * what's already in flight. Redirects to the dashboard once a reel is created. */
+ * what's already in flight. Review mode opens Studio; auto mode goes to the dashboard. */
 export function CreateReelScreen() {
   const navigate = useNavigate();
   const error = useReelStudio((state) => state.error);
@@ -27,8 +27,8 @@ export function CreateReelScreen() {
         <h1 className="m-0 text-lg leading-tight text-foreground">Create New Reel</h1>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
-            Set the niche, genre, source, tier, and background, then generate — you'll be taken to the
-            dashboard to watch it render.
+            Set niche, genre, and background — browse a story for Reddit reels, then create. Review mode
+            opens Studio; auto mode returns to the dashboard.
           </p>
           <CaptionSmokeButton size="sm" variant="ghost" label="Test captions" />
         </div>
@@ -41,7 +41,15 @@ export function CreateReelScreen() {
       ) : null}
 
       <div className="mx-auto max-w-5xl">
-        <CreateReelForm onCreated={() => void navigate({ to: "/", search: { status: undefined } })} />
+        <CreateReelForm
+          onCreated={(result) => {
+            if (result.pipelineMode === "review") {
+              void navigate({ to: "/studio/$id", params: { id: result.id } });
+            } else {
+              void navigate({ to: "/", search: { status: undefined } });
+            }
+          }}
+        />
       </div>
 
       <FfmpegBlockModal capability={ffmpegBlock} onClose={clearFfmpegBlock} />

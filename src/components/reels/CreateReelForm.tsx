@@ -1,5 +1,5 @@
-import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,19 @@ import { useReelStudio } from "@/store/reel-studio";
 import { formatLabel, parsePartsValue, createReelLoadingHint, createReelLoadingLabel } from "@/utils/reel";
 import { EditEffectsControls } from "./EditEffectsControls";
 import { VoicePickerList } from "./VoicePickerList";
+import type { StorySelection } from "./StoryPickerStep";
+import { storySelectionToCreateFields } from "./StoryPickerStep";
+
+const StoryPickerStep = lazy(() =>
+  import("./StoryPickerStep").then((module) => ({ default: module.StoryPickerStep }))
+);
+
+type CreateStep = "settings" | "story";
+type SourcePostMode = "browse" | "custom" | "auto";
+
+function defaultSourcePostMode(source?: CreateReelInput["source"]): SourcePostMode {
+  return source === "llm" ? "auto" : "browse";
+}
 
 /** The Lurker house look — the out-of-box art style for horror reels. Mirrors
  *  the lead entry in server/src/config/art-styles.ts. */
@@ -32,7 +45,7 @@ const defaultForm: CreateReelInput = {
 
 interface CreateReelFormProps {
   /** Called after a reel is successfully created (e.g. to navigate away). */
-  onCreated?: () => void;
+  onCreated?: (result: { id: string; pipelineMode: "auto" | "review" }) => void;
 }
 
 function modelDisplayName(model?: string): string {
@@ -110,12 +123,20 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const loadArtStyles = useReelStudio((state) => state.loadArtStyles);
   const loadYouTubeChannels = useReelStudio((state) => state.loadYouTubeChannels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
-  const [topicMode, setTopicMode] = useState<"auto" | "custom">("auto");
+  const [sourcePostMode, setSourcePostMode] = useState<SourcePostMode>("browse");
+  const [step, setStep] = useState<CreateStep>("settings");
+  const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
   const [resolvedDefaults, setResolvedDefaults] = useState<ReelDefaults | undefined>();
   const [horrorReferences, setHorrorReferences] = useState<HorrorReference[]>([]);
-  const isGameplayNiche = form.niche === "reddit"; // only gameplay_overlay niches use a gameplay background
+  const isGameplayNiche = form.niche === "reddit";
   const isHorrorNiche = form.niche.startsWith("horror");
+  const needsStoryStep = isGameplayNiche && sourcePostMode === "browse";
+
+  useEffect(() => {
+    setStorySelection(null);
+    setStep("settings");
+  }, [form.genre, form.source, form.niche, sourcePostMode]);
 
   useEffect(() => {
     void loadGameplay();
@@ -199,32 +220,67 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       className={cn(panelClassName, "mb-2.5 grid gap-4 p-4")}
       onSubmit={async (event) => {
         event.preventDefault();
+        if (step === "settings" && needsStoryStep) {
+          setStep("story");
+          return;
+        }
+        if (needsStoryStep && !storySelection) return;
         const isComicHorror = form.niche === "horror" && form.genre === "2d_comic_horror";
-        const ok = await create({
+        const topic =
+          sourcePostMode === "auto"
+            ? "auto"
+            : sourcePostMode === "custom"
+              ? form.topic || undefined
+              : "auto";
+        const result = await create({
           ...form,
+          ...storySelectionToCreateFields(storySelection),
           niche: isComicHorror ? "horror_comic" : form.niche,
           genre: isComicHorror ? "analog_horror" : form.genre,
+          topic,
           gameplayKey: form.gameplayKey || undefined,
           imageModel: form.imageModel || undefined,
           horrorAudioKey: form.horrorAudioKey || undefined,
           outroChannelId: form.outroChannelId || undefined,
           thumbnailMode: form.thumbnailMode ?? "frame",
         });
-        if (ok) onCreated?.();
+        if (result.ok) onCreated?.({ id: result.id, pipelineMode: result.pipelineMode });
       }}
     >
       <div className="grid gap-3 sm:flex sm:items-center sm:justify-between">
-        <strong className="text-[15px] text-foreground">Create New Reel</strong>
+        <div className="grid gap-1">
+          <strong className="text-[15px] text-foreground">
+            {step === "story" ? "Pick a story" : "Create New Reel"}
+          </strong>
+          {step === "story" ? (
+            <span className="text-xs text-muted-foreground">Step 2 of 2 — choose from live feed or story bank</span>
+          ) : needsStoryStep ? (
+            <span className="text-xs text-muted-foreground">Step 1 of 2 — reel settings</span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => void load()}>
-            <RefreshCw size={16} />
-            Refresh
-          </Button>
-          <Button type="submit" variant="default" disabled={loading}>
+          {step === "story" ? (
+            <Button type="button" variant="outline" onClick={() => setStep("settings")}>
+              <ArrowLeft size={16} />
+              Back
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" onClick={() => void load()}>
+              <RefreshCw size={16} />
+              Refresh
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant="default"
+            disabled={loading || (step === "story" && !storySelection)}
+          >
             {loading ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
             {loading
               ? createReelLoadingLabel({ niche: form.niche, parts: form.parts })
-              : "Create Reel"}
+              : step === "story" || !needsStoryStep
+                ? "Create Reel"
+                : "Pick story"}
           </Button>
         </div>
       </div>
@@ -235,6 +291,24 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         </div>
       ) : null}
 
+      {step === "story" && needsStoryStep ? (
+        <Suspense
+          fallback={
+            <div className="rounded-md border border-border bg-muted px-3 py-4 text-xs text-muted-foreground">
+              Loading story picker…
+            </div>
+          }
+        >
+          <StoryPickerStep
+            genre={form.genre ?? ""}
+            source={form.source ?? "hybrid"}
+            parts={form.parts}
+            selection={storySelection}
+            onSelect={setStorySelection}
+          />
+        </Suspense>
+      ) : (
+        <>
       <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(130px,1fr))]">
         <Label>
           Niche
@@ -268,7 +342,11 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             Source
             <Select
               value={form.source}
-              onChange={(event) => setForm({ ...form, source: event.target.value as CreateReelInput["source"] })}
+              onChange={(event) => {
+                const source = event.target.value as CreateReelInput["source"];
+                setForm((current) => ({ ...current, source }));
+                setSourcePostMode(defaultSourcePostMode(source));
+              }}
             >
               <option value="hybrid">hybrid</option>
               <option value="llm">llm</option>
@@ -378,40 +456,70 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
 
       <Label>
         Source Post
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => {
-              setTopicMode("auto");
+              setSourcePostMode("browse");
               setForm((current) => ({ ...current, topic: "auto" }));
             }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-medium",
-              topicMode === "auto" ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-accent"
+              sourcePostMode === "browse"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-foreground hover:bg-accent"
             )}
           >
-            Auto
+            Browse
           </button>
           <button
             type="button"
             onClick={() => {
-              setTopicMode("custom");
+              setSourcePostMode("custom");
               setForm((current) => ({ ...current, topic: "" }));
             }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-medium",
-              topicMode === "custom" ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-accent"
+              sourcePostMode === "custom"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-foreground hover:bg-accent"
             )}
           >
             Custom Topic
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSourcePostMode("auto");
+              setForm((current) => ({ ...current, topic: "auto" }));
+            }}
+            className={cn(
+              "rounded-md border px-3 py-1.5 text-xs font-medium",
+              sourcePostMode === "auto"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-foreground hover:bg-accent"
+            )}
+          >
+            Auto
+          </button>
         </div>
 
-        {topicMode === "auto" ? (
+        {sourcePostMode === "browse" ? (
+          <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            {form.source === "llm"
+              ? "Browse pre-generated stories from the bank. Hybrid and verbatim can also pick live Reddit posts."
+              : "Pick a story from the live Reddit feed or story bank on the next step."}
+            {resolvedDefaults?.scriptModel ? (
+              <span className="mt-1 block font-medium text-foreground">
+                Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
+              </span>
+            ) : null}
+          </p>
+        ) : sourcePostMode === "auto" ? (
           <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {isGameplayNiche
-              ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty. You don't need to type anything; this is the default for high-volume posting."
-              : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns. You don't need to type anything."}
+              ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty."
+              : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns."}
             {resolvedDefaults?.scriptModel ? (
               <span className="mt-1 block font-medium text-foreground">
                 Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
@@ -422,8 +530,12 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           <div className="grid gap-1.5">
             <Input
               value={form.topic ?? ""}
-              onChange={(event) => setForm({ ...form, topic: event.target.value })}
-              placeholder={isGameplayNiche ? "e.g. a dispute over splitting a wedding gift" : "e.g. an abandoned hospital wing that shouldn't be there"}
+              onChange={(event) => setForm((current) => ({ ...current, topic: event.target.value }))}
+              placeholder={
+                isGameplayNiche
+                  ? "e.g. a dispute over splitting a wedding gift"
+                  : "e.g. an abandoned hospital wing that shouldn't be there"
+              }
               autoFocus
             />
             {resolvedDefaults?.scriptModel ? (
@@ -824,6 +936,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             <Film size={13} /> {gameplayClips.length} clip{gameplayClips.length === 1 ? "" : "s"} in the pool
           </span>
         </div>
+      )}
+        </>
       )}
     </form>
   );

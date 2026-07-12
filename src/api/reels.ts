@@ -306,6 +306,10 @@ export interface CreateReelInput {
   ttsModel?: string;
   ttsVoice?: string;
   ttsFormat?: "mp3" | "pcm";
+  /** Bank story picked in browse step */
+  selectedStoryId?: string;
+  /** Live Reddit post picked in browse step */
+  selectedSeedUrl?: string;
 }
 
 export interface GameplayClip {
@@ -998,7 +1002,13 @@ export async function approvePlan(id: string): Promise<Reel> {
 
 export async function replanReel(
   id: string,
-  patch: { topic?: string; providedScript?: string; horrorReferenceId?: string }
+  patch: {
+    topic?: string;
+    providedScript?: string;
+    horrorReferenceId?: string;
+    selectedStoryId?: string;
+    selectedSeedUrl?: string;
+  }
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/replan`, { method: "POST", body: JSON.stringify(patch) });
 }

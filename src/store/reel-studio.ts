@@ -66,7 +66,7 @@ interface ReelStudioState {
   }) => Promise<string | undefined>;
   removeYouTubeChannel: (id: string) => Promise<void>;
   select: (id: string) => Promise<void>;
-  create: (input: CreateReelInput) => Promise<boolean>;
+  create: (input: CreateReelInput) => Promise<CreateReelResult>;
   clearFfmpegBlock: () => void;
   pollSelected: () => Promise<void>;
   saveReview: (review: ReelReview) => Promise<void>;
@@ -80,6 +80,10 @@ interface ReelStudioState {
   promoteVariant: (variantId: string) => Promise<void>;
   setPreviewTimeSeconds: (seconds: number) => void;
 }
+
+export type CreateReelResult =
+  | { ok: true; id: string; pipelineMode: "auto" | "review" }
+  | { ok: false };
 
 export const useReelStudio = create<ReelStudioState>((set, get) => ({
   reels: [],
@@ -212,14 +216,18 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
       await get().load();
       await get().select(result.id);
       set({ loading: false });
-      return true;
+      return {
+        ok: true,
+        id: result.id,
+        pipelineMode: input.pipelineMode ?? "review",
+      };
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : "Failed to create reel",
         loading: false,
         ffmpegBlock: ffmpegBlockFromError(error),
       });
-      return false;
+      return { ok: false };
     }
   },
 

@@ -1,14 +1,19 @@
-import { Loader2, RefreshCw, Volume2, Wand2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Loader2, RefreshCw, Wand2, BookOpen } from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   listGameplay,
+  replanReel,
   regenerateReel,
   updateRedditCard,
   updateReelSettings,
-  updateScene,
   type GameplayClip,
   type Reel,
 } from "@/api/reels";
+import type { StorySource } from "@/api/stories";
+import {
+  storySelectionToCreateFields,
+  type StorySelection,
+} from "@/components/reels/StoryPickerStep";
 import { CostChip, RenderCacheStatus, describeRenderCost } from "@/components/reels/RenderCostHint";
 import type { ConfirmAction, StudioRun } from "@/components/studio/types";
 import { Button } from "@/components/ui/button";
@@ -22,6 +27,23 @@ import {
   gameplayNarrationCacheReady,
   gameplayRerenderCostsCredits,
 } from "@/utils/reel";
+
+const StoryPickerStep = lazy(() =>
+  import("@/components/reels/StoryPickerStep").then((module) => ({
+    default: module.StoryPickerStep,
+  }))
+);
+
+function reelStorySource(reel: Reel): StorySource {
+  const raw = reel.source ?? reel.storySource ?? "hybrid";
+  if (raw === "llm" || raw === "hybrid" || raw === "verbatim") return raw;
+  return "hybrid";
+}
+
+function reelPartsHint(reel: Reel): "off" | "auto" | number {
+  if (reel.partCount && reel.partCount > 1) return reel.partCount;
+  return "off";
+}
 
 export function RedditSourcePanel({
   reel,
@@ -44,6 +66,8 @@ export function RedditSourcePanel({
   const [comments, setComments] = useState(String(story?.comments ?? ""));
   const [clips, setClips] = useState<GameplayClip[]>([]);
   const [gameplayKey, setGameplayKey] = useState(reel.gameplayKey ?? "");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
 
   useEffect(() => {
     setTitle(story?.title ?? reel.title ?? "");
@@ -145,9 +169,100 @@ export function RedditSourcePanel({
 
   const titleChangedPreview = title.trim() !== (story?.title ?? reel.title ?? "").trim();
   const bakeIntent = !titleChangedPreview && gameplayNarrationCacheReady(reel) ? "composite" : "full";
+  const storySource = reelStorySource(reel);
+  const canReplanStory = reel.status === "plan_review" || reel.status === "completed" || reel.status === "failed";
+
+  const confirmReplanWithStory = () => {
+    if (!storySelection) return;
+    requestConfirm({
+      title: "Re-plan with this story?",
+      body: "Discards the current plan and runs OpenRouter story planning again.",
+      details: [
+        "LLM planning credits will be charged.",
+        "Existing scene assets are cleared until you approve and produce again.",
+      ],
+      confirmLabel: "Spend credits & re-plan",
+      costTone: "paid",
+      onConfirm: () =>
+        run(() =>
+          replanReel(reelKey, storySelectionToCreateFields(storySelection))
+        ),
+    });
+  };
 
   return (
     <div className="grid gap-3">
+      <PanelTitle className="text-foreground">Story source</PanelTitle>
+      {story ? (
+        <div className="rounded-md border border-border bg-card p-2.5 text-xs">
+          <div className="font-medium text-foreground">{story.title ?? reel.title}</div>
+          {story.subreddit ? (
+            <div className="mt-1 text-muted-foreground">{story.subreddit}</div>
+          ) : null}
+          {story.seedUrl ? (
+            <a
+              href={story.seedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block text-primary no-underline hover:underline"
+            >
+              View source post
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+          Story will be planned from your topic or bank selection.
+        </p>
+      )}
+
+      {canReplanStory ? (
+        <div className="grid gap-2 rounded-lg border border-border bg-black/15 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+              <BookOpen size={16} />
+              Pick another story
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setPickerOpen((open) => !open)}
+            >
+              {pickerOpen ? "Hide picker" : "Browse"}
+            </Button>
+          </div>
+          {pickerOpen ? (
+            <Suspense
+              fallback={
+                <div className="rounded-md border border-border bg-muted px-3 py-3 text-xs text-muted-foreground">
+                  Loading story picker…
+                </div>
+              }
+            >
+              <StoryPickerStep
+                compact
+                genre={reel.genre ?? "aita_family"}
+                source={storySource}
+                parts={reelPartsHint(reel)}
+                selection={storySelection}
+                onSelect={setStorySelection}
+              />
+            </Suspense>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy || !storySelection}
+            onClick={confirmReplanWithStory}
+          >
+            <Wand2 size={15} />
+            Re-plan with selected story
+          </Button>
+        </div>
+      ) : null}
+
       <PanelTitle className="text-foreground">Title card</PanelTitle>
       <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
         Shown over gameplay while the title is spoken. Saving metadata is free —
