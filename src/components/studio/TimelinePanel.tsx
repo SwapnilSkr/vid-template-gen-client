@@ -183,7 +183,7 @@ export function TimelinePanel({
                 Narration text
               </Label>
               <Textarea
-                rows={3}
+                rows={8}
                 value={narration}
                 disabled={disableAll}
                 onChange={(e) => setNarration(e.target.value)}
