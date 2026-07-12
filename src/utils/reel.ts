@@ -33,6 +33,7 @@ export function reelNeedsPolling(reel?: Reel | null): boolean {
   if (reel.voiceVariants?.some((v) => v.status === "pending")) return true;
   const yt = reel.youtube?.status;
   if (yt === "pending" || yt === "uploading") return true;
+  if (reel.instagram?.some((publish) => publish.status === "pending" || publish.status === "uploading")) return true;
   return false;
 }
 

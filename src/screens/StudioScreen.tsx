@@ -175,6 +175,10 @@ export function StudioScreen() {
       const block = ffmpegBlockFromError(err);
       if (block) setFfmpegBlock(block);
       setError(err instanceof Error ? err.message : "Action failed");
+      // Distribution errors may be returned after a worker already changed a
+      // target's state. Refresh so retry/republish controls never reason from
+      // an old reel snapshot.
+      void refresh();
     } finally {
       setBusy(false);
     }
@@ -263,7 +267,7 @@ export function StudioScreen() {
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
               <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
-              {reel.currentStep ? ` · ${reel.currentStep}` : ""}
+              {reel.status !== "completed" && reel.currentStep ? ` · ${reel.currentStep}` : ""}
             </p>
           </div>
         </div>

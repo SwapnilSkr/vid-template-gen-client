@@ -190,9 +190,12 @@ export interface Reel {
     channelId: string;
     channelLabel?: string;
     status: "pending" | "uploading" | "published" | "failed";
+    containerId?: string;
     mediaId?: string;
     url?: string;
     error?: string;
+    message?: string;
+    updatedAt?: string;
     publishedAt?: string;
   }>;
   instagramSettings?: { caption?: string; shareToFeed?: boolean };
@@ -204,6 +207,7 @@ export interface Reel {
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;
+  outroInstagramChannelId?: string;
   outro?: OutroSettings;
   /** Skip multi-part "Stay tuned for part N" (Reddit mid-series only). */
   skipPartOutro?: boolean;
@@ -304,6 +308,7 @@ export interface CreateReelInput {
   gameplayKey?: string;
   horrorAudioKey?: string;
   outroChannelId?: string;
+  outroInstagramChannelId?: string;
   outro?: OutroSettings;
   thumbnailMode?: "frame" | "ai";
   imageModel?: string;
@@ -560,8 +565,8 @@ export async function startInstagramChannelConnect(input: { label: string; chann
 }
 export async function deleteInstagramChannel(id: string): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "DELETE" }); }
 export async function updateInstagramChannel(id: string, input: { label?: string; niches?: string[] }): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
-export async function distributeReel(id: string, input: { youtubeChannelIds?: string[]; instagramChannelIds?: string[] }): Promise<void> {
-  await request(`/reels/${id}/distribute`, { method: "POST", body: JSON.stringify(input) });
+export async function distributeReel(id: string, input: { youtubeChannelIds?: string[]; instagramChannelIds?: string[]; forceRepublish?: boolean }): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/distribute`, { method: "POST", body: JSON.stringify(input) });
 }
 
 export async function createReel(input: CreateReelInput): Promise<{ id: string; parts: Reel[] }> {
@@ -918,6 +923,7 @@ export interface ReelSettingsInput {
   horrorReferenceId?: string;
   gameplayKey?: string;
   outroChannelId?: string;
+  outroInstagramChannelId?: string;
   outro?: OutroSettings;
   skipPartOutro?: boolean;
   skipBrandedOutro?: boolean;

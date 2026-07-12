@@ -114,6 +114,9 @@ export function PublishPanel({
   if (reel.status !== "completed") return null;
   const yt = reel.youtube;
   const targetCount = selectedYoutubeIds.length + selectedInstagramIds.length;
+  const instagramPublishByChannel = new Map((reel.instagram ?? []).map((publish) => [publish.channelId, publish]));
+  const activeInstagram = (reel.instagram ?? []).filter((publish) => publish.status === "pending" || publish.status === "uploading");
+  const republishingInstagram = selectedInstagramIds.filter((id) => instagramPublishByChannel.get(id)?.status === "published");
   const toggle = (id: string, setIds: React.Dispatch<React.SetStateAction<string[]>>) => setIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
 
   return (
@@ -184,13 +187,14 @@ export function PublishPanel({
         >
           <Check size={14} /> Save publishing details
         </Button>
+        <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Youtube size={12} className="text-red-500" />YouTube Shorts preview</div><p className="m-0 font-semibold text-foreground">{title || "Your YouTube title"}</p><p className="mb-0 mt-1 whitespace-pre-wrap text-muted-foreground">{description || "Your YouTube description"}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Thumbnail: {reel.review?.thumbnailUrl ? "YouTube thumbnail ready." : "No uploaded thumbnail yet."}</p></div>
       </div>
 
       <div className="grid gap-2.5 rounded-md border border-pink-500/20 bg-pink-500/[0.035] p-2.5">
         <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2 text-sm font-semibold"><Instagram size={15} className="text-pink-500" />Instagram Reel</span><span className="text-[11px] text-muted-foreground">Platform-specific</span></div>
         <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Write the Reel caption, hook, CTA, and hashtags…" onChange={(event) => setInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {extractHashtags(instagramCaption).length} hashtags</span></Label>
         <label className="flex cursor-pointer items-center gap-2 rounded border border-border bg-card/60 px-2.5 py-2 text-xs"><input type="checkbox" checked={shareToFeed} disabled={busy} onChange={(event) => setShareToFeed(event.target.checked)} /><span className="font-medium">Also share to Feed</span><span className="ml-auto text-muted-foreground">{shareToFeed ? "Reels + Feed" : "Reels tab only"}</span></label>
-        <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Instagram size={12} />Reel preview</div><p className="m-0 whitespace-pre-wrap text-muted-foreground">{instagramCaption || "Your Instagram caption will appear here."}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Cover: {reel.shortsCover?.imageUrl ? "Vertical Cover will be sent to Instagram and remains the opening-frame fallback." : "Instagram will use the first video frame. Create a Vertical Cover for a controlled result."}</p></div>
+        <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Instagram size={12} />Reel preview</div><p className="m-0 whitespace-pre-wrap text-muted-foreground">{instagramCaption || "Your Instagram caption will appear here."}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Cover: {reel.shortsCover?.imageUrl ? "Instagram selects the first frame from the rendered MP4. Re-render after saving the Vertical Cover so it is baked into that opening frame." : "Instagram will use the first video frame. Create a Vertical Cover, then re-render for a controlled result."}</p></div>
         <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
       </div>
 
@@ -252,10 +256,11 @@ export function PublishPanel({
         <div className="text-xs font-semibold text-foreground">Publish destinations</div>
         <p className="text-[11px] text-muted-foreground">Select every owned account that should receive this reviewed render. Each upload runs independently.</p>
         {channels.length ? <DestinationGroup icon={<Youtube size={14} className="text-red-500" />} title="YouTube Shorts">{channels.map((channel) => <DestinationOption key={channel.id} checked={selectedYoutubeIds.includes(channel.id)} disabled={busy} onChange={() => toggle(channel.id, setSelectedYoutubeIds)} label={channel.googleChannelTitle || channel.label} detail={`${channel.googleChannelHandle || channel.privacyStatus} · ${channel.privacyStatus}`} />)}</DestinationGroup> : null}
-        {instagramChannels.length ? <DestinationGroup icon={<Instagram size={14} className="text-pink-500" />} title="Instagram Reels">{instagramChannels.map((channel) => <DestinationOption key={channel.id} checked={selectedInstagramIds.includes(channel.id)} disabled={busy || channel.status !== "active"} onChange={() => toggle(channel.id, setSelectedInstagramIds)} label={channel.username ? `@${channel.username}` : channel.label} detail={channel.label} />)}</DestinationGroup> : null}
+        {instagramChannels.length ? <DestinationGroup icon={<Instagram size={14} className="text-pink-500" />} title="Instagram Reels">{instagramChannels.map((channel) => { const publish = instagramPublishByChannel.get(channel.id); const active = publish?.status === "pending" || publish?.status === "uploading"; return <DestinationOption key={channel.id} checked={selectedInstagramIds.includes(channel.id)} disabled={busy || channel.status !== "active" || active} onChange={() => toggle(channel.id, setSelectedInstagramIds)} label={channel.username ? `@${channel.username}` : channel.label} detail={active ? `${publish?.status} · ${publish?.message ?? "working"}` : publish?.status === "published" ? "published · select to republish" : channel.label} />; })}</DestinationGroup> : null}
         {!channels.length && !instagramChannels.length ? <div className="text-xs text-warning">Connect an account from Accounts before publishing.</div> : null}
       </div>
-      {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} icon={<Instagram size={12} />} />)}</div> : null}
+      {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} message={publish.message} icon={<Instagram size={12} />} />)}</div> : null}
+      {activeInstagram.length ? <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"><strong>Publishing in progress.</strong> {activeInstagram.map((publish) => `${publish.channelLabel ?? publish.channelId}: ${publish.message ?? publish.status}`).join(" · ")} The Studio is locked until these destinations settle.</div> : null}
 
       <Button
         type="button"
@@ -263,8 +268,8 @@ export function PublishPanel({
         disabled={busy || !reel.outputUrl || targetCount === 0}
         onClick={() =>
           requestConfirm({
-            title: "Publish to selected accounts?",
-            body: `Queues this reviewed render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
+            title: republishingInstagram.length ? "Republish to Instagram?" : "Publish to selected accounts?",
+            body: republishingInstagram.length ? `This sends another Reel to ${republishingInstagram.join(", ")}. Only continue if you intentionally removed or want to replace the previous post.` : `Queues this reviewed render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
             details: [
               "Uses the publishing details shown in this Studio panel.",
               "The upload runs in the background — status appears above.",
@@ -277,8 +282,10 @@ export function PublishPanel({
                   description,
                   tags: tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
                 });
-                await distributeReel(reelKey, { youtubeChannelIds: selectedYoutubeIds, instagramChannelIds: selectedInstagramIds });
-                return getReel(reelKey);
+                // The confirmation modal is the explicit user authorization for
+                // a resend. Do not infer it from a potentially stale reel
+                // snapshot after a previous failed request.
+                return distributeReel(reelKey, { youtubeChannelIds: selectedYoutubeIds, instagramChannelIds: selectedInstagramIds, forceRepublish: selectedInstagramIds.length > 0 });
               }),
           })
         }
@@ -291,7 +298,7 @@ export function PublishPanel({
 
 function DestinationGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) { return <div className="grid gap-1"><div className="inline-flex items-center gap-1 text-xs font-medium text-foreground">{icon}{title}</div>{children}</div>; }
 function DestinationOption({ checked, disabled, onChange, label, detail }: { checked: boolean; disabled: boolean; onChange: () => void; label: string; detail: string }) { return <label className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1.5 text-xs hover:bg-secondary"><input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} /><span className="min-w-0 flex-1 truncate font-medium">{label}</span><span className="truncate text-muted-foreground">{detail}</span></label>; }
-function PublishOutcome({ label, status, url, error, icon }: { label: string; status: string; url?: string; error?: string; icon: React.ReactNode }) { return <div className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"><span>{icon}</span><span className="min-w-0 flex-1 truncate font-medium">{label}</span><span className="capitalize text-muted-foreground">{status}</span>{url ? <a href={url} target="_blank" rel="noreferrer" className="text-primary"><ExternalLink size={12} /></a> : null}{error ? <span className="max-w-40 truncate text-destructive" title={error}>{error}</span> : null}</div>; }
+function PublishOutcome({ label, status, url, error, message, icon }: { label: string; status: string; url?: string; error?: string; message?: string; icon: React.ReactNode }) { return <div className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"><span>{icon}</span><span className="min-w-0 flex-1 truncate font-medium">{label}</span><span className="capitalize text-muted-foreground">{status}</span>{url ? <a href={url} target="_blank" rel="noreferrer" className="text-primary"><ExternalLink size={12} /></a> : null}<span className={cn("max-w-64 truncate", error ? "text-destructive" : "text-muted-foreground")} title={error || message}>{error || message}</span></div>; }
 
 function HashtagSuggestions({ label, tags, selected, onAdd }: { label: string; tags: string[]; selected: string[]; onAdd: (tag: string) => void }) {
   const available = tags.filter((tag) => !selected.includes(tag));
