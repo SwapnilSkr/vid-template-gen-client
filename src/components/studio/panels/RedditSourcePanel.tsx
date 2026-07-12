@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw, Wand2, BookOpen } from "lucide-react";
+import { Loader2, RefreshCw, Wand2, BookOpen, Info } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
   listGameplay,
@@ -75,6 +75,8 @@ export function RedditSourcePanel({
   const [comments, setComments] = useState(String(story?.comments ?? ""));
   const [clips, setClips] = useState<GameplayClip[]>([]);
   const [gameplayKey, setGameplayKey] = useState(reel.gameplayKey ?? "");
+  const [showTitleInfo, setShowTitleInfo] = useState(false);
+  const [showGameplayInfo, setShowGameplayInfo] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
   const [replanScope, setReplanScope] = useState<ReplanScope>(() =>
@@ -352,11 +354,25 @@ export function RedditSourcePanel({
         </div>
       ) : null}
 
-      <PanelTitle className="text-foreground">Title card</PanelTitle>
-      <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
-        Shown over gameplay while the title is spoken. Saving metadata is free —
-        baking into the video reuses cached narration when possible.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <PanelTitle className="text-foreground">Title card</PanelTitle>
+        <button
+          type="button"
+          onClick={() => setShowTitleInfo(!showTitleInfo)}
+          className="text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          <Info size={14} />
+        </button>
+      </div>
+
+      {showTitleInfo && (
+        <div className="relative">
+          <div className="absolute right-0 top-0 z-10 w-64 rounded-md border border-border bg-popover p-2 text-[11px] leading-relaxed text-popover-foreground shadow-md">
+            Shown over gameplay while the title is spoken. Saving metadata is free —
+            baking into the video reuses cached narration when possible.
+          </div>
+        </div>
+      )}
 
       <RenderCacheStatus reel={reel} intent={bakeIntent} />
 
@@ -459,7 +475,31 @@ export function RedditSourcePanel({
         ) : null}
       </div>
 
-      <PanelTitle className="mt-2 text-foreground">Gameplay clip</PanelTitle>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <PanelTitle className="text-foreground">Gameplay clip</PanelTitle>
+        {canBakeIntoVideo && (
+          <button
+            type="button"
+            onClick={() => setShowGameplayInfo(!showGameplayInfo)}
+            className="text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            <Info size={14} />
+          </button>
+        )}
+      </div>
+
+      {showGameplayInfo && canBakeIntoVideo && (
+        <div className="relative">
+          <div className="absolute right-0 top-0 z-10 w-64 rounded-md border border-border bg-popover p-2 text-[11px] leading-relaxed text-popover-foreground shadow-md">
+            Clip choice is saved immediately. Use{" "}
+            <span className="font-medium">
+              Re-render title card into video
+            </span>{" "}
+            above (or Export → Re-render) to bake the new background — that
+            re-runs TTS with the current studio voice.
+          </div>
+        </div>
+      )}
       <Label className="gap-1 text-xs text-muted-foreground">
         Background
         <Select
@@ -483,16 +523,7 @@ export function RedditSourcePanel({
           ))}
         </Select>
       </Label>
-      {canBakeIntoVideo ? (
-        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground/80">
-          Clip choice is saved immediately. Use{" "}
-          <span className="font-medium text-foreground">
-            Re-render title card into video
-          </span>{" "}
-          above (or Export → Re-render) to bake the new background — that
-          re-runs TTS with the current studio voice.
-        </p>
-      ) : null}
+
     </div>
   );
 }
