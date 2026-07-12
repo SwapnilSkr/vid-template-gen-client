@@ -12,6 +12,8 @@ export function ProjectPanel({
   scenes,
   selectedSceneIndex,
   onSelectScene,
+  onDeletePart,
+  deletePartDisabled,
 }: {
   reel: Reel;
   seriesReels: Reel[];
@@ -19,6 +21,8 @@ export function ProjectPanel({
   scenes: Scene[];
   selectedSceneIndex: number;
   onSelectScene: (index: number) => void;
+  onDeletePart: (part: Reel) => void;
+  deletePartDisabled: boolean;
 }) {
   return (
     <EditorPanel
@@ -31,6 +35,8 @@ export function ProjectPanel({
           reel={reel}
           seriesReels={seriesReels}
           currentId={currentId}
+          onDeletePart={onDeletePart}
+          deletePartDisabled={deletePartDisabled}
         />
         <div className="grid gap-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">

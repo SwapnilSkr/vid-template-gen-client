@@ -7,12 +7,13 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
   addScene,
   apiUrl,
   approvePlan,
   assertFfmpegReady,
+  deleteSeriesPart,
   ffmpegBlockFromError,
   getReel,
   listReelSeries,
@@ -66,6 +67,8 @@ export function StudioScreen() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("source");
   /** Temporary program-monitor override for a ready voice variant (before promote). */
   const [variantPreviewUrl, setVariantPreviewUrl] = useState<string | undefined>();
+  // A slow poll response must never replace a more recent local edit response.
+  const refreshVersionRef = useRef(0);
 
   const selectScene = useCallback((index: number) => {
     startTransition(() => setSelectedSceneIndex(index));
@@ -76,11 +79,14 @@ export function StudioScreen() {
   }, []);
 
   const refresh = useCallback(async () => {
+    const version = ++refreshVersionRef.current;
     try {
       const next = await getReel(id);
+      if (version !== refreshVersionRef.current) return;
       setReel(next);
       setError(undefined);
     } catch (err) {
+      if (version !== refreshVersionRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load reel");
     } finally {
       setLoading(false);
@@ -166,6 +172,8 @@ export function StudioScreen() {
     try {
       if (opts?.requireFfmpeg) await assertFfmpegReady();
       const next = await action();
+      // Invalidate any poll that began before this successful mutation.
+      refreshVersionRef.current += 1;
       setReel(next);
       const nextId = next._id ?? next.id;
       if (nextId && nextId !== id) {
@@ -183,6 +191,80 @@ export function StudioScreen() {
       setBusy(false);
     }
   }, [id, navigate]);
+
+  // Delete one part of a series. The backend renumbers the survivors; if the
+  // deleted part is the one we're viewing, hop to a remaining part (or the reel
+  // list when the whole thing is gone), otherwise just refresh in place.
+  const deletePart = useCallback(
+    async (partId: string) => {
+      setBusy(true);
+      setError(undefined);
+      try {
+        const { remainingIds } = await deleteSeriesPart(partId);
+        refreshVersionRef.current += 1;
+        if (partId === id) {
+          const next = remainingIds.find((rid) => rid !== partId);
+          if (next) {
+            await navigate({ to: "/studio/$id", params: { id: next }, replace: true });
+          } else {
+            await navigate({ to: "/", search: { status: undefined } });
+          }
+        } else {
+          await refresh();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete part");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [id, navigate, refresh],
+  );
+
+  // Build the confirm dialog for deleting a series part, warning when the change
+  // touches parts that are already rendered or published.
+  const requestDeletePart = useCallback(
+    (part: Reel) => {
+      const partId = part._id ?? part.id ?? "";
+      if (!partId) return;
+      const partLabel = `Part ${part.partNumber ?? 1}`;
+      const remaining = seriesReels.filter((p) => (p._id ?? p.id) !== partId);
+      const anyRendered = seriesReels.some(
+        (p) => p.status === "completed" || Boolean(p.outputUrl),
+      );
+      const anyPublished = seriesReels.some(
+        (p) =>
+          p.youtube?.status === "published" ||
+          p.youtube?.status === "uploading",
+      );
+      const details = [
+        remaining.length === 1
+          ? "Only one part will remain — it becomes a standalone reel with no “stay tuned” teaser."
+          : `Remaining parts renumber to Part 1…${remaining.length} of ${remaining.length}.`,
+        "This part’s video, audio, and thumbnail are permanently deleted.",
+      ];
+      if (anyRendered) {
+        details.push(
+          "Renumbered parts that were already rendered will need re-generating so their teaser matches.",
+        );
+      }
+      if (anyPublished) {
+        details.push(
+          "A part is already on YouTube — deleting here does NOT unpublish it, and its uploaded “Part N of M” metadata will be out of date.",
+        );
+      }
+      setConfirmAction({
+        title: `Delete ${partLabel}?`,
+        body: `Remove ${partLabel} from this series and re-record the remaining ${remaining.length} part${remaining.length === 1 ? "" : "s"}.`,
+        details,
+        confirmLabel: `Delete ${partLabel}`,
+        variant: "destructive",
+        costTone: "free",
+        onConfirm: () => deletePart(partId),
+      });
+    },
+    [seriesReels, deletePart],
+  );
 
   useEffect(() => {
     const count = reel?.scenes?.length ?? 0;
@@ -491,6 +573,8 @@ export function StudioScreen() {
             scenes={scenes}
             selectedSceneIndex={selectedSceneIndex}
             onSelectScene={selectScene}
+            onDeletePart={requestDeletePart}
+            deletePartDisabled={studioLocked}
           />
         </aside>
 

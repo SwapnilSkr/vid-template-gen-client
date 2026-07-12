@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { type Reel } from "@/api/reels";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { buttonClassName } from "@/components/ui/button";
@@ -10,10 +10,14 @@ export function ReelContextBar({
   reel,
   seriesReels,
   currentId,
+  onDeletePart,
+  deletePartDisabled,
 }: {
   reel: Reel;
   seriesReels: Reel[];
   currentId: string;
+  onDeletePart: (part: Reel) => void;
+  deletePartDisabled: boolean;
 }) {
   const isSeries = Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
   if (!isSeries) {
@@ -46,29 +50,43 @@ export function ReelContextBar({
           const id = reelKey(part);
           const active = id === currentId;
           return (
-            <Link
+            <div
               key={id || `${part.partNumber}`}
-              to="/studio/$id"
-              params={{ id }}
               className={cn(
-                "grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left text-xs no-underline",
+                "group relative grid grid-cols-[1fr_auto] items-center gap-1 rounded-md border pr-1 text-xs",
                 active
                   ? "border-primary/70 bg-primary/10"
                   : "border-border bg-card hover:bg-secondary",
               )}
             >
-              <span className="font-semibold text-foreground">
-                Part {part.partNumber ?? 1}
-              </span>
-              <span className="truncate text-muted-foreground/80">
-                {part.title || part.topic || "Untitled"}
-              </span>
-              <ReelStatusChip
-                size="sm"
-                status={part.status}
-                label={part.status === "plan_review" ? "review" : undefined}
-              />
-            </Link>
+              <Link
+                to="/studio/$id"
+                params={{ id }}
+                className="grid min-w-0 gap-1 px-3 py-2 text-left no-underline"
+              >
+                <span className="font-semibold text-foreground">
+                  Part {part.partNumber ?? 1}
+                </span>
+                <span className="truncate text-muted-foreground/80">
+                  {part.title || part.topic || "Untitled"}
+                </span>
+                <ReelStatusChip
+                  size="sm"
+                  status={part.status}
+                  label={part.status === "plan_review" ? "review" : undefined}
+                />
+              </Link>
+              <button
+                type="button"
+                disabled={deletePartDisabled}
+                title={`Delete Part ${part.partNumber ?? 1}`}
+                aria-label={`Delete Part ${part.partNumber ?? 1}`}
+                onClick={() => onDeletePart(part)}
+                className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           );
         })}
       </div>

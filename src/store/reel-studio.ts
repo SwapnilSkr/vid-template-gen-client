@@ -300,6 +300,10 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   async deleteById(id) {
     set({ loading: true, error: undefined });
     try {
+      // Deleting a series part renumbers its siblings server-side, so their
+      // "Part N of M" counts change — refetch instead of a local splice.
+      const deleted = get().reels.find((item) => reelId(item) === id);
+      const wasSeriesPart = Boolean(deleted?.seriesId) && (deleted?.partCount ?? 1) > 1;
       await deleteReel(id);
       set((state) => {
         const reels = state.reels.filter((item) => reelId(item) !== id);
@@ -311,6 +315,7 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
           loading: false,
         };
       });
+      if (wasSeriesPart) await get().load();
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to delete reel", loading: false });
     }

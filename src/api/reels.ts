@@ -619,6 +619,14 @@ export async function deleteReel(id: string): Promise<void> {
   await request(`/reels/${id}`, { method: "DELETE" });
 }
 
+/** Delete one part of a series; the backend renumbers the survivors and returns
+ *  the remaining part ids in order (empty when the whole reel is gone). */
+export async function deleteSeriesPart(
+  id: string,
+): Promise<{ seriesId?: string; remainingIds: string[] }> {
+  return request(`/reels/${id}/part`, { method: "DELETE" });
+}
+
 export async function purgeFailedReels(): Promise<{ deleted: string[]; errors: { id: string; error: string }[] }> {
   return request("/maintenance/reels/purge-failed", { method: "POST" });
 }
