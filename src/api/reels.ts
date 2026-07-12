@@ -147,6 +147,7 @@ export interface Reel {
   id?: string;
   niche: string;
   topic: string;
+  tier?: "cheap" | "value" | "premium";
   genre?: string;
   source?: string;
   storySource?: string;

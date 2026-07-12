@@ -74,11 +74,18 @@ export interface ListRedditCandidatesInput {
   source: "hybrid" | "verbatim";
   limit?: number;
   excludeUrls?: string[];
+  parts?: "off" | "auto" | number;
+  tier?: string;
 }
 
 export interface ListRedditCandidatesResult {
   items: RedditCandidate[];
   hasMore: boolean;
+}
+
+function partsQueryValue(parts?: "off" | "auto" | number): string | undefined {
+  if (parts === undefined || parts === "off") return undefined;
+  return String(parts);
 }
 
 export async function listRedditCandidates(
@@ -88,6 +95,8 @@ export async function listRedditCandidates(
   appendQuery(params, "genre", input.genre);
   appendQuery(params, "source", input.source);
   appendQuery(params, "limit", input.limit);
+  appendQuery(params, "tier", input.tier);
+  appendQuery(params, "parts", partsQueryValue(input.parts));
   if (input.excludeUrls?.length) {
     params.set("excludeUrls", JSON.stringify(input.excludeUrls));
   }
@@ -103,6 +112,8 @@ export interface ListStoryBankInput {
   limit?: number;
   offset?: number;
   sort?: "fifo" | "newest";
+  parts?: "off" | "auto" | number;
+  tier?: string;
 }
 
 export interface ListStoryBankResult {
@@ -120,6 +131,8 @@ export async function listStoryBank(
   appendQuery(params, "limit", input.limit);
   appendQuery(params, "offset", input.offset);
   appendQuery(params, "sort", input.sort);
+  appendQuery(params, "tier", input.tier);
+  appendQuery(params, "parts", partsQueryValue(input.parts));
   const query = params.toString();
   return request<ListStoryBankResult>(`/stories/bank${query ? `?${query}` : ""}`);
 }

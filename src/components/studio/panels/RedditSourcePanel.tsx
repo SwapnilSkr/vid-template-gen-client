@@ -245,6 +245,7 @@ export function RedditSourcePanel({
                 compact
                 genre={reel.genre ?? "aita_family"}
                 source={storySource}
+                tier={reel.tier}
                 parts={reelPartsHint(reel)}
                 selection={storySelection}
                 onSelect={setStorySelection}

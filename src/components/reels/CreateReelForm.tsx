@@ -302,6 +302,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           <StoryPickerStep
             genre={form.genre ?? ""}
             source={form.source ?? "hybrid"}
+            tier={form.tier}
             parts={form.parts}
             selection={storySelection}
             onSelect={setStorySelection}

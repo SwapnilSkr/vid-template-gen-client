@@ -20,10 +20,12 @@ export type StorySelection =
   | { kind: "feed"; seedUrl: string };
 
 type PickerTab = "feed" | "bank";
+type BankSort = "fifo" | "newest";
 
 export interface StoryPickerStepProps {
   genre: string;
   source: StorySource;
+  tier?: string;
   parts?: "off" | "auto" | number;
   selection: StorySelection | null;
   onSelect: (selection: StorySelection | null) => void;
@@ -37,6 +39,7 @@ function showSeriesHint(parts?: "off" | "auto" | number): boolean {
 export function StoryPickerStep({
   genre,
   source,
+  tier,
   parts,
   selection,
   onSelect,
@@ -44,6 +47,8 @@ export function StoryPickerStep({
 }: StoryPickerStepProps) {
   const showFeedTab = source !== "llm";
   const [tab, setTab] = useState<PickerTab>(showFeedTab ? "feed" : "bank");
+  const [bankSort, setBankSort] = useState<BankSort>("fifo");
+  const [feedPage, setFeedPage] = useState(1);
   const [feedItems, setFeedItems] = useState<RedditCandidate[]>([]);
   const [bankItems, setBankItems] = useState<StoryBankItem[]>([]);
   const [feedHasMore, setFeedHasMore] = useState(false);
@@ -72,16 +77,21 @@ export function StoryPickerStep({
       if (!showFeedTab) return;
       setFeedLoading(true);
       setFeedError(undefined);
+      const nextPage = append ? feedPage + 1 : 1;
+      const limit = FEED_PAGE_SIZE * nextPage;
       try {
         const result = await listRedditCandidates({
           genre,
           source: source as "hybrid" | "verbatim",
-          limit: FEED_PAGE_SIZE,
+          limit,
+          tier,
+          parts,
           excludeUrls: append ? excludeUrls : undefined,
         });
         startTransition(() => {
           setFeedItems((current) => (append ? [...current, ...result.items] : result.items));
           setFeedHasMore(result.hasMore);
+          setFeedPage(nextPage);
         });
       } catch (error) {
         setFeedError(error instanceof Error ? error.message : "Failed to load live feed");
@@ -89,7 +99,7 @@ export function StoryPickerStep({
         setFeedLoading(false);
       }
     },
-    [excludeUrls, genre, showFeedTab, source]
+    [excludeUrls, feedPage, genre, parts, showFeedTab, source, tier]
   );
 
   const loadBank = useCallback(
@@ -101,9 +111,11 @@ export function StoryPickerStep({
         const result = await listStoryBank({
           genre,
           source,
+          tier,
+          parts,
           limit: BANK_PAGE_SIZE,
           offset,
-          sort: "fifo",
+          sort: bankSort,
         });
         startTransition(() => {
           setBankItems((current) => (append ? [...current, ...result.items] : result.items));
@@ -116,21 +128,18 @@ export function StoryPickerStep({
         setBankLoading(false);
       }
     },
-    [bankItems.length, genre, source]
+    [bankItems.length, bankSort, genre, parts, source, tier]
   );
 
   useEffect(() => {
-    let cancelled = false;
+    setFeedPage(1);
+    setFeedItems([]);
+    setBankItems([]);
     const tasks: Promise<void>[] = [loadBank(false)];
     if (showFeedTab) tasks.unshift(loadFeed(false));
-    void Promise.all(tasks).then(() => {
-      if (cancelled) return;
-    });
-    return () => {
-      cancelled = true;
-    };
+    void Promise.all(tasks);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when filters change
-  }, [genre, source, showFeedTab]);
+  }, [genre, source, tier, parts, showFeedTab, bankSort]);
 
   const handleTabChange = (next: PickerTab) => {
     startTransition(() => setTab(next));
@@ -153,13 +162,19 @@ export function StoryPickerStep({
     else void loadBank(false);
   };
 
-  const emptyFeed = !feedLoading && !feedError && feedItems.length === 0;
-  const emptyBank = !bankLoading && !bankError && bankItems.length === 0;
+  const emptyFeed =
+    !feedLoading && !feedError && feedItems.length === 0;
+  const emptyBank =
+    !bankLoading && !bankError && bankItems.length === 0;
+  const loadMoreLabel =
+    feedPage === 1
+      ? `Load more (${FEED_PAGE_SIZE * 2} next)`
+      : `Load more (${FEED_PAGE_SIZE * (feedPage + 1)} next)`;
 
   return (
     <div className={cn("grid gap-3", compact ? "gap-2" : "gap-3")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {showFeedTab ? (
             <button
               type="button"
@@ -192,16 +207,30 @@ export function StoryPickerStep({
             ) : null}
           </button>
         </div>
-        <Button type="button" size="sm" variant="ghost" disabled={feedLoading || bankLoading} onClick={refreshActive}>
-          <RefreshCw size={14} className={feedLoading || bankLoading ? "animate-spin" : undefined} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {tab === "bank" || !showFeedTab ? (
+            <select
+              value={bankSort}
+              onChange={(event) => setBankSort(event.target.value as BankSort)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            >
+              <option value="fifo">Oldest first (FIFO)</option>
+              <option value="newest">Newest first</option>
+            </select>
+          ) : null}
+          <Button type="button" size="sm" variant="ghost" disabled={feedLoading || bankLoading} onClick={refreshActive}>
+            <RefreshCw size={14} className={feedLoading || bankLoading ? "animate-spin" : undefined} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {!compact ? (
         <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-          Pick one story for this reel. Live feed shows fresh Reddit posts; the bank holds pre-generated stories
-          ready to film.
+          Pick one story for this reel. Unavailable posts stay visible so you can see what is already taken.
+          {tier ? (
+            <span className="mt-1 block text-muted-foreground/80">Tier: {tier}</span>
+          ) : null}
         </p>
       ) : null}
 
@@ -214,7 +243,7 @@ export function StoryPickerStep({
           ) : null}
           {emptyFeed ? (
             <div className="rounded-md border border-dashed border-border bg-black/10 px-3 py-6 text-center text-xs text-muted-foreground">
-              No fresh posts for this genre right now. Try another genre, check the story bank, or use Auto-pick.
+              No posts for this genre right now. Try another genre, check the story bank, or use Auto-pick.
             </div>
           ) : (
             <div className="grid gap-2">
@@ -237,7 +266,7 @@ export function StoryPickerStep({
           ) : null}
           {feedHasMore && !feedLoading ? (
             <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => void loadFeed(true)}>
-              Load more
+              {loadMoreLabel}
             </Button>
           ) : null}
         </div>
