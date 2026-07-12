@@ -52,6 +52,7 @@ const route = getRouteApi("/studio/$id");
 
 export function StudioScreen() {
   const { id } = route.useParams();
+  const navigate = route.useNavigate();
   const [reel, setReel] = useState<Reel | undefined>();
   const [seriesReels, setSeriesReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +165,12 @@ export function StudioScreen() {
     setError(undefined);
     try {
       if (opts?.requireFfmpeg) await assertFfmpegReady();
-      setReel(await action());
+      const next = await action();
+      setReel(next);
+      const nextId = next._id ?? next.id;
+      if (nextId && nextId !== id) {
+        void navigate({ to: "/studio/$id", params: { id: nextId }, replace: true });
+      }
     } catch (err) {
       const block = ffmpegBlockFromError(err);
       if (block) setFfmpegBlock(block);
@@ -172,7 +178,7 @@ export function StudioScreen() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [id, navigate]);
 
   useEffect(() => {
     const count = reel?.scenes?.length ?? 0;

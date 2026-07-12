@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import {
   listGameplay,
   replanReel,
+  replanReelSeries,
   regenerateReel,
   updateRedditCard,
   updateReelSettings,
@@ -26,7 +27,11 @@ import {
   gameplayMissingTtsSegmentCount,
   gameplayNarrationCacheReady,
   gameplayRerenderCostsCredits,
+  parsePartsValue,
 } from "@/utils/reel";
+
+type ReplanScope = "episode" | "series";
+type SeriesParts = "off" | "auto" | number;
 
 const StoryPickerStep = lazy(() =>
   import("@/components/reels/StoryPickerStep").then((module) => ({
@@ -40,9 +45,13 @@ function reelStorySource(reel: Reel): StorySource {
   return "hybrid";
 }
 
-function reelPartsHint(reel: Reel): "off" | "auto" | number {
+function defaultSeriesParts(reel: Reel): SeriesParts {
   if (reel.partCount && reel.partCount > 1) return reel.partCount;
-  return "off";
+  return "auto";
+}
+
+function isMultiPartSeries(reel: Reel): boolean {
+  return Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
 }
 
 export function RedditSourcePanel({
@@ -68,6 +77,15 @@ export function RedditSourcePanel({
   const [gameplayKey, setGameplayKey] = useState(reel.gameplayKey ?? "");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
+  const [replanScope, setReplanScope] = useState<ReplanScope>(() =>
+    isMultiPartSeries(reel) ? "series" : "episode"
+  );
+  const [seriesParts, setSeriesParts] = useState<SeriesParts>(() => defaultSeriesParts(reel));
+
+  useEffect(() => {
+    setReplanScope(isMultiPartSeries(reel) ? "series" : "episode");
+    setSeriesParts(defaultSeriesParts(reel));
+  }, [reel._id, reel.id, reel.seriesId, reel.partCount]);
 
   useEffect(() => {
     setTitle(story?.title ?? reel.title ?? "");
@@ -171,21 +189,39 @@ export function RedditSourcePanel({
   const bakeIntent = !titleChangedPreview && gameplayNarrationCacheReady(reel) ? "composite" : "full";
   const storySource = reelStorySource(reel);
   const canReplanStory = reel.status === "plan_review" || reel.status === "completed" || reel.status === "failed";
+  const pickerParts = replanScope === "series" ? seriesParts : "off";
+  const episodeCount =
+    replanScope === "series" && seriesParts !== "off"
+      ? isMultiPartSeries(reel)
+        ? reel.partCount ?? 2
+        : typeof seriesParts === "number"
+          ? seriesParts
+          : undefined
+      : 1;
 
   const confirmReplanWithStory = () => {
     if (!storySelection) return;
+    const seriesMode = replanScope === "series";
+    const fields = storySelectionToCreateFields(storySelection);
     requestConfirm({
-      title: "Re-plan with this story?",
-      body: "Discards the current plan and runs OpenRouter story planning again.",
+      title: seriesMode ? "Re-plan whole series?" : "Re-plan with this story?",
+      body: seriesMode
+        ? "Discards plans for every episode and runs story planning again from one selected thread."
+        : "Discards the current plan and runs OpenRouter story planning again.",
       details: [
         "LLM planning credits will be charged.",
-        "Existing scene assets are cleared until you approve and produce again.",
-      ],
+        seriesMode
+          ? `All ${episodeCount ? `~${episodeCount} ` : ""}episodes are cleared until you approve and produce again.`
+          : "Existing scene assets are cleared until you approve and produce again.",
+        seriesMode ? "Other episodes in this series will use the new story arc." : undefined,
+      ].filter((line): line is string => Boolean(line)),
       confirmLabel: "Spend credits & re-plan",
       costTone: "paid",
       onConfirm: () =>
         run(() =>
-          replanReel(reelKey, storySelectionToCreateFields(storySelection))
+          seriesMode
+            ? replanReelSeries(reelKey, { ...fields, parts: seriesParts })
+            : replanReel(reelKey, fields)
         ),
     });
   };
@@ -241,15 +277,67 @@ export function RedditSourcePanel({
                 </div>
               }
             >
-              <StoryPickerStep
-                compact
-                genre={reel.genre ?? "aita_family"}
-                source={storySource}
-                tier={reel.tier}
-                parts={reelPartsHint(reel)}
-                selection={storySelection}
-                onSelect={setStorySelection}
-              />
+              <div className="grid gap-2">
+                <div className="grid gap-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground">Re-plan scope</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={replanScope === "episode" ? "default" : "outline"}
+                      disabled={busy}
+                      onClick={() => setReplanScope("episode")}
+                    >
+                      This episode only
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={replanScope === "series" ? "default" : "outline"}
+                      disabled={busy}
+                      onClick={() => setReplanScope("series")}
+                    >
+                      Whole series
+                    </Button>
+                  </div>
+                  {replanScope === "series" ? (
+                    <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+                      Splits the selected story across episodes and updates every part in this series.
+                      {isMultiPartSeries(reel)
+                        ? " Extra episodes are removed or added if the part count changes."
+                        : " Creates a multi-part series when the story is long enough."}
+                    </p>
+                  ) : (
+                    <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+                      Only this reel changes. Sibling episodes keep their current stories.
+                    </p>
+                  )}
+                </div>
+                {replanScope === "series" ? (
+                  <Label>
+                    Parts
+                    <Select
+                      value={String(seriesParts)}
+                      onChange={(event) => setSeriesParts(parsePartsValue(event.target.value))}
+                    >
+                      <option value="off">1 (no split)</option>
+                      <option value="auto">auto</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </Select>
+                  </Label>
+                ) : null}
+                <StoryPickerStep
+                  compact
+                  genre={reel.genre ?? "aita_family"}
+                  source={storySource}
+                  tier={reel.tier}
+                  parts={pickerParts}
+                  selection={storySelection}
+                  onSelect={setStorySelection}
+                />
+              </div>
             </Suspense>
           ) : null}
           <Button
@@ -259,7 +347,7 @@ export function RedditSourcePanel({
             onClick={confirmReplanWithStory}
           >
             <Wand2 size={15} />
-            Re-plan with selected story
+            {replanScope === "series" ? "Re-plan whole series" : "Re-plan with selected story"}
           </Button>
         </div>
       ) : null}

@@ -1013,3 +1013,14 @@ export async function replanReel(
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/replan`, { method: "POST", body: JSON.stringify(patch) });
 }
+
+export async function replanReelSeries(
+  id: string,
+  patch: {
+    selectedStoryId?: string;
+    selectedSeedUrl?: string;
+    parts?: "off" | "auto" | number;
+  }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/replan-series`, { method: "POST", body: JSON.stringify(patch) });
+}
