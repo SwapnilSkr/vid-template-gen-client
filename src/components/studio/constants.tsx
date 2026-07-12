@@ -16,7 +16,7 @@ export const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
   animation: "none" | "pop";
 } = {
   fontName: "Arial",
-  fontSize: 64,
+  fontSize: 135,
   primaryColor: "#FFFFFF",
   activeColor: "#FFD700",
   outlineColor: "#000000",
@@ -28,7 +28,7 @@ export const CAPTION_DEFAULTS: Required<Omit<CaptionStyle, "animation">> & {
   marginR: 90,
   chunkSize: 4,
   bold: true,
-  uppercase: false,
+  uppercase: true,
   animation: "none",
   karaoke: false,
 };

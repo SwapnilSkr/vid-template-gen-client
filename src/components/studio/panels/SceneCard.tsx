@@ -163,8 +163,13 @@ export function SceneCard({
               )
             }
           >
-            {dirty ? "Save" : "Saved"}
+            {dirty ? "Save script" : "Script saved"}
           </Button>
+          {!audioUrl && !generatingAudio && !dirty ? (
+            <span className="basis-full text-[11px] text-warning sm:basis-auto">
+              Script saved — regenerate audio to update the preview.
+            </span>
+          ) : null}
           {!isGameplay ? (
             <>
               {reel.niche.startsWith("horror") ? (
@@ -205,33 +210,33 @@ export function SceneCard({
               >
                 <ImageIcon size={13} /> Image
               </Button>
-              <Button
-                type="button"
-                size="default"
-                variant="outline"
-                className="border-border bg-secondary text-foreground hover:bg-accent"
-                disabled={disableAll}
-                title="Regenerate this scene's narration audio"
-                onClick={() =>
-                  requestConfirm({
-                    title: `Regenerate narration for scene ${scene.index + 1}?`,
-                    body: "This makes one new OpenRouter TTS request, then rebuilds the preview video with existing images and other scene audio.",
-                    details: [
-                      "Costs narration generation for this scene only.",
-                      "Keeps every scene image.",
-                      "Keeps other scenes' narration audio.",
-                      "Caption timing is rebuilt from the new audio duration.",
-                    ],
-                    confirmLabel: "Regenerate audio",
-                    onConfirm: () =>
-                      run(() => regenerateScene(reelId, scene.index, ["audio"])),
-                  })
-                }
-              >
-                <Play size={13} /> Audio
-              </Button>
             </>
           ) : null}
+          <Button
+            type="button"
+            size="default"
+            variant="outline"
+            className="border-border bg-secondary text-foreground hover:bg-accent"
+            disabled={disableAll}
+            title="Regenerate this scene's narration audio"
+            onClick={() =>
+              requestConfirm({
+                title: `Regenerate narration for ${isGameplay ? "sentence" : "scene"} ${scene.index + 1}?`,
+                body: isGameplay
+                  ? "This makes one new OpenRouter TTS request for this sentence, then rebuilds the gameplay Reel with the other narration reused."
+                  : "This makes one new OpenRouter TTS request, then rebuilds the preview video with existing images and other scene audio.",
+                details: [
+                  "Costs narration generation for this item only.",
+                  isGameplay ? "Keeps the gameplay background and other sentence audio." : "Keeps every scene image.",
+                  "Caption timing is rebuilt from the new audio duration.",
+                ],
+                confirmLabel: "Regenerate audio",
+                onConfirm: () => run(() => regenerateScene(reelId, scene.index, ["audio"])),
+              })
+            }
+          >
+            <Play size={13} /> Regenerate audio
+          </Button>
           {total > 1 ? (
             <Button
               type="button"

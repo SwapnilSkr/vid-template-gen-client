@@ -1,6 +1,6 @@
-import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft } from "lucide-react";
+import { Film, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
+import { getReelDefaults, listInstagramChannels, type CreateReelInput, type ImageModelOption, type InstagramChannelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -123,6 +123,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const loadArtStyles = useReelStudio((state) => state.loadArtStyles);
   const loadYouTubeChannels = useReelStudio((state) => state.loadYouTubeChannels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
+  const [instagramChannels, setInstagramChannels] = useState<InstagramChannelOption[]>([]);
   const [sourcePostMode, setSourcePostMode] = useState<SourcePostMode>("browse");
   const [step, setStep] = useState<CreateStep>("settings");
   const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
@@ -144,6 +145,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     void loadImageModels();
     void loadArtStyles();
     void loadYouTubeChannels();
+    void listInstagramChannels().then(setInstagramChannels).catch(() => setInstagramChannels([]));
   }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles, loadYouTubeChannels]);
 
   useEffect(() => {
@@ -186,6 +188,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const selectedClip = gameplayClips.find((clip) => clip.key === form.gameplayKey);
   const selectedHorrorAudio = horrorAudios.find((audio) => audio.key === form.horrorAudioKey);
   const selectedOutroChannel = youtubeChannels.find((channel) => channel.id === form.outroChannelId);
+  const selectedOutroInstagram = instagramChannels.find((channel) => channel.id === form.outroInstagramChannelId);
   const selectedImageModel = imageModels.find((option) => option.model === form.imageModel);
   const selectedHorrorReference = horrorReferences.find((reference) => reference._id === form.horrorReferenceId);
   const selectedVoice = useReelStudio((state) =>
@@ -399,10 +402,10 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           </span>
         </div>
         <Label>
-          Channel used in the outro
+          Account used in the outro
           <Select
-            value={form.outroChannelId ?? ""}
-            onChange={(event) => setForm({ ...form, outroChannelId: event.target.value || undefined })}
+            value={form.outroInstagramChannelId ? `instagram:${form.outroInstagramChannelId}` : form.outroChannelId ?? ""}
+            onChange={(event) => { const value = event.target.value; setForm({ ...form, outroChannelId: value.startsWith("instagram:") ? undefined : value || undefined, outroInstagramChannelId: value.startsWith("instagram:") ? value.slice("instagram:".length) : undefined }); }}
           >
             <option value="">Auto by niche</option>
             {youtubeChannels.map((channel) => (
@@ -410,6 +413,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
                 {channelName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
               </option>
             ))}
+            {instagramChannels.map((channel) => <option key={`instagram:${channel.id}`} value={`instagram:${channel.id}`}>Instagram · {channel.username ? `@${channel.username}` : channel.label}</option>)}
           </Select>
         </Label>
 
@@ -514,7 +518,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               <span className="mt-1 block font-medium text-foreground">
                 Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
               </span>
-            ) : null}
+        ) : null}
+        {selectedOutroInstagram ? <div className="flex items-center gap-3 rounded-md border border-pink-500/20 bg-pink-500/[0.04] p-2.5"><Instagram className="size-5 text-pink-500" /><div className="text-sm"><div className="font-semibold">@{selectedOutroInstagram.username ?? selectedOutroInstagram.label}</div><div className="text-xs text-muted-foreground">Instagram handle and profile image will brand the outro.</div></div></div> : null}
           </p>
         ) : sourcePostMode === "auto" ? (
           <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
