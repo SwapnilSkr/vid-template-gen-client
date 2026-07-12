@@ -26,10 +26,7 @@ export function CreateReelScreen() {
         </Link>
         <h1 className="m-0 text-lg leading-tight text-foreground">Create New Reel</h1>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
-            Set niche, genre, and background — browse a story for Reddit reels, then create. Review mode
-            opens Studio; auto mode returns to the dashboard.
-          </p>
+          <div />
           <CaptionSmokeButton size="sm" variant="ghost" label="Test captions" />
         </div>
       </header>

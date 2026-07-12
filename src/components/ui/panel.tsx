@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export const panelClassName = "rounded-lg border border-border bg-card";
+export const panelClassName = "rounded-xl border border-border/40 bg-card/65 shadow-[0_8px_30px_rgb(0,0,0,0.3)] backdrop-blur-md";
 
 export function Panel({
   className,
@@ -18,7 +18,7 @@ export function PanelHeader({
   return (
     <div
       ref={ref}
-      className={cn("flex items-center justify-between gap-3 border-b border-border px-3.5 py-2.5", className)}
+      className={cn("flex items-center justify-between gap-3 border-b border-border/20 px-4 py-3 bg-white/[0.02]", className)}
       {...props}
     />
   );

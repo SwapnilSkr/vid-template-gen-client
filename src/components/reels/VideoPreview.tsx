@@ -11,12 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { Panel, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { useReelStudio } from "@/store/reel-studio";
-import {
-  formatLabel,
-  reelId,
-  reelProgressLabel,
-  REEL_ACTIVE_STATUSES,
-} from "@/utils/reel";
+import { formatLabel, reelId } from "@/utils/reel";
+import { cn } from "@/lib/utils";
 
 interface VideoPreviewProps {
   reel?: Reel;
@@ -32,13 +28,7 @@ function reelOptionLabel(item: Reel, index: number) {
   return `${String(index + 1).padStart(2, "0")} · ${item.title || item.topic || "Untitled reel"} · ${formatLabel(item.genre)}${partLabel}`;
 }
 
-function previewStatusCopy(reel: Reel, isGenerating: boolean): string {
-  if (reel.status === "plan_review") {
-    return "Plan ready — open Studio to review, then generate.";
-  }
-  if (isGenerating) return "Assets appear here as each scene finishes.";
-  return "Completed reels appear here for review.";
-}
+
 
 export function VideoPreview({
   reel,
@@ -53,36 +43,21 @@ export function VideoPreview({
   const hasNavigator = reels.length > 1 && selectedIndex >= 0;
   const previousReel = hasNavigator ? reels[selectedIndex - 1] : undefined;
   const nextReel = hasNavigator ? reels[selectedIndex + 1] : undefined;
-  const isGenerating = reel
-    ? REEL_ACTIVE_STATUSES.includes(reel.status)
-    : false;
 
-  let sceneAssetCount = 0;
-  let audioReady = 0;
-  const sceneAssets: Scene[] = [];
-  if (reel?.scenes) {
-    for (const scene of reel.scenes) {
-      if (scene.audioUrl) audioReady += 1;
-      if (scene.assetUrl && !scene.isHero) {
-        sceneAssetCount += 1;
-        sceneAssets.push(scene);
-      }
-    }
-  }
-  const sceneTotal = reel?.scenes?.length ?? 0;
+
+
 
   return (
     <Panel className="grid h-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
       <PanelHeader>
-        <div className="min-w-0">
-          <PanelTitle>Reel Preview</PanelTitle>
-          <span className="ml-1 rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-            9:16
+        <div className="min-w-0 truncate pr-4">
+          <span className="text-sm font-semibold tracking-normal text-foreground">
+            {reel ? (reel.title || reel.topic || "Untitled reel") : "No reel selected"}
           </span>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1 shrink-0">
           {hasNavigator ? (
-            <div className="grid min-w-[260px] max-w-[520px] flex-1 grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-1">
+            <>
               <Button
                 type="button"
                 variant="outline"
@@ -95,22 +70,6 @@ export function VideoPreview({
               >
                 <ChevronLeft size={16} />
               </Button>
-              <Select
-                aria-label="Select reel preview"
-                value={selectedId ?? ""}
-                onChange={(event) =>
-                  event.target.value && void select(event.target.value)
-                }
-              >
-                {reels.map((item, index) => {
-                  const id = reelId(item);
-                  return (
-                    <option key={id} value={id}>
-                      {reelOptionLabel(item, index)}
-                    </option>
-                  );
-                })}
-              </Select>
               <Button
                 type="button"
                 variant="outline"
@@ -121,38 +80,23 @@ export function VideoPreview({
               >
                 <ChevronRight size={16} />
               </Button>
-            </div>
+            </>
           ) : null}
-          {reel?.outputUrl ? (
-            <a
-              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-[13px] font-medium text-foreground no-underline"
-              href={reel.outputUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open
-              <ExternalLink size={15} />
-            </a>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="More preview actions"
-          >
-            <MoreVertical size={16} />
-          </Button>
         </div>
       </PanelHeader>
 
-      <div className="m-3 flex min-h-60 items-center justify-center rounded-md border border-border bg-black/45 p-3 md:min-h-[300px]">
-        <div className="aspect-9/16 h-[min(460px,52vh)] w-auto max-w-full overflow-hidden rounded-md border border-border bg-black">
+      <div className="m-3 flex min-h-60 items-center justify-center rounded-lg border border-border/30 bg-black/25 p-3 md:min-h-[300px]">
+        <div className={cn(
+          "aspect-9/16 h-[min(460px,52vh)] w-auto max-w-full overflow-hidden rounded-lg border border-border/30 bg-black transition-all duration-300",
+          reel && !reel.outputUrl && "bg-gradient-to-b from-zinc-950 via-zinc-900/50 to-zinc-950 shadow-[0_0_20px_rgba(97,110,216,0.15)] border-indigo-500/20"
+        )}>
           {reel?.outputUrl ? (
             <video
               className="h-full w-full object-contain"
               key={reel.outputUrl}
               src={reel.outputUrl}
               controls
+              autoPlay
               playsInline
               onLoadedMetadata={(event) =>
                 setPreviewTimeSeconds(event.currentTarget.currentTime)
@@ -164,57 +108,33 @@ export function VideoPreview({
                 setPreviewTimeSeconds(event.currentTarget.currentTime)
               }
             />
-          ) : sceneAssets.length > 0 && reel ? (
-            <div className="grid h-full grid-rows-[minmax(0,1fr)_auto] gap-2 p-2">
-              <div className="grid min-h-0 grid-cols-2 content-start gap-1.5 overflow-y-auto sm:grid-cols-3">
-                {sceneAssets.map((scene) => {
-                  const src = mediaUrl(scene.assetUrl);
-                  if (!src) return null;
-                  return (
-                    <div
-                      key={scene.index}
-                      className="relative aspect-9/16 overflow-hidden rounded border border-border/70 bg-black/40"
-                    >
-                      <img
-                        src={src}
-                        alt={`Scene ${scene.index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                      <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 text-[10px] text-white">
-                        {scene.index + 1}
-                        {scene.audioUrl ? " · ♪" : ""}
-                      </span>
-                    </div>
-                  );
-                })}
+          ) : reel ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+              <div className="relative flex h-14 w-14 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-2 border-indigo-500/10" />
+                <div className="absolute inset-0 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                <Film className="h-6 w-6 text-indigo-400 animate-pulse" />
               </div>
-              <div className="grid gap-0.5 px-1 pb-1 text-center text-[12px] text-muted-foreground">
-                <strong className="inline-flex items-center justify-center gap-1.5 text-foreground">
-                  {isGenerating ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : null}
-                  {reel.currentStep ?? `${reel.progress}% generated`}
-                </strong>
-                <span>
-                  {sceneAssetCount}/{sceneTotal || "?"} stills
-                  {audioReady > 0 ? ` · ${audioReady} narration` : ""}
-                </span>
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                  Generating Reel
+                </h3>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-400 shadow-sm border border-indigo-500/20 animate-pulse">
+                  {reel.progress}% completed
+                </div>
+                <p className="max-w-[180px] text-xs text-muted-foreground leading-normal mt-1">
+                  Writing script, synthesizing audio, and rendering assets...
+                </p>
               </div>
             </div>
           ) : (
             <div className="grid h-full place-items-center gap-2 px-4 text-center text-muted-foreground">
-              {isGenerating ? (
-                <Loader2 size={40} className="animate-spin text-primary" />
-              ) : (
-                <Film size={46} />
-              )}
-              <strong className="text-foreground">
-                {reel ? reelProgressLabel(reel) : "Select or create a reel"}
+              <Film size={40} className="text-zinc-600" />
+              <strong className="text-sm font-semibold text-foreground/80">
+                Select or create a reel
               </strong>
-              <span className="text-[13px] text-muted-foreground">
-                {reel
-                  ? previewStatusCopy(reel, isGenerating)
-                  : "Completed reels appear here for review."}
+              <span className="text-xs text-muted-foreground/80 max-w-[200px]">
+                Completed reels will appear here for review and styling.
               </span>
             </div>
           )}

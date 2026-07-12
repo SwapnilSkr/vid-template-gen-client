@@ -95,6 +95,7 @@ function ReviewInspectorForm({
   const [hasUnsavedReviewEdits, setHasUnsavedReviewEdits] = useState(false);
   const [activePanel, setActivePanel] = useState<InspectorPanel>("review");
   const [costExpanded, setCostExpanded] = useState(false);
+  const [channelsExpanded, setChannelsExpanded] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     ConfirmDialogAction | undefined
   >();
@@ -240,10 +241,10 @@ function ReviewInspectorForm({
   }
 
   const tabs: { id: InspectorPanel; label: string; icon: ReactNode }[] = [
-    { id: "review", label: "Review", icon: <CheckCircle2 size={14} /> },
-    { id: "thumbnail", label: "Thumb", icon: <ImageIcon size={14} /> },
-    { id: "publish", label: "Publish", icon: <Youtube size={14} /> },
-    { id: "details", label: "Details", icon: <GitBranch size={14} /> },
+    { id: "review", label: "Review", icon: <CheckCircle2 size={16} /> },
+    { id: "thumbnail", label: "Thumb", icon: <ImageIcon size={16} /> },
+    { id: "publish", label: "Publish", icon: <Youtube size={16} /> },
+    { id: "details", label: "Details", icon: <GitBranch size={16} /> },
   ];
 
   return (
@@ -267,16 +268,11 @@ function ReviewInspectorForm({
               to="/studio/$id"
               params={{ id: reelId(reel) }}
               className={cn(
-                buttonClassName("outline"),
-                "w-full",
-                reel.status === "plan_review" &&
-                  "border-warning/50 text-warning",
+                buttonClassName("default"),
+                "w-full"
               )}
             >
-              <Sparkles size={16} />
-              {reel.status === "plan_review"
-                ? "Review plan in Studio"
-                : "Open in Studio"}
+              Edit in Studio
             </Link>
           ) : null}
 
@@ -286,14 +282,13 @@ function ReviewInspectorForm({
                 key={tab.id}
                 type="button"
                 className={cn(
-                  "inline-flex min-h-8 min-w-0 items-center justify-center gap-1 rounded px-1.5 text-xs font-semibold text-muted-foreground transition",
+                  "inline-flex min-h-10 min-w-0 items-center justify-center gap-1 rounded px-1.5 py-1.5 text-xs font-semibold text-muted-foreground transition",
                   activePanel === tab.id &&
                     "bg-primary text-primary-foreground shadow-sm",
                 )}
                 onClick={() => setActivePanel(tab.id)}
               >
                 {tab.icon}
-                <span className="truncate">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -391,7 +386,7 @@ function ReviewInspectorForm({
                 </Button>
                 <Button
                   type="button"
-                  variant="default"
+                  variant="secondary"
                   disabled={!canReview}
                   onClick={() => void approveDraftReview()}
                 >
@@ -518,13 +513,29 @@ function ReviewInspectorForm({
                 )}
 
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-foreground">
-                    Channel Accounts
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setChannelsExpanded(!channelsExpanded)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left focus:outline-none cursor-pointer"
+                  >
+                    <span className="text-xs font-semibold text-foreground">
+                      Channel Accounts
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      className={cn(
+                        "text-muted-foreground transition-transform duration-200",
+                        channelsExpanded && "rotate-180",
+                      )}
+                    />
+                  </button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowChannelConnect((current) => !current)}
+                    onClick={() => {
+                      setShowChannelConnect((current) => !current);
+                      if (!showChannelConnect) setChannelsExpanded(true);
+                    }}
                     title={
                       showChannelConnect
                         ? "Close add channel"
@@ -536,7 +547,9 @@ function ReviewInspectorForm({
                   </Button>
                 </div>
 
-                {showChannelConnect ? (
+                {channelsExpanded ? (
+                  <>
+                    {showChannelConnect ? (
                   <div className="grid gap-2 rounded-md border border-border bg-card/70 p-2.5">
                     <Label>
                       Internal nickname
@@ -661,6 +674,8 @@ function ReviewInspectorForm({
                         </div>
                       ))}
                   </div>
+                ) : null}
+                  </>
                 ) : null}
               </div>
 
