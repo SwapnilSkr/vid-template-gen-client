@@ -33,7 +33,6 @@ import { InspectorPanel } from "@/components/studio/InspectorPanel";
 import { ProgramMonitor } from "@/components/studio/ProgramMonitor";
 import { ProjectPanel } from "@/components/studio/ProjectPanel";
 import { TimelinePanel } from "@/components/studio/TimelinePanel";
-import { SceneCard } from "@/components/studio/panels/SceneCard";
 import type { ConfirmAction, InspectorTab, StudioRun } from "@/components/studio/types";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -506,6 +505,8 @@ export function StudioScreen() {
               onSelectScene={selectScene}
               busy={studioLocked}
               disabled={studioLocked}
+              isGameplay={isGameplay}
+              requestConfirm={setConfirmAction}
               run={run}
               onAddScene={() =>
                 void run(() =>
@@ -514,23 +515,6 @@ export function StudioScreen() {
               }
             />
           </div>
-          {selectedScene ? (
-            <SceneCard
-              reelId={id}
-              reel={reel}
-              scene={selectedScene}
-              total={scenes.length}
-              busy={studioLocked}
-              disabled={studioLocked}
-              isGameplay={isGameplay}
-              run={run}
-              requestConfirm={setConfirmAction}
-            />
-          ) : (
-            <div className="grid place-items-center rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
-              No scenes yet.
-            </div>
-          )}
 
           <div className="grid gap-3">
             <InspectorPanel
