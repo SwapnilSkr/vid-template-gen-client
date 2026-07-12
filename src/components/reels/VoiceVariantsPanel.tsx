@@ -214,9 +214,7 @@ export function VoiceVariantsPanel({
             );
           })}
         </div>
-      ) : (
-
-      )}
+      ) : null}
 
       {error ? (
         <p className="m-0 text-xs font-semibold text-destructive">{error}</p>

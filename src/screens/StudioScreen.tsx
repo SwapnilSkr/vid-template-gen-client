@@ -478,7 +478,7 @@ export function StudioScreen() {
         </div>
       ) : null}
 
-      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(320px,380px)]">
+      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
         <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)]">
           <ProjectPanel
             reel={reel}
@@ -491,27 +491,29 @@ export function StudioScreen() {
         </aside>
 
         <main className="grid min-w-0 content-start gap-3">
-          <ProgramMonitor
-            reel={reel}
-            previewUrl={previewUrl}
-            variantPreview={Boolean(variantPreviewUrl)}
-            onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
-          />
-          <TimelinePanel
-            reelId={id}
-            reel={reel}
-            scenes={scenes}
-            selectedSceneIndex={selectedSceneIndex}
-            onSelectScene={selectScene}
-            busy={studioLocked}
-            disabled={studioLocked}
-            run={run}
-            onAddScene={() =>
-              void run(() =>
-                addScene(id, { narration: "New scene narration." }),
-              )
-            }
-          />
+          <div className="grid gap-3 xl:grid-cols-2">
+            <ProgramMonitor
+              reel={reel}
+              previewUrl={previewUrl}
+              variantPreview={Boolean(variantPreviewUrl)}
+              onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
+            />
+            <TimelinePanel
+              reelId={id}
+              reel={reel}
+              scenes={scenes}
+              selectedSceneIndex={selectedSceneIndex}
+              onSelectScene={selectScene}
+              busy={studioLocked}
+              disabled={studioLocked}
+              run={run}
+              onAddScene={() =>
+                void run(() =>
+                  addScene(id, { narration: "New scene narration." }),
+                )
+              }
+            />
+          </div>
           {selectedScene ? (
             <SceneCard
               reelId={id}
@@ -529,27 +531,27 @@ export function StudioScreen() {
               No scenes yet.
             </div>
           )}
-        </main>
 
-        <div className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)] xl:overflow-y-auto xl:pr-1">
-          <InspectorPanel
-            tab={inspectorTab}
-            onTabChange={changeInspectorTab}
-            reel={reel}
-            busy={studioLocked}
-            isGameplay={isGameplay}
-            run={run}
-            requestConfirm={setConfirmAction}
-          />
-          <VoiceVariantsPanel
-            reel={reel}
-            reelId={id}
-            locked={studioLocked}
-            onRefresh={refresh}
-            onPreviewVariant={setVariantPreviewUrl}
-            requestConfirm={setConfirmAction}
-          />
-        </div>
+          <div className="grid gap-3">
+            <InspectorPanel
+              tab={inspectorTab}
+              onTabChange={changeInspectorTab}
+              reel={reel}
+              busy={studioLocked}
+              isGameplay={isGameplay}
+              run={run}
+              requestConfirm={setConfirmAction}
+            />
+            <VoiceVariantsPanel
+              reel={reel}
+              reelId={id}
+              locked={studioLocked}
+              onRefresh={refresh}
+              onPreviewVariant={setVariantPreviewUrl}
+              requestConfirm={setConfirmAction}
+            />
+          </div>
+        </main>
       </div>
       </div>
       <ConfirmModal
