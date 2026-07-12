@@ -767,6 +767,7 @@ export interface ThumbnailSourceRequest {
   atSeconds?: number;
   sceneIndex?: number;
   aspectRatio?: ThumbnailAspectRatio;
+  cleanGameplay?: boolean;
 }
 
 export async function getThumbnailSource(

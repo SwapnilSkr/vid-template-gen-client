@@ -303,7 +303,9 @@ export function ThumbnailStudioScreen() {
   const bg = doc.background;
   const bgSourceKey = useMemo(() => {
     if (bg.sourceType === "frame") {
-      return canUseFrame ? `frame:${bg.atSeconds.toFixed(1)}:${doc.aspectRatio}` : undefined;
+      return canUseFrame
+        ? `frame:${bg.atSeconds.toFixed(1)}:${doc.aspectRatio}:${isShorts && isGameplay ? "clean-gameplay" : "rendered"}`
+        : undefined;
     }
     if (bg.sourceType === "scene") {
       return bg.sceneIndex !== undefined && sceneStills.length
@@ -311,7 +313,7 @@ export function ThumbnailStudioScreen() {
         : undefined;
     }
     return reel?.review?.thumbnailUrl ? `saved:${reel.review.thumbnailUrl}:${doc.aspectRatio}` : undefined;
-  }, [bg.sourceType, bg.atSeconds, bg.sceneIndex, doc.aspectRatio, canUseFrame, sceneStills.length, reel?.review?.thumbnailUrl]);
+  }, [bg.sourceType, bg.atSeconds, bg.sceneIndex, doc.aspectRatio, canUseFrame, sceneStills.length, reel?.review?.thumbnailUrl, isShorts, isGameplay]);
 
   useEffect(() => {
     if (!reel || !bgSourceKey) {
@@ -345,6 +347,7 @@ export function ThumbnailStudioScreen() {
           atSeconds: bg.sourceType === "frame" ? Math.max(bg.atSeconds, 0) : undefined,
           sceneIndex: bg.sourceType === "scene" ? bg.sceneIndex : undefined,
           aspectRatio: doc.aspectRatio,
+          cleanGameplay: isShorts && isGameplay,
         });
         if (requestId !== bgRequestRef.current) return;
         bgCacheRef.current.set(bgSourceKey, result.imageDataUrl);
@@ -359,10 +362,10 @@ export function ThumbnailStudioScreen() {
         setBgLoading(false);
         setError(err instanceof Error ? err.message : "Background fetch failed");
       }
-    }, 260);
+    }, isShorts && isGameplay ? 100 : 260);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bgSourceKey, id, Boolean(reel)]);
+  }, [bgSourceKey, id, Boolean(reel), isShorts, isGameplay]);
 
   // ---- doc mutation helpers ----
   const applyDoc = useCallback(
