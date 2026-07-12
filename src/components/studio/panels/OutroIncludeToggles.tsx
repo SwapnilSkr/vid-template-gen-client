@@ -1,5 +1,5 @@
-import { Youtube } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Clapperboard, Youtube } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { updateReelSettings, type Reel } from "@/api/reels";
 import type { ConfirmAction, StudioRun } from "@/components/studio/types";
 import { cn } from "@/lib/utils";
@@ -96,6 +96,7 @@ export function OutroIncludeToggles({
     <div className={cn("grid gap-2", compact ? "sm:grid-cols-2" : undefined)}>
       {showPartTeaser ? (
         <OutroToggle
+          icon={<Clapperboard size={14} className="text-muted-foreground" />}
           label="Part teaser"
           hint={`“Stay tuned for part ${nextPartNumber(reel)}.”`}
           checked={!skipPartOutro}
@@ -105,6 +106,7 @@ export function OutroIncludeToggles({
         />
       ) : null}
       <OutroToggle
+        icon={<Youtube size={14} className="text-muted-foreground" />}
         label="Branded outro"
         hint="Channel card + subscribe TTS after the body."
         checked={!skipBrandedOutro}
@@ -117,6 +119,7 @@ export function OutroIncludeToggles({
 }
 
 function OutroToggle({
+  icon,
   label,
   hint,
   checked,
@@ -124,6 +127,7 @@ function OutroToggle({
   compact,
   onChange,
 }: {
+  icon: ReactNode;
   label: string;
   hint: string;
   checked: boolean;
@@ -148,7 +152,7 @@ function OutroToggle({
       />
       <span className="grid gap-0.5">
         <span className="inline-flex items-center gap-1.5 font-medium">
-          <Youtube size={14} className="text-muted-foreground" />
+          {icon}
           Include {label}
         </span>
         <span className="text-muted-foreground">{hint}</span>
