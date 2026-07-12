@@ -31,6 +31,7 @@ import {
   regenerateReel,
   saveThumbnailDraft,
   saveShortsCover,
+  clearShortsCover,
   stageThumbnailDraftImage,
   type FontOption,
   type Reel,
@@ -70,8 +71,12 @@ import {
 } from "@/components/thumbnail-studio/Chrome";
 import {
   AI_PROMPT_CHIPS,
+  buildDocFromSavedShortsCover,
+  clearShortsSessionDoc,
   defaultTitleText,
+  hasSavedShortsCover,
   sessionDocKey,
+  shortsSessionDocKey,
 } from "@/components/thumbnail-studio/utils";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, type ConfirmDialogAction } from "@/components/ui/confirm-dialog";
@@ -114,6 +119,8 @@ export function ThumbnailStudioScreen() {
   const initializedRef = useRef<string | undefined>(undefined);
   /** JSON snapshot of the doc at last staging — drives the "out of date" badge. */
   const stagedJsonRef = useRef<string | undefined>(undefined);
+  /** Last saved Shorts cover on the server — discard reverts to this. */
+  const savedShortsJsonRef = useRef<string | undefined>(undefined);
 
   // ---- reel loading + polling while generation is active ----
   const refresh = useCallback(async () => {
@@ -175,19 +182,55 @@ export function ThumbnailStudioScreen() {
     };
   }, []);
 
-  // ---- one-time doc restore per reel: session → server draft → fresh ----
+  // ---- one-time doc restore per reel: saved Shorts → session → server draft → fresh ----
   useEffect(() => {
     if (!reel || initializedRef.current === id) return;
     initializedRef.current = id;
 
-    const cacheKey = `${sessionDocKey(id)}${isShorts ? (reel.strategy === "gameplay_overlay" ? ":shorts-overlay-v2" : ":shorts") : ""}`;
+    if (isShorts) {
+      savedShortsJsonRef.current = undefined;
+      const shortsKey = shortsSessionDocKey(id, reel.strategy === "gameplay_overlay");
+      const serverSaved = buildDocFromSavedShortsCover(reel);
+
+      let sessionDoc: ThumbDoc | undefined;
+      try {
+        const raw = sessionStorage.getItem(shortsKey);
+        if (raw) {
+          const revived = reviveDoc(JSON.parse(raw));
+          if (revived) sessionDoc = revived;
+        }
+      } catch {
+        /* corrupted session cache */
+      }
+
+      if (serverSaved) {
+        const serverJson = JSON.stringify(serverSaved);
+        savedShortsJsonRef.current = serverJson;
+        if (sessionDoc && JSON.stringify(sessionDoc) !== serverJson) {
+          history.replaceAll(sessionDoc);
+          return;
+        }
+        history.replaceAll(serverSaved);
+        return;
+      }
+
+      if (sessionDoc) {
+        history.replaceAll(sessionDoc);
+        const fresh = defaultDoc("9:16", defaultTitleText(reel));
+        if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
+          fresh.background.sourceType = "frame";
+        }
+        savedShortsJsonRef.current = JSON.stringify(fresh);
+        return;
+      }
+    }
+
+    const cacheKey = sessionDocKey(id);
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
         const revived = reviveDoc(JSON.parse(raw));
-        // An early Reddit-overlay build seeded an empty layer stack. Do not let
-        // that migration artifact hide the user's authored thumbnail layers.
-        if (revived && !(isShorts && reel.strategy === "gameplay_overlay" && revived.layers.length === 0)) {
+        if (revived) {
           history.replaceAll(revived);
           return;
         }
@@ -200,9 +243,10 @@ export function ThumbnailStudioScreen() {
     if (draftInput) {
       const aspect = (isShorts ? "9:16" : (reel.thumbnailDraft?.aspectRatio ?? "16:9")) as ThumbAspect;
       const revived = reviveDoc(draftInput) ?? docFromLegacyDraftInput(draftInput, aspect);
-      if (revived && !(isShorts && reel.strategy === "gameplay_overlay" && revived.layers.length === 0)) {
+      if (revived) {
         history.replaceAll(revived);
         stagedJsonRef.current = JSON.stringify(revived);
+        if (isShorts) savedShortsJsonRef.current = JSON.stringify(revived);
         return;
       }
     }
@@ -236,6 +280,7 @@ export function ThumbnailStudioScreen() {
       fresh.background.sceneIndex = reel.thumbnailSceneIndex;
     }
     history.replaceAll(fresh);
+    if (isShorts) savedShortsJsonRef.current = JSON.stringify(fresh);
   }, [reel, id, history, isShorts]);
 
   // ---- persist the doc across navigations within the session ----
@@ -243,10 +288,10 @@ export function ThumbnailStudioScreen() {
     if (initializedRef.current !== id) return;
     const t = window.setTimeout(() => {
       try {
-        sessionStorage.setItem(
-          `${sessionDocKey(id)}${isShorts ? (reel?.strategy === "gameplay_overlay" ? ":shorts-overlay-v2" : ":shorts") : ""}`,
-          JSON.stringify(doc),
-        );
+        const key = isShorts
+          ? shortsSessionDocKey(id, reel?.strategy === "gameplay_overlay")
+          : sessionDocKey(id);
+        sessionStorage.setItem(key, JSON.stringify(doc));
       } catch {
         /* quota / private mode */
       }
@@ -551,6 +596,58 @@ export function ThumbnailStudioScreen() {
     [id, run, stageDraft]
   );
 
+  const buildFreshShortsDoc = useCallback((): ThumbDoc => {
+    if (!reel) return defaultDoc("9:16", "");
+    const defaultAspect: ThumbAspect = reel.strategy === "gameplay_overlay" ? "9:16" : "9:16";
+    const fresh = defaultDoc(defaultAspect, defaultTitleText(reel));
+    if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
+      fresh.background.sourceType = "frame";
+    } else if (reel.thumbnailSceneIndex !== undefined) {
+      fresh.background.sourceType = "scene";
+      fresh.background.sceneIndex = reel.thumbnailSceneIndex;
+    }
+    return fresh;
+  }, [reel]);
+
+  const restoreShortsDoc = useCallback(
+    (baseline?: ThumbDoc) => {
+      if (!reel) return;
+      clearShortsSessionDoc(id, reel.strategy === "gameplay_overlay");
+      bgCacheRef.current.clear();
+      const next = baseline ?? buildFreshShortsDoc();
+      history.replaceAll(next);
+      savedShortsJsonRef.current = JSON.stringify(next);
+      setSelectedId(undefined);
+      setEditingId(undefined);
+    },
+    [buildFreshShortsDoc, history, id, reel]
+  );
+
+  const discardUnsavedShortsEdits = useCallback(
+    () =>
+      run(async () => {
+        const latest = await getReel(id);
+        const savedDoc = buildDocFromSavedShortsCover(latest);
+        if (savedDoc) {
+          restoreShortsDoc(savedDoc);
+          return latest;
+        }
+        restoreShortsDoc();
+        return latest;
+      }),
+    [id, restoreShortsDoc, run]
+  );
+
+  const removeSavedShortsCover = useCallback(
+    () =>
+      run(async () => {
+        const cleared = await clearShortsCover(id);
+        restoreShortsDoc();
+        return cleared;
+      }),
+    [id, restoreShortsDoc, run]
+  );
+
   const uploadShortsCover = useCallback(() => run(async () => {
     const saved = await saveShortsCover(id, {
     imageDataUrl: exportDataUrl(),
@@ -564,12 +661,26 @@ export function ThumbnailStudioScreen() {
       ? `reddit:${reel?.redditStory?.title ?? reel?.title ?? ""}:${bg.atSeconds.toFixed(1)}`
       : `scene:${bg.sceneIndex ?? "none"}:${sceneStills.find((item) => item.scene.index === bg.sceneIndex)?.url ?? ""}`,
     });
+    savedShortsJsonRef.current = JSON.stringify(doc);
+    clearShortsSessionDoc(id, Boolean(isGameplay));
     // A completed Reddit reel can apply the cover immediately using only
     // cached narration + FFmpeg. Planned horror reels simply retain it until produce.
     return saved.outputUrl && (isGameplay || saved.assemblyVideoUrl)
       ? regenerateReel(id, "composite_only")
       : saved;
   }), [bg.atSeconds, bg.sceneIndex, doc, exportDataUrl, id, isGameplay, reel?.redditStory?.title, reel?.title, run, sceneStills]);
+
+  useEffect(() => {
+    if (!isShorts || !reel) return;
+    const saved = buildDocFromSavedShortsCover(reel);
+    if (saved) savedShortsJsonRef.current = JSON.stringify(saved);
+  }, [isShorts, reel?.shortsCover]);
+
+  const hasSavedShorts = Boolean(reel && hasSavedShortsCover(reel));
+  const shortsDirty =
+    isShorts &&
+    savedShortsJsonRef.current !== undefined &&
+    JSON.stringify(doc) !== savedShortsJsonRef.current;
 
   const downloadPng = useCallback(() => {
     try {
@@ -644,6 +755,11 @@ export function ThumbnailStudioScreen() {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          {isShorts && shortsDirty ? (
+            <span className="rounded-full border border-warning/60 bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
+              Unsaved Shorts edits
+            </span>
+          ) : null}
           {hasDraft ? (
             <span
               className={cn(
@@ -1025,6 +1141,42 @@ export function ThumbnailStudioScreen() {
             </StudioPanel>
 
             <StudioPanel title={isShorts ? "Save Shorts cover" : "Export"} icon={<Save size={15} />}>
+              {isShorts ? (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-border bg-secondary text-foreground hover:bg-accent"
+                    disabled={disableEdits || !shortsDirty}
+                    onClick={() => void discardUnsavedShortsEdits()}
+                  >
+                    <Undo2 size={15} />
+                    {hasSavedShorts ? "Revert to saved cover" : "Reset editor"}
+                  </Button>
+                  {reel.shortsCover?.imageUrl ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
+                      disabled={disableEdits}
+                      onClick={() =>
+                        setConfirmAction({
+                          title: "Remove saved Shorts cover?",
+                          body: "Deletes the saved cover PNG from S3 and resets the editor to a fresh default.",
+                          details: [
+                            "The next render will not include an opening cover unless you save again.",
+                            "Unsaved canvas tweaks in this browser tab are cleared too.",
+                          ],
+                          confirmLabel: "Remove saved cover",
+                          onConfirm: () => void removeSavedShortsCover(),
+                        })
+                      }
+                    >
+                      <Trash2 size={15} /> Remove saved cover
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="grid gap-2 sm:grid-cols-3">
                 {!isShorts ? <Button
                   type="button"
@@ -1054,8 +1206,11 @@ export function ThumbnailStudioScreen() {
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground/80">
-                The canvas is rendered in your browser at full resolution — what you see is exactly
-                what uploads. Save keeps one composed PNG on the server until you upload or discard.
+                {isShorts
+                  ? hasSavedShorts
+                    ? "Canvas tweaks auto-save in this browser tab until you revert. “Save cover (zero AI)” is what writes the PNG + layout to S3 — Revert restores that last save."
+                    : "Canvas tweaks auto-save in this browser tab until you reset. “Save cover (zero AI)” writes the PNG + layout to S3."
+                  : "The canvas is rendered in your browser at full resolution — what you see is exactly what uploads. Save keeps one composed PNG on the server until you upload or discard."}
               </p>
             </StudioPanel>
           </main>
