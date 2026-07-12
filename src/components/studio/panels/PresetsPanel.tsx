@@ -22,6 +22,14 @@ import { PanelTitle } from "@/components/ui/panel";
 import { MOTION_MODES } from "@/constants/reels";
 import { cn } from "@/lib/utils";
 
+const ART_STYLE_FALLBACK_COLORS = [
+  ["#f6d365", "#fda085"],
+  ["#84fab0", "#8fd3f4"],
+  ["#a18cd1", "#fbc2eb"],
+  ["#ffecd2", "#fcb69f"],
+  ["#cfd9df", "#e2ebf0"],
+];
+
 export function PresetsPanel({
   reel,
   busy,
@@ -112,35 +120,88 @@ export function PresetsPanel({
         </div>
       ) : null}
 
-      <Label className="text-xs text-muted-foreground">
-        Art style
-        <Select
-          disabled={busy}
-          value={reel.artStyleId ?? ""}
-          onChange={(e) => {
-            const artStyleId = e.target.value;
-            requestConfirm({
-              title: "Change art style?",
-              body: "This clears existing scene stills because the current images no longer match the selected style.",
-              details: [
-                "No OpenRouter call happens immediately.",
-                "The next asset produce run regenerates scene images.",
-                "Narration audio is kept.",
-              ],
-              confirmLabel: "Change style",
-              onConfirm: () =>
-                run(() => updateReelSettings(reelKey, { artStyleId })),
-            });
-          }}
-        >
-          <option value="">Auto</option>
-          {artStyles.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.displayName}
-            </option>
-          ))}
-        </Select>
-      </Label>
+      <div className="grid gap-2 pt-2">
+        <span className="text-xs font-medium text-foreground">Art style</span>
+        <div className="grid grid-cols-5 gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (reel.artStyleId) {
+                requestConfirm({
+                  title: "Change art style?",
+                  body: "This clears existing scene stills because the current images no longer match the selected style.",
+                  details: [
+                    "No OpenRouter call happens immediately.",
+                    "The next asset produce run regenerates scene images.",
+                    "Narration audio is kept.",
+                  ],
+                  confirmLabel: "Change style",
+                  onConfirm: () =>
+                    run(() => updateReelSettings(reelKey, { artStyleId: "" })),
+                });
+              }
+            }}
+            className="flex flex-col gap-1.5 text-left group"
+          >
+            <div
+              className={cn(
+                "h-14 w-full rounded-md border border-border bg-secondary shadow-sm transition-all",
+                !reel.artStyleId
+                  ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                  : "group-hover:border-primary/50",
+              )}
+            />
+            <span className="text-xs font-medium text-foreground">Auto</span>
+          </button>
+          {artStyles.map((s, i) => {
+            const active = reel.artStyleId === s.id;
+            const colors =
+              ART_STYLE_FALLBACK_COLORS[i % ART_STYLE_FALLBACK_COLORS.length];
+            return (
+              <button
+                key={s.id}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (!active) {
+                    requestConfirm({
+                      title: "Change art style?",
+                      body: "This clears existing scene stills because the current images no longer match the selected style.",
+                      details: [
+                        "No OpenRouter call happens immediately.",
+                        "The next asset produce run regenerates scene images.",
+                        "Narration audio is kept.",
+                      ],
+                      confirmLabel: "Change style",
+                      onConfirm: () =>
+                        run(() => updateReelSettings(reelKey, { artStyleId: s.id })),
+                    });
+                  }
+                }}
+                className="flex flex-col gap-1.5 text-left group"
+              >
+                <div
+                  className={cn(
+                    "h-14 w-full rounded-md border border-border shadow-sm transition-all",
+                    active
+                      ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                      : "group-hover:border-primary/50",
+                  )}
+                  style={{
+                    background: s.thumbnailUrl
+                      ? `url(${s.thumbnailUrl}) center/cover`
+                      : `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
+                  }}
+                />
+                <span className="text-xs font-medium text-foreground">
+                  {s.displayName}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <Label className="text-xs text-muted-foreground">
         Motion

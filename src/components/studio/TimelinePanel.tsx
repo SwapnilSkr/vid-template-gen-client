@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Scissors, Volume2, Image as ImageIcon, Play, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Scissors, Volume2, Image as ImageIcon, Play, Trash2, AlignLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { reorderScenes, updateScene, regenerateScene, removeScene, type Reel, type Scene } from "@/api/reels";
 import { EditorPanel } from "@/components/studio/EditorPanel";
@@ -109,65 +109,94 @@ export function TimelinePanel({
       }
     >
       <div className="flex h-full flex-col">
-        <div className="grid min-w-0 gap-2 p-3 pb-4">
-          <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
-              Video
-            </span>
-            <div className="studio-scrollbar min-w-0 overflow-x-auto pb-1">
-              <div className="flex w-max gap-1.5">
-                {scenes.map((scene) => (
-                  <button
-                    key={scene.index}
-                    type="button"
-                    onClick={() => onSelectScene(scene.index)}
-                    style={{ width: clipWidth(scene) }}
-                    className={cn(
-                      "relative grid grid-cols-[34px_1fr] items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors",
-                      selectedSceneIndex === scene.index
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-background hover:border-input",
-                    )}
-                  >
-                    <SceneThumb reel={reel} scene={scene} className="w-[34px]" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[11px] font-medium text-foreground">
-                        Scene {scene.index + 1}
+        <div className="grid min-w-0 pl-0 pt-0 pb-0 pr-0 bg-[#1e1c26] rounded-t-md border-b border-border">
+          {/* Text Track */}
+          <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center border-b border-[#352f4a]">
+            <div className="flex h-10 items-center justify-center gap-2 border-r border-[#352f4a]">
+              <AlignLeft size={16} className="text-[#a855f7]" />
+            </div>
+            <div className="flex h-full items-center min-w-0 overflow-x-auto relative ml-4 mr-4 studio-scrollbar">
+              <div className="flex w-max gap-0 h-full">
+                 {scenes.map((scene) => (
+                    <button
+                      key={`text-${scene.index}`}
+                      type="button"
+                      onClick={() => onSelectScene(scene.index)}
+                      style={{ width: clipWidth(scene) }}
+                      className={cn(
+                        "relative flex items-center h-full rounded-none px-2 text-left transition-colors border-r border-black/20",
+                        selectedSceneIndex === scene.index
+                          ? "bg-gradient-to-b from-[#a855f7] to-[#7e22ce] border-t-2 border-l-2 border-r-2 border-white/60 z-20"
+                          : "bg-gradient-to-b from-[#7e22ce] to-[#6b21a8] opacity-90",
+                      )}
+                    >
+                      <span className="truncate text-[11px] font-medium text-white">
+                        {scene.narration || "No text"}
                       </span>
-                      <span className="block text-[10px] tabular-nums text-muted-foreground/80">
-                        {Math.max(scene.duration || 0, 0).toFixed(1)}s
-                      </span>
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                 ))}
+               </div>
+            </div>
+          </div>
+
+          {/* Main videos Track */}
+          <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center border-b border-[#352f4a]">
+            <div className="flex h-10 items-center justify-center gap-2 border-r border-[#352f4a]">
+              <ImageIcon size={16} className="text-[#14b8a6]" />
+            </div>
+            <div className="flex h-full items-center min-w-0 overflow-x-auto relative ml-4 mr-4 studio-scrollbar">
+              <div className="flex w-max h-full gap-0">
+                 {scenes.map((scene) => (
+                    <button
+                      key={`video-${scene.index}`}
+                      type="button"
+                      onClick={() => onSelectScene(scene.index)}
+                      style={{ width: clipWidth(scene) }}
+                      className={cn(
+                        "group relative flex items-center h-full overflow-hidden border-r border-black/20 text-left transition-colors rounded-none",
+                        selectedSceneIndex === scene.index
+                          ? "bg-gradient-to-b from-[#14b8a6] to-[#0d9488] border-l-2 border-r-2 border-white/60 z-20"
+                          : "bg-gradient-to-b from-[#0d9488] to-[#0f766e]",
+                      )}
+                    >
+                      <SceneThumb reel={reel} scene={scene} className="absolute inset-0 w-full h-full object-cover rounded-none z-10 border-none bg-transparent" />
+                      
+                      <div className="absolute inset-0 z-20 hidden group-hover:flex items-center justify-center bg-black/60">
+                        <span className="truncate text-[11px] font-medium text-white opacity-95">
+                          Scene {scene.index + 1}
+                        </span>
+                      </div>
+                    </button>
+                 ))}
               </div>
             </div>
           </div>
-          <div className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
-              Audio
-            </span>
-            <div className="studio-scrollbar min-w-0 overflow-x-auto pb-1">
-              <div className="flex w-max gap-1.5">
-                {scenes.map((scene) => (
-                  <button
-                    key={scene.index}
-                    type="button"
-                    onClick={() => onSelectScene(scene.index)}
-                    style={{ width: clipWidth(scene) }}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md border px-2 py-2 text-left transition-colors",
-                      selectedSceneIndex === scene.index
-                        ? "border-success/70 bg-success/10"
-                        : "border-border bg-background hover:border-input",
-                    )}
-                  >
-                    <Volume2 size={14} className="shrink-0 text-success" />
-                    <span className="truncate text-[11px] font-medium text-muted-foreground">
-                      Narration {scene.index + 1}
-                    </span>
-                  </button>
-                ))}
+
+          {/* Audio Track */}
+          <div className="grid min-w-0 grid-cols-[80px_minmax(0,1fr)] items-center">
+            <div className="flex h-10 items-center justify-center gap-2 border-r border-[#352f4a]">
+              <Volume2 size={16} className="text-[#10b981]" />
+            </div>
+            <div className="flex h-full items-center min-w-0 overflow-x-auto relative ml-4 mr-4 studio-scrollbar">
+              <div className="flex w-max gap-0 h-full">
+                 {scenes.map((scene) => (
+                    <button
+                      key={`audio-${scene.index}`}
+                      type="button"
+                      onClick={() => onSelectScene(scene.index)}
+                      style={{ width: clipWidth(scene) }}
+                      className={cn(
+                        "relative flex items-center h-full rounded-none px-2 text-left transition-colors border-r border-black/20",
+                        selectedSceneIndex === scene.index
+                          ? "bg-gradient-to-b from-[#10b981] to-[#059669] border-b-2 border-l-2 border-r-2 border-white/60 z-20"
+                          : "bg-gradient-to-b from-[#059669] to-[#047857] opacity-90",
+                      )}
+                    >
+                      <span className="truncate text-[11px] font-medium text-white">
+                        Audio {scene.index + 1}
+                      </span>
+                    </button>
+                 ))}
               </div>
             </div>
           </div>
@@ -175,31 +204,35 @@ export function TimelinePanel({
 
         {selectedScene ? (
           <div className="flex-1 border-t border-border bg-muted/20 p-3 pt-4">
-            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Narration
-            </h3>
-            <div className="grid min-w-0 gap-2 overflow-hidden">
-              <Label className="gap-1 text-xs text-muted-foreground sr-only">
-                Narration text
-              </Label>
-              <Textarea
-                rows={8}
-                value={narration}
-                disabled={disableAll}
-                onChange={(e) => setNarration(e.target.value)}
-              />
+            <div className="grid min-w-0 grid-cols-2 gap-4 overflow-hidden">
+              <div className="grid gap-2 min-w-0">
+                <Label className="gap-1 text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  Narration
+                </Label>
+                <Textarea
+                  rows={4}
+                  value={narration}
+                  disabled={disableAll}
+                  onChange={(e) => setNarration(e.target.value)}
+                  className="resize-none h-full"
+                />
+              </div>
               {!isGameplay ? (
-                <Label className="gap-1 text-xs text-muted-foreground">
-                  Visual prompt
+                <div className="grid gap-2 min-w-0">
+                  <Label className="gap-1 text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    Visual prompt
+                  </Label>
                   <Textarea
-                    rows={2}
+                    rows={4}
                     value={visualPrompt}
                     disabled={disableAll}
                     onChange={(e) => setVisualPrompt(e.target.value)}
+                    className="resize-none h-full"
                   />
-                </Label>
+                </div>
               ) : null}
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+            </div>
+            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-1.5">
                 {!isGameplay ? (
                   <Select
                     className="h-8 w-full text-xs sm:w-auto"
@@ -316,7 +349,6 @@ export function TimelinePanel({
                   </Button>
                 ) : null}
               </div>
-            </div>
           </div>
         ) : (
           <div className="flex-1 grid place-items-center border-t border-border bg-muted/20 p-8 text-sm text-muted-foreground">
