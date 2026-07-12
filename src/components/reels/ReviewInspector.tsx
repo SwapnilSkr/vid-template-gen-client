@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useReelStudio } from "@/store/reel-studio";
 import { reelId, reelTopStatus } from "@/utils/reel";
+import { sanitizeAiCostBreakdown } from "@/utils/reel-cost";
 
 interface ReviewInspectorProps {
   reel?: Reel;
@@ -162,7 +163,7 @@ function ReviewInspectorForm({
 
   const completed = reel?.status === "completed";
   const canReview = completed && Boolean(draft);
-  const costBreakdown = reel?.costBreakdown;
+  const costBreakdown = sanitizeAiCostBreakdown(reel?.costBreakdown);
   const youtubeStatus = reel?.youtube?.status;
   const publishInFlight =
     youtubeStatus === "pending" || youtubeStatus === "uploading";

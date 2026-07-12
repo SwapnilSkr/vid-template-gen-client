@@ -1,9 +1,10 @@
 import { Receipt } from "lucide-react";
 import type { Reel } from "@/api/reels";
 import { PanelTitle } from "@/components/ui/panel";
+import { sanitizeAiCostBreakdown } from "@/utils/reel-cost";
 
 export function CostPanel({ reel }: { reel: Reel }) {
-  const breakdown = reel.costBreakdown;
+  const breakdown = sanitizeAiCostBreakdown(reel.costBreakdown);
   if (!breakdown?.lines?.length) {
     return (
       <div className="grid gap-2">
