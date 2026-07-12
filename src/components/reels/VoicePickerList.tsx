@@ -50,6 +50,7 @@ export function VoicePickerList({
 
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [activeModel, setActiveModel] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -77,6 +78,12 @@ export function VoicePickerList({
     return [...byModel.entries()];
   }, [ttsVoices]);
 
+  useEffect(() => {
+    if (grouped.length > 0 && activeModel === null) {
+      setActiveModel(grouped[0][0]);
+    }
+  }, [grouped, activeModel]);
+
   async function togglePlay(option: TtsVoiceOption) {
     const key = voiceKey(option.model, option.voice);
     const audio = audioRef.current;
@@ -102,69 +109,78 @@ export function VoicePickerList({
   }
 
   return (
-    <div className={cn("max-h-64 overflow-y-auto rounded-md border border-border", className)}>
-      {grouped.map(([model, voices]) => (
-        <div key={model}>
-          <div className="sticky top-0 flex items-center justify-between gap-2 bg-muted px-2.5 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
-            <span>{voices[0]?.provider ?? modelLabel(model)}</span>
-            {voices[0]?.priceLabel ? <span className="normal-case">{voices[0].priceLabel}</span> : null}
-          </div>
-          {voices.map((option) => {
-            const key = voiceKey(option.model, option.voice);
-            const selected = isSelected(option);
-            const disabled = !selected && (isDisabled?.(option) ?? false);
-            return (
-              <div
-                key={key}
+    <div className={cn("flex flex-col gap-3", className)}>
+      <div className="flex flex-wrap gap-2">
+        {grouped.map(([model, voices]) => {
+          const isActive = model === activeModel;
+          return (
+            <button
+              key={model}
+              type="button"
+              onClick={() => setActiveModel(model)}
+              className={cn(
+                "cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                isActive
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              {voices[0]?.provider ?? modelLabel(model)}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {activeModel && grouped.find(([m]) => m === activeModel)?.[1].map((option) => {
+          const key = voiceKey(option.model, option.voice);
+          const selected = isSelected(option);
+          const disabled = !selected && (isDisabled?.(option) ?? false);
+          return (
+            <div
+              key={key}
+              onClick={() => {
+                if (!disabled) onToggle(option);
+              }}
+              className={cn(
+                "group relative flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors",
+                selected
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-background text-foreground hover:border-primary/50",
+                disabled && "cursor-not-allowed opacity-50"
+              )}
+            >
+              <span className="font-medium truncate">
+                {selected ? `${selectedLabel}: ` : ""}
+                {voiceLabel(option.label)}
+              </span>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void togglePlay(option);
+                }}
+                aria-label={playingKey === key ? "Pause sample" : "Play sample"}
                 className={cn(
-                  "flex items-center justify-between gap-2 border-t border-border/60 px-2.5 py-1.5 text-xs",
-                  selected && "bg-primary/5"
+                  "grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-primary transition-opacity hover:bg-primary hover:text-primary-foreground",
+                  playingKey === key || loadingKey === key
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100 focus:opacity-100"
                 )}
-                data-selected={selected ? "true" : undefined}
               >
-                <span className="min-w-0 flex-1">
-                  <span className={cn("block truncate font-semibold text-foreground", selected && "text-primary")}>
-                    {selected ? "Selected: " : ""}
-                    {voiceLabel(option.label)}
-                  </span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {option.priceLabel ?? "usage-priced"}
-                    {option.unitPriceLabel ? ` · ${option.unitPriceLabel}` : ""}
-                    {option.recommendedFor?.length ? ` · ${option.recommendedFor.join(", ")}` : ""}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void togglePlay(option)}
-                  aria-label={playingKey === key ? "Pause sample" : "Play sample"}
-                  className="grid size-7 shrink-0 place-items-center rounded-md border border-border text-foreground hover:bg-accent"
-                >
-                  {loadingKey === key ? (
-                    <Loader2 className="animate-spin" size={13} />
-                  ) : playingKey === key ? (
-                    <Pause size={13} />
-                  ) : (
-                    <Play size={13} />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onToggle(option)}
-                  disabled={disabled}
-                  className={cn(
-                    "shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
-                    selected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border text-foreground hover:bg-accent"
-                  )}
-                >
-                  {selected ? selectedLabel : unselectedLabel}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+                {loadingKey === key ? (
+                  <Loader2 className="animate-spin" size={10} />
+                ) : playingKey === key ? (
+                  <Pause size={10} />
+                ) : (
+                  <Play size={10} />
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

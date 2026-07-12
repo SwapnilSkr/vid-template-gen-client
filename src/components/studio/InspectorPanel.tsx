@@ -99,16 +99,15 @@ export function InspectorPanel({
               key={item.id}
               type="button"
               onClick={() => onTabChange(item.id)}
+              title={item.label}
               className={cn(
-                "inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors",
-                item.id === "thumbnail" ? "min-w-[92px]" : "min-w-[86px]",
+                "inline-flex flex-1 min-h-11 shrink-0 items-center justify-center rounded-md text-xs font-medium transition-colors",
                 tab === item.id
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
               {item.icon}
-              {item.label}
             </button>
           ))}
         </div>

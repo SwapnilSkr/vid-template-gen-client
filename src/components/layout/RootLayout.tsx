@@ -1,33 +1,38 @@
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import { Menu, Play, X } from "lucide-react";
 import { useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { cn } from "@/lib/utils";
 
 export function RootLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useRouterState({ select: (state) => state.location.pathname });
+  const isStudio = location.startsWith("/studio");
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-background lg:grid-cols-[224px_minmax(0,1fr)]">
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-2.5 border-b border-border bg-sidebar px-3 py-2.5 lg:hidden">
-        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground">
-            <Play size={12} fill="currentColor" />
+    <div className={cn("grid min-h-screen grid-cols-1 bg-background", !isStudio && "lg:grid-cols-[224px_minmax(0,1fr)]")}>
+      {!isStudio && (
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-2.5 border-b border-border bg-sidebar px-3 py-2.5 lg:hidden">
+          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground">
+              <Play size={12} fill="currentColor" />
+            </span>
+            ReelForge
           </span>
-          ReelForge
-        </span>
-        <button
-          type="button"
-          onClick={() => setMobileNavOpen((open) => !open)}
-          className="grid size-8 place-items-center rounded-md border border-border bg-card text-foreground"
-          aria-label="Toggle navigation"
-        >
-          {mobileNavOpen ? <X size={16} /> : <Menu size={16} />}
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((open) => !open)}
+            className="grid size-8 place-items-center rounded-md border border-border bg-card text-foreground"
+            aria-label="Toggle navigation"
+          >
+            {mobileNavOpen ? <X size={16} /> : <Menu size={16} />}
+          </button>
+        </div>
+      )}
 
-      <Sidebar mobileOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
+      {!isStudio && <Sidebar mobileOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />}
 
-      {mobileNavOpen ? (
+      {!isStudio && mobileNavOpen ? (
         <button
           type="button"
           aria-label="Close navigation"

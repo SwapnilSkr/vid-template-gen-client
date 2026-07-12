@@ -1,5 +1,5 @@
-import { Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ChevronDown, Film, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { getReelDefaults, type CreateReelInput, type ImageModelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,162 @@ function pickSuggestedOutroChannel(
     ) ??
     channels.find((channel) => channel.isDefault) ??
     channels[0]
+  );
+}
+
+function ChannelSelectDropdown({
+  value,
+  onChange,
+  channels,
+}: {
+  value: string | undefined;
+  onChange: (id: string | undefined) => void;
+  channels: YouTubeChannelOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedChannel = channels.find((c) => c.id === value);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex w-full items-center justify-between gap-3 rounded-md border border-border bg-card/70 p-2.5 text-left transition-colors hover:border-input focus:border-primary/60 focus:ring-2 focus:ring-ring/25 focus:outline-none",
+          open && "border-primary/60 ring-2 ring-ring/25"
+        )}
+      >
+        {selectedChannel ? (
+          <div className="flex w-full items-center gap-3">
+            {selectedChannel.logoUrl ? (
+              <img
+                className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
+                src={selectedChannel.logoUrl}
+                alt=""
+              />
+            ) : (
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+                <UserCircle size={24} />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-foreground">
+                {channelName(selectedChannel)}
+              </div>
+              <div className="truncate text-xs font-semibold text-muted-foreground">
+                {channelHandle(selectedChannel)}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {channelPurpose(selectedChannel)}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {selectedChannel.privacyStatus}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+              <UserCircle size={24} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-foreground">
+                Auto by niche
+              </div>
+              <div className="truncate text-xs font-semibold text-muted-foreground">
+                Renderer will fall back to niche default
+              </div>
+            </div>
+          </div>
+        )}
+        <ChevronDown size={20} className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-[300px] w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(undefined);
+              setOpen(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-sm p-2 text-left transition-colors hover:bg-accent hover:text-accent-foreground",
+              !selectedChannel && "bg-accent text-accent-foreground"
+            )}
+          >
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+              <UserCircle size={24} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-foreground">
+                Auto by niche
+              </div>
+              <div className="truncate text-xs font-semibold text-muted-foreground">
+                Renderer will fall back to niche default
+              </div>
+            </div>
+          </button>
+          
+          {channels.map((channel) => (
+            <button
+              key={channel.id}
+              type="button"
+              onClick={() => {
+                onChange(channel.id);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-sm p-2 text-left transition-colors hover:bg-accent hover:text-accent-foreground",
+                selectedChannel?.id === channel.id && "bg-accent text-accent-foreground"
+              )}
+            >
+              {channel.logoUrl ? (
+                <img
+                  className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
+                  src={channel.logoUrl}
+                  alt=""
+                />
+              ) : (
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
+                  <UserCircle size={24} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-foreground">
+                  {channelName(channel)}
+                </div>
+                <div className="truncate text-xs font-semibold text-muted-foreground">
+                  {channelHandle(channel)}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {channelPurpose(channel)}
+                  </span>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {channel.privacyStatus}
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -389,70 +545,18 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       </div>
 
       <div className="grid gap-2 rounded-lg border border-border bg-black/15 p-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 mb-2">
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
             <Youtube size={17} />
-            Brand / Outro Channel
-          </span>
-          <span className="text-xs font-medium text-muted-foreground">
-            Recorded into this video
+            YouTube channel
           </span>
         </div>
-        <Label>
-          Channel used in the outro
-          <Select
-            value={form.outroChannelId ?? ""}
-            onChange={(event) => setForm({ ...form, outroChannelId: event.target.value || undefined })}
-          >
-            <option value="">Auto by niche</option>
-            {youtubeChannels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channelName(channel)} · {channelPurpose(channel)} · {channel.privacyStatus}
-              </option>
-            ))}
-          </Select>
-        </Label>
-
-        {selectedOutroChannel ? (
-          <div className="flex items-center gap-3 rounded-md border border-border bg-card/70 p-2.5">
-            {selectedOutroChannel.logoUrl ? (
-              <img
-                className="h-11 w-11 shrink-0 rounded-full border border-border object-cover"
-                src={selectedOutroChannel.logoUrl}
-                alt=""
-              />
-            ) : (
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-muted text-muted-foreground">
-                <UserCircle size={24} />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-foreground">
-                {channelName(selectedOutroChannel)}
-              </div>
-              <div className="truncate text-xs font-semibold text-muted-foreground">
-                {channelHandle(selectedOutroChannel)}
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {channelPurpose(selectedOutroChannel)}
-                </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {selectedOutroChannel.privacyStatus}
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            No channel is selected. The renderer will fall back to the niche default name unless you connect a
-            YouTube channel first.
-          </p>
-        )}
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-          This controls the channel name, logo, and spoken outro burned into the generated video. The publish
-          destination will default to this same channel later, but can still be changed before upload.
-        </p>
+        
+        <ChannelSelectDropdown 
+          value={form.outroChannelId ?? undefined}
+          onChange={(id) => setForm({ ...form, outroChannelId: id })}
+          channels={youtubeChannels.filter((c) => c.source !== "env")}
+        />
       </div>
 
       <Label>
@@ -518,9 +622,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           </p>
         ) : sourcePostMode === "auto" ? (
           <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {isGameplayNiche
-              ? "Pulls the next fresh, unused story from the topped-up bank for this genre — or generates one on the spot if the bank is empty."
-              : "The scriptwriter picks a topic on its own, informed by this genre's trending patterns."}
+            {!isGameplayNiche && "The scriptwriter picks a topic on its own, informed by this genre's trending patterns. You don't need to type anything."}
             {resolvedDefaults?.scriptModel ? (
               <span className="mt-1 block font-medium text-foreground">
                 Scriptwriter: {modelDisplayName(resolvedDefaults.scriptModel)}
@@ -600,10 +702,6 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
           <div className="grid gap-1">
             <strong className="text-[13px] text-foreground">How this reel is made</strong>
-            <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
-              Reddit reels start from a story plan with a title card and sentence scenes over gameplay.
-              Review and edit the card, sentences, captions, and thumbnail in Studio before TTS and render.
-            </p>
           </div>
           <label className="flex items-start gap-2 text-xs text-foreground">
             <input
@@ -734,9 +832,6 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           <option value="frame">Choose video frame later (no AI image cost)</option>
           <option value="ai">Generate AI thumbnail during render</option>
         </Select>
-        <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-          Frame mode only generates AI title, description, tags, and prompt. It does not create or upload a thumbnail until you save a selected frame in review.
-        </p>
       </Label>
 
       {isHorrorNiche && (
@@ -855,14 +950,6 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             {resolvedDefaults?.tts ? (
               <>
                 <div className="font-semibold text-foreground">Default voice: {resolvedDefaults.tts.label}</div>
-                <div className="mt-1">
-                  {resolvedDefaults.tts.provider ?? resolvedDefaults.tts.model} · {resolvedDefaults.tts.voice} ·{" "}
-                  {resolvedDefaults.tts.format}
-                </div>
-                <div className="mt-1">
-                  Unit economics: {resolvedDefaults.tts.priceLabel ?? "usage-priced"}
-                  {resolvedDefaults.tts.unitPriceLabel ? ` · ${resolvedDefaults.tts.unitPriceLabel}` : ""}
-                </div>
                 {resolvedDefaults.tts.priceNote ? <div className="mt-1">{resolvedDefaults.tts.priceNote}</div> : null}
               </>
             ) : (
@@ -874,13 +961,6 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             {selectedVoice ? (
               <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs leading-relaxed">
                 <div className="font-semibold text-primary">Selected voice: {selectedVoice.label}</div>
-                <div className="mt-1 text-muted-foreground">
-                  {selectedVoice.provider ?? selectedVoice.model} · {selectedVoice.voice} · {selectedVoice.format}
-                </div>
-                <div className="mt-1 text-muted-foreground">
-                  Unit economics: {selectedVoice.priceLabel ?? "usage-priced"}
-                  {selectedVoice.unitPriceLabel ? ` · ${selectedVoice.unitPriceLabel}` : ""}
-                </div>
                 {selectedVoice.priceNote ? (
                   <div className="mt-1 text-muted-foreground">{selectedVoice.priceNote}</div>
                 ) : null}

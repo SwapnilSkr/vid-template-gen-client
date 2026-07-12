@@ -750,7 +750,12 @@ export function ThumbnailStudioScreen() {
               {isShorts ? "Shorts Cover Studio" : "Thumbnail studio"} · {reel.title || "Untitled reel"}
             </h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {reel.niche} · <ReelStatusChip status={reel.status} size="sm" />
+              {reel.niche}
+              {reel.status !== "completed" && (
+                <>
+                  {" "}· <ReelStatusChip status={reel.status} size="sm" />
+                </>
+              )}
             </p>
           </div>
         </div>

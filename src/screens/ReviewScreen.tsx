@@ -81,17 +81,17 @@ export function ReviewScreen() {
   const selectedFailed = selected?.status === "failed";
 
   return (
-    <section className="min-w-0 overflow-x-clip px-4 py-4 sm:px-5 lg:px-6">
+    <section className="min-w-0 select-none overflow-x-clip px-4 py-4 sm:px-5 lg:px-6">
       <PageHeader downloadUrl={selected?.outputUrl} />
 
       {error ? (
-        <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs leading-relaxed text-destructive">
+        <div className="mb-3 rounded-xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-xs leading-relaxed text-destructive backdrop-blur-sm">
           {error}
         </div>
       ) : null}
 
       {status === "rejected" && failedCount > 0 ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/15 bg-destructive/5 px-4 py-3 backdrop-blur-sm">
           <span className="text-xs font-medium text-destructive">
             {failedCount} failed reel{failedCount === 1 ? "" : "s"}
             {selectedFailed
@@ -150,7 +150,7 @@ export function ReviewScreen() {
           />
         </div>
         <div className="grid min-w-0 gap-2.5 xl:col-span-2">
-          <GenerationTimeline reel={selected} />
+          {selected?.status !== "completed" ? <GenerationTimeline reel={selected} /> : null}
           <RecentReelsList
             selectedId={selectedId}
             reels={filteredReels}

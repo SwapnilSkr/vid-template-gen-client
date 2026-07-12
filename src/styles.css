@@ -74,8 +74,17 @@
   }
 
   button,
-  a {
+  a,
+  [role="button"],
+  select {
     -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  button:disabled,
+  a[aria-disabled="true"],
+  [role="button"][aria-disabled="true"] {
+    cursor: default;
   }
 }
 

@@ -1,8 +1,24 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { motion, AnimatePresence } from "framer-motion";
+import {
   ArrowLeft,
   Clapperboard,
   Download,
+  ExternalLink,
+  GripVertical,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -33,7 +49,6 @@ import { InspectorPanel } from "@/components/studio/InspectorPanel";
 import { ProgramMonitor } from "@/components/studio/ProgramMonitor";
 import { ProjectPanel } from "@/components/studio/ProjectPanel";
 import { TimelinePanel } from "@/components/studio/TimelinePanel";
-import { SceneCard } from "@/components/studio/panels/SceneCard";
 import type { ConfirmAction, InspectorTab, StudioRun } from "@/components/studio/types";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -186,6 +201,22 @@ export function StudioScreen() {
     setSelectedSceneIndex((index) => Math.min(Math.max(index, 0), count - 1));
   }, [reel?.scenes?.length]);
 
+  const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.currentTarget;
+    const currentTime = video.currentTime;
+    const scenesList = reel?.scenes ?? [];
+    if (!scenesList.length) return;
+
+    let accumulatedTime = 0;
+    for (let i = 0; i < scenesList.length; i++) {
+      accumulatedTime += Math.max(scenesList[i].duration || 0, 0);
+      if (currentTime <= accumulatedTime) {
+        setSelectedSceneIndex((prev) => (prev !== i ? i : prev));
+        break;
+      }
+    }
+  }, [reel?.scenes]);
+
   if (loading) {
     return (
       <section className="grid place-items-center py-20 text-muted-foreground">
@@ -261,9 +292,13 @@ export function StudioScreen() {
               {reel.title || "Untitled reel"}
             </h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              {reel.niche} · {reel.genre ?? "no genre"} ·{" "}
-              <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
-              {reel.currentStep ? ` · ${reel.currentStep}` : ""}
+              {reel.niche} · {reel.genre ?? "no genre"}
+              {reel.status !== "completed" && (
+                <>
+                  {" "}· <ReelStatusChip status={reel.status} size="sm" /> · {reel.progress}%
+                  {reel.currentStep ? ` · ${reel.currentStep}` : ""}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -478,79 +513,53 @@ export function StudioScreen() {
         </div>
       ) : null}
 
-      <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(320px,380px)]">
-        <aside className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)]">
-          <ProjectPanel
-            reel={reel}
-            seriesReels={seriesReels}
-            currentId={id}
-            scenes={scenes}
-            selectedSceneIndex={selectedSceneIndex}
-            onSelectScene={selectScene}
-          />
-        </aside>
-
-        <main className="grid min-w-0 content-start gap-3">
-          <ProgramMonitor
-            reel={reel}
-            previewUrl={previewUrl}
-            variantPreview={Boolean(variantPreviewUrl)}
-            onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
-          />
-          <TimelinePanel
-            reelId={id}
-            reel={reel}
-            scenes={scenes}
-            selectedSceneIndex={selectedSceneIndex}
-            onSelectScene={selectScene}
-            busy={studioLocked}
-            disabled={studioLocked}
-            run={run}
-            onAddScene={() =>
-              void run(() =>
-                addScene(id, { narration: "New scene narration." }),
-              )
-            }
-          />
-          {selectedScene ? (
-            <SceneCard
+      <main className="grid min-w-0 content-start gap-3">
+          <div className="grid gap-3 xl:grid-cols-2">
+            <ProgramMonitor
+              reel={reel}
+              previewUrl={previewUrl}
+              variantPreview={Boolean(variantPreviewUrl)}
+              onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
+            />
+            <TimelinePanel
               reelId={id}
               reel={reel}
-              scene={selectedScene}
-              total={scenes.length}
+              scenes={scenes}
+              selectedSceneIndex={selectedSceneIndex}
+              onSelectScene={selectScene}
               busy={studioLocked}
               disabled={studioLocked}
+              isGameplay={isGameplay}
+              requestConfirm={setConfirmAction}
+              run={run}
+              onAddScene={() =>
+                void run(() =>
+                  addScene(id, { narration: "New scene narration." }),
+                )
+              }
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <InspectorPanel
+              tab={inspectorTab}
+              onTabChange={changeInspectorTab}
+              reel={reel}
+              busy={studioLocked}
               isGameplay={isGameplay}
               run={run}
               requestConfirm={setConfirmAction}
             />
-          ) : (
-            <div className="grid place-items-center rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
-              No scenes yet.
-            </div>
-          )}
+            <VoiceVariantsPanel
+              reel={reel}
+              reelId={id}
+              locked={studioLocked}
+              onRefresh={refresh}
+              onPreviewVariant={setVariantPreviewUrl}
+              requestConfirm={setConfirmAction}
+            />
+          </div>
         </main>
-
-        <div className="grid min-h-0 min-w-0 gap-3 xl:sticky xl:top-[61px] xl:max-h-[calc(100vh-73px)] xl:overflow-y-auto xl:pr-1">
-          <InspectorPanel
-            tab={inspectorTab}
-            onTabChange={changeInspectorTab}
-            reel={reel}
-            busy={studioLocked}
-            isGameplay={isGameplay}
-            run={run}
-            requestConfirm={setConfirmAction}
-          />
-          <VoiceVariantsPanel
-            reel={reel}
-            reelId={id}
-            locked={studioLocked}
-            onRefresh={refresh}
-            onPreviewVariant={setVariantPreviewUrl}
-            requestConfirm={setConfirmAction}
-          />
-        </div>
-      </div>
       </div>
       <ConfirmModal
         action={confirmAction}

@@ -4,7 +4,7 @@ import { reelStatusLabel } from "@/utils/reel";
 
 function reelStatusTone(status: ReelStatus): string {
   if (status === "completed") {
-    return "border-success/40 bg-success/15 text-success";
+    return "border-muted-foreground/40 bg-muted/40 text-muted-foreground";
   }
   if (status === "failed") {
     return "border-destructive/45 bg-destructive/12 text-destructive";
@@ -34,8 +34,8 @@ export function ReelStatusChip({
       className={cn(
         "inline-flex justify-center rounded-full border capitalize leading-none",
         size === "md" &&
-          "min-w-[86px] px-2.5 py-1 text-[11px] font-medium tracking-normal",
-        size === "sm" && "w-fit px-2 py-0.5 text-[10px] font-medium",
+          "min-w-[86px] px-2.5 py-1 text-[12px] font-medium tracking-normal",
+        size === "sm" && "w-fit px-2 py-0.5 text-[12px] font-medium",
         reelStatusTone(status),
         className,
       )}
