@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 export function ProgramMonitor({
   reel,
   previewUrl,
+  fallbackPreviewUrl,
   variantPreview,
   onClearVariantPreview,
 }: {
   reel: Reel;
   previewUrl?: string;
+  /** Static Reddit opening composition shown before an MP4 exists. */
+  fallbackPreviewUrl?: string;
   variantPreview?: boolean;
   onClearVariantPreview?: () => void;
 }) {
@@ -61,6 +64,17 @@ export function ProgramMonitor({
               className="relative aspect-9/16 max-h-[50vh] w-full rounded-lg border border-border bg-black xl:max-h-[46vh]"
             />
           </div>
+        ) : fallbackPreviewUrl ? (
+          <div className="grid w-[min(100%,248px)] place-items-center">
+            <img
+              src={fallbackPreviewUrl}
+              alt="Planned Reddit opening cover"
+              className="relative aspect-9/16 w-full rounded-lg border border-border bg-black object-contain"
+            />
+            <span className="mt-2 text-center text-[11px] text-muted-foreground">
+              Opening-cover preview · gameplay remains live after generation
+            </span>
+          </div>
         ) : (
           <div className="grid aspect-9/16 max-h-[50vh] w-full max-w-[360px] place-items-center rounded-lg border border-border bg-black text-sm text-muted-foreground/80 xl:max-h-[46vh]">
             No preview yet
@@ -70,4 +84,3 @@ export function ProgramMonitor({
     </EditorPanel>
   );
 }
-

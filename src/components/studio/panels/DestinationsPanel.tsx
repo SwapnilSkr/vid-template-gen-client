@@ -20,6 +20,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
+import { REEL_ACTIVE_STATUSES } from "@/utils/reel";
 
 type ChannelChoice = {
   key: string;
@@ -47,6 +48,10 @@ export function DestinationsPanel({
   run: StudioRun;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
+  const isPlanReview = reel.status === "plan_review";
+  const canRerenderDestination = Boolean(reel.bodyVideoUrl) &&
+    (reel.scenes?.length ?? 0) > 0 &&
+    !REEL_ACTIVE_STATUSES.includes(reel.status);
   const extras = useMemo(() => reel.destinations ?? [], [reel.destinations]);
   const [yt, setYt] = useState<YouTubeChannelOption[]>([]);
   const [ig, setIg] = useState<InstagramChannelOption[]>([]);
@@ -115,9 +120,9 @@ export function DestinationsPanel({
         <Youtube size={15} className="text-primary" /> Channels
       </PanelTitle>
       <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
-        Publish this reel to multiple channels — each gets its own outro over the same body, so
-        the only extra spend is that channel's outro voiceover. The primary channel's outro is set
-        in the fields below; extra channels are managed here.
+        {isPlanReview
+          ? "Add planned destinations now. They will each receive their branded outro during the first generate."
+          : "Publish this reel to multiple channels — each gets its own outro over the same body, so the only extra spend is that channel's outro voiceover. The primary channel's outro is set in the fields below; extra channels are managed here."}
       </p>
 
       {/* Primary (read-only reference — edited in the Outro fields below) */}
@@ -157,7 +162,9 @@ export function DestinationsPanel({
                 <span className="ml-1.5 text-muted-foreground/60">· {dest.platform}</span>
               </span>
               <div className="flex shrink-0 items-center gap-2">
-                <span className={cn("text-[11px]", statusTone[dest.status])}>{dest.status}</span>
+                <span className={cn("text-[11px]", statusTone[dest.status])}>
+                  {isPlanReview && dest.status === "pending" ? "planned" : dest.status}
+                </span>
                 <button
                   type="button"
                   disabled={busy}
@@ -195,7 +202,9 @@ export function DestinationsPanel({
               <div className="grid gap-2 border-t border-border px-3 py-2.5">
                 <Label className="text-xs text-muted-foreground">
                   Spoken outro line
-                  <span className="ml-1 font-normal text-muted-foreground/70">(TTS if changed)</span>
+                  <span className="ml-1 font-normal text-muted-foreground/70">
+                    {isPlanReview ? "(saved for generate)" : "(TTS if changed)"}
+                  </span>
                   <Textarea
                     rows={2}
                     disabled={busy}
@@ -263,7 +272,8 @@ export function DestinationsPanel({
                     })
                   }
                 >
-                  <RefreshCw size={14} /> Save &amp; re-render this outro
+                  {canRerenderDestination ? <RefreshCw size={14} /> : null}
+                  {canRerenderDestination ? "Save & re-render this outro" : "Save outro copy (free)"}
                 </Button>
               </div>
             ) : null}
@@ -297,8 +307,9 @@ export function DestinationsPanel({
           </div>
         )}
         <p className="m-0 text-[11px] text-muted-foreground/70">
-          Once produced, adding a channel renders just its outro (reused body — only its voiceover
-          is charged).
+          {isPlanReview
+            ? "Planned channels are saved free and render alongside the reel’s first production."
+            : "Once produced, adding a channel renders just its outro (reused body — only its voiceover is charged)."}
         </p>
       </div>
     </div>

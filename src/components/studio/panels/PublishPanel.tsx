@@ -48,11 +48,41 @@ export function PublishPanel({
   const [title, setTitle] = useState(() => reel.review?.title ?? reel.title ?? "");
   const [description, setDescription] = useState(() => reel.review?.description ?? "");
   const [tagsText, setTagsText] = useState((reel.review?.tags ?? []).join(", "));
-  const [instagramCaption, setInstagramCaption] = useState(() => reel.instagramSettings?.caption ?? reel.review?.description ?? "");
+  // Platform copy is intentionally isolated: Instagram never derives from the
+  // YouTube review description, either in this form or at publish time.
+  const [instagramCaption, setInstagramCaption] = useState(
+    () => reel.instagramSettings?.caption ?? "",
+  );
   const [shareToFeed, setShareToFeed] = useState(() => reel.instagramSettings?.shareToFeed ?? true);
   const [hashtagInput, setHashtagInput] = useState("");
   const [hashtagTarget, setHashtagTarget] = useState<"title" | "description">("description");
   const [trendSummary, setTrendSummary] = useState<TrendGenreSummary | undefined>();
+
+  // Publishing is intentionally constrained to outputs rendered for the exact
+  // channel. The canonical output is only the primary destination's video;
+  // sending it to a sibling account would leak the wrong branded outro.
+  const destinationByAccount = useMemo(() => {
+    const states = new Map<string, { ready: boolean; detail: string }>();
+    const primaryPlatform = reel.outroInstagramChannelId ? "instagram" : "youtube";
+    const primaryChannelId = reel.outroInstagramChannelId || reel.outroChannelId;
+    if (primaryChannelId) {
+      states.set(`${primaryPlatform}:${primaryChannelId}`, {
+        ready: Boolean(reel.outputUrl),
+        detail: reel.outputUrl ? "primary outro ready" : "primary outro needs rendering",
+      });
+    }
+    for (const destination of reel.destinations ?? []) {
+      states.set(`${destination.platform}:${destination.channelId}`, {
+        ready: destination.status === "ready" && Boolean(destination.outputUrl),
+        detail: destination.status === "ready" && destination.outputUrl
+          ? "channel outro ready"
+          : destination.status === "failed"
+            ? "destination render failed"
+            : "destination needs rendering",
+      });
+    }
+    return states;
+  }, [reel.destinations, reel.outroChannelId, reel.outroInstagramChannelId, reel.outputUrl]);
 
   useEffect(() => {
     void Promise.allSettled([listYouTubeChannels(), listInstagramChannels()]).then(([yt, ig]) => {
@@ -66,6 +96,13 @@ export function PublishPanel({
       .then((items) => setTrendSummary(items.find((item) => item.genre === reel.genre) ?? items[0]))
       .catch(() => setTrendSummary(undefined));
   }, [reel.genre, reel.niche]);
+
+  // A rerender/removal can make a previously checked account invalid. Never
+  // let an old checkbox selection survive into a later publish request.
+  useEffect(() => {
+    setSelectedYoutubeIds((current) => current.filter((id) => destinationByAccount.get(`youtube:${id}`)?.ready));
+    setSelectedInstagramIds((current) => current.filter((id) => destinationByAccount.get(`instagram:${id}`)?.ready));
+  }, [destinationByAccount]);
 
   const observedHashtags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -135,12 +172,12 @@ export function PublishPanel({
           <span className="text-[11px] text-muted-foreground/80">Type hashtags directly here; this is the exact title YouTube receives.</span>
         </Label>
         <Label className="text-xs text-muted-foreground">
-          Description
+          YouTube description
           <Textarea value={description} maxLength={5000} rows={7} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
           <span className={cn("justify-self-end text-[11px]", description.length > 4800 ? "text-warning" : "text-muted-foreground/80")}>
             {description.length}/5,000 · {descriptionHashtags.length} hashtag{descriptionHashtags.length === 1 ? "" : "s"}
           </span>
-          <span className="text-[11px] text-muted-foreground/80">This same copy becomes the Instagram Reel caption for selected Instagram accounts.</span>
+          <span className="text-[11px] text-muted-foreground/80">Only YouTube receives this description.</span>
         </Label>
 
         <div className="grid gap-1.5">
@@ -192,7 +229,7 @@ export function PublishPanel({
 
       <div className="grid gap-2.5 rounded-md border border-pink-500/20 bg-pink-500/[0.035] p-2.5">
         <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2 text-sm font-semibold"><Instagram size={15} className="text-pink-500" />Instagram Reel</span><span className="text-[11px] text-muted-foreground">Platform-specific</span></div>
-        <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Write the Reel caption, hook, CTA, and hashtags…" onChange={(event) => setInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {extractHashtags(instagramCaption).length} hashtags</span></Label>
+        <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Write the Reel caption, hook, CTA, and hashtags…" onChange={(event) => setInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {extractHashtags(instagramCaption).length} hashtags</span><span className="text-[11px] text-muted-foreground/80">Only Instagram receives this caption. It never follows YouTube copy.</span></Label>
         <label className="flex cursor-pointer items-center gap-2 rounded border border-border bg-card/60 px-2.5 py-2 text-xs"><input type="checkbox" checked={shareToFeed} disabled={busy} onChange={(event) => setShareToFeed(event.target.checked)} /><span className="font-medium">Also share to Feed</span><span className="ml-auto text-muted-foreground">{shareToFeed ? "Reels + Feed" : "Reels tab only"}</span></label>
         <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Instagram size={12} />Reel preview</div><p className="m-0 whitespace-pre-wrap text-muted-foreground">{instagramCaption || "Your Instagram caption will appear here."}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Cover: {reel.shortsCover?.imageUrl ? "Instagram selects the first frame from the rendered MP4. Re-render after saving the Vertical Cover so it is baked into that opening frame." : "Instagram will use the first video frame. Create a Vertical Cover, then re-render for a controlled result."}</p></div>
         <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
@@ -254,9 +291,9 @@ export function PublishPanel({
 
       <div className="grid gap-2 rounded-md border border-border bg-background/35 p-2.5">
         <div className="text-xs font-semibold text-foreground">Publish destinations</div>
-        <p className="text-[11px] text-muted-foreground">Select every owned account that should receive this reviewed render. Each upload runs independently.</p>
-        {channels.length ? <DestinationGroup icon={<Youtube size={14} className="text-red-500" />} title="YouTube Shorts">{channels.map((channel) => <DestinationOption key={channel.id} checked={selectedYoutubeIds.includes(channel.id)} disabled={busy} onChange={() => toggle(channel.id, setSelectedYoutubeIds)} label={channel.googleChannelTitle || channel.label} detail={`${channel.googleChannelHandle || channel.privacyStatus} · ${channel.privacyStatus}`} />)}</DestinationGroup> : null}
-        {instagramChannels.length ? <DestinationGroup icon={<Instagram size={14} className="text-pink-500" />} title="Instagram Reels">{instagramChannels.map((channel) => { const publish = instagramPublishByChannel.get(channel.id); const active = publish?.status === "pending" || publish?.status === "uploading"; return <DestinationOption key={channel.id} checked={selectedInstagramIds.includes(channel.id)} disabled={busy || channel.status !== "active" || active} onChange={() => toggle(channel.id, setSelectedInstagramIds)} label={channel.username ? `@${channel.username}` : channel.label} detail={active ? `${publish?.status} · ${publish?.message ?? "working"}` : publish?.status === "published" ? "published · select to republish" : channel.label} />; })}</DestinationGroup> : null}
+        <p className="text-[11px] text-muted-foreground">Only accounts with a ready, channel-specific outro can be selected. Each upload uses that destination&apos;s own rendered video—not another channel&apos;s primary output.</p>
+        {channels.length ? <DestinationGroup icon={<Youtube size={14} className="text-red-500" />} title="YouTube Shorts">{channels.map((channel) => { const destination = destinationByAccount.get(`youtube:${channel.id}`); const ready = Boolean(destination?.ready); return <DestinationOption key={channel.id} checked={selectedYoutubeIds.includes(channel.id)} disabled={busy || !ready} onChange={() => toggle(channel.id, setSelectedYoutubeIds)} label={channel.googleChannelTitle || channel.label} detail={ready ? `${destination?.detail} · ${channel.privacyStatus}` : `${destination?.detail ?? "add in Channels"} · unavailable`} />; })}</DestinationGroup> : null}
+        {instagramChannels.length ? <DestinationGroup icon={<Instagram size={14} className="text-pink-500" />} title="Instagram Reels">{instagramChannels.map((channel) => { const publish = instagramPublishByChannel.get(channel.id); const active = publish?.status === "pending" || publish?.status === "uploading"; const destination = destinationByAccount.get(`instagram:${channel.id}`); const ready = Boolean(destination?.ready); return <DestinationOption key={channel.id} checked={selectedInstagramIds.includes(channel.id)} disabled={busy || channel.status !== "active" || active || !ready} onChange={() => toggle(channel.id, setSelectedInstagramIds)} label={channel.username ? `@${channel.username}` : channel.label} detail={active ? `${publish?.status} · ${publish?.message ?? "working"}` : !ready ? `${destination?.detail ?? "add in Channels"} · unavailable` : publish?.status === "published" ? "published · select to republish" : destination?.detail ?? channel.label} />; })}</DestinationGroup> : null}
         {!channels.length && !instagramChannels.length ? <div className="text-xs text-warning">Connect an account from Accounts before publishing.</div> : null}
       </div>
       {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} message={publish.message} icon={<Instagram size={12} />} />)}</div> : null}
@@ -265,13 +302,14 @@ export function PublishPanel({
       <Button
         type="button"
         variant="default"
-        disabled={busy || !reel.outputUrl || targetCount === 0}
+        disabled={busy || targetCount === 0 || instagramCaption.length > 2200}
         onClick={() =>
           requestConfirm({
             title: republishingInstagram.length ? "Republish to Instagram?" : "Publish to selected accounts?",
-            body: republishingInstagram.length ? `This sends another Reel to ${republishingInstagram.join(", ")}. Only continue if you intentionally removed or want to replace the previous post.` : `Queues this reviewed render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
+            body: republishingInstagram.length ? `This sends another Reel to ${republishingInstagram.join(", ")}. Only continue if you intentionally removed or want to replace the previous post.` : `Queues the ready channel-specific render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
             details: [
-              "Uses the publishing details shown in this Studio panel.",
+              "Saves the YouTube title, description, tags, and Instagram caption shown here before queuing uploads.",
+              "Every selected account uploads only its own rendered destination output and branded outro.",
               "The upload runs in the background — status appears above.",
             ],
             confirmLabel: "Publish",
@@ -281,6 +319,12 @@ export function PublishPanel({
                   title,
                   description,
                   tags: tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
+                });
+                // This must finish before enqueueing distribution. The Instagram
+                // worker reads persisted settings, not this component's local
+                // state, so omitting it published stale captions.
+                await updateReelSettings(reelKey, {
+                  instagram: { caption: instagramCaption, shareToFeed },
                 });
                 // The confirmation modal is the explicit user authorization for
                 // a resend. Do not infer it from a potentially stale reel

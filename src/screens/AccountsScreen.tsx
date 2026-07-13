@@ -5,6 +5,7 @@ import {
   listInstagramChannels,
   listYouTubeChannels,
   startInstagramChannelConnect,
+  startYouTubeChannelConnect,
   updateInstagramChannel,
   updateYouTubeChannel,
   deleteYouTubeChannel,
@@ -18,8 +19,10 @@ export function AccountsScreen() {
   const [instagram, setInstagram] = useState<InstagramChannelOption[]>([]);
   const [youtube, setYoutube] = useState<YouTubeChannelOption[]>([]);
   const [label, setLabel] = useState("");
+  const [youtubeLabel, setYoutubeLabel] = useState("");
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [youtubeConnecting, setYoutubeConnecting] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
 
@@ -51,6 +54,34 @@ export function AccountsScreen() {
       };
       window.addEventListener("message", onMessage);
     } catch (err) { setError(err instanceof Error ? err.message : "Could not start Instagram connection."); setConnecting(false); }
+  }
+
+  async function openYouTubeConnect(input: { label: string; channelKey?: string; privacyStatus?: YouTubeChannelOption["privacyStatus"]; categoryId?: string; niches?: string[] }, mode: "connect" | "reconnect") {
+    if (!input.label.trim()) { setError("Give this channel an internal nickname first."); return; }
+    setYoutubeConnecting(true); setError(undefined); setMessage(undefined);
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "youtube-channel-connected") return;
+      window.removeEventListener("message", onMessage);
+      setYoutubeConnecting(false);
+      if (event.data.success) { setYoutubeLabel(""); setMessage(event.data.message); void load(); }
+      else setError(event.data.message || `Could not ${mode} YouTube channel.`);
+    };
+    window.addEventListener("message", onMessage);
+    try {
+      const { authUrl } = await startYouTubeChannelConnect(input);
+      const popup = window.open(authUrl, "youtube-connect", "width=720,height=820");
+      if (!popup) throw new Error("Your browser blocked the Google login popup. Allow popups and try again.");
+    } catch (err) {
+      window.removeEventListener("message", onMessage);
+      setError(err instanceof Error ? err.message : "Could not start YouTube connection.");
+      setYoutubeConnecting(false);
+    }
+  }
+
+  async function reconnectYoutube(channel: YouTubeChannelOption) {
+    const displayName = channel.googleChannelTitle || channel.label;
+    if (!window.confirm(`Reconnect ${displayName}? Sign in to the Google account that owns this exact YouTube channel. This replaces its stored refresh token.`)) return;
+    await openYouTubeConnect({ label: channel.label, channelKey: channel.id, privacyStatus: channel.privacyStatus, categoryId: channel.categoryId, niches: channel.niches }, "reconnect");
   }
 
   async function removeInstagram(id: string) {
@@ -90,12 +121,16 @@ export function AccountsScreen() {
 
       <section className="space-y-4">
         <div><h2 className="inline-flex items-center gap-2 text-base font-semibold"><Youtube size={18} className="text-red-500" />YouTube</h2><p className="mt-1 text-sm text-muted-foreground">Shorts channels connected to the distribution engine.</p></div>
-        {youtube.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{youtube.map((channel) => <AccountCard key={channel.id} avatar={channel.logoUrl} fallback={<Youtube size={18} />} title={channel.googleChannelTitle || channel.label} subtitle={channel.googleChannelHandle || channel.label} status={channel.source === "env" ? "server managed" : channel.privacyStatus} onEdit={() => void renameYoutube(channel)} onRemove={() => void removeYoutube(channel)} />)}</div> : <EmptyState icon={<Youtube size={18} />} text="No YouTube channels connected." />}
-        <p className="text-xs text-muted-foreground"><ExternalLink className="mr-1 inline size-3" />Tokens stay on the server. Environment-managed YouTube channels are edited in server configuration.</p>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row"><Input value={youtubeLabel} className="sm:max-w-sm" placeholder="Nickname, e.g. Lurker's Lore" onChange={(e) => setYoutubeLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void openYouTubeConnect({ label: youtubeLabel }, "connect"); }} /><Button onClick={() => void openYouTubeConnect({ label: youtubeLabel }, "connect")} disabled={youtubeConnecting}>{youtubeConnecting ? <Loader2 className="size-4 animate-spin" /> : <Plus size={16} />}{youtubeConnecting ? "Opening Google…" : "Connect YouTube"}</Button></div>
+          <p className="mt-2 text-xs text-muted-foreground">Choose the Google account that owns the channel. The refresh token stays server-side and is only replaced when you explicitly reconnect.</p>
+        </div>
+        {youtube.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{youtube.map((channel) => <AccountCard key={channel.id} avatar={channel.logoUrl} fallback={<Youtube size={18} />} title={channel.googleChannelTitle || channel.label} subtitle={channel.googleChannelHandle || channel.label} status={channel.status === "needs_reauth" ? "reconnect required" : channel.source === "env" ? "server managed" : channel.privacyStatus} onEdit={() => void renameYoutube(channel)} onReconnect={() => void reconnectYoutube(channel)} reconnecting={youtubeConnecting} onRemove={() => void removeYoutube(channel)} />)}</div> : <EmptyState icon={<Youtube size={18} />} text="No YouTube channels connected." />}
+        <p className="text-xs text-muted-foreground"><ExternalLink className="mr-1 inline size-3" />Use Reconnect when Google rejects a credential. It creates a database-backed replacement for an older environment-managed token, without exposing it in the browser.</p>
       </section>
     </main>
   );
 }
 
 function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) { return <div className="flex items-center gap-3 rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground"><span className="text-muted-foreground">{icon}</span>{text}</div>; }
-function AccountCard({ avatar, fallback, title, subtitle, status, error, onEdit, onRemove }: { avatar?: string; fallback: React.ReactNode; title: string; subtitle: string; status: string; error?: string; onEdit: () => void; onRemove: () => void }) { return <article className="group rounded-xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/35"><div className="flex items-start gap-3">{avatar ? <img className="size-11 rounded-full object-cover" src={avatar} alt="" /> : <div className="grid size-11 place-items-center rounded-full bg-secondary text-muted-foreground">{fallback}</div>}<div className="min-w-0 flex-1"><h3 className="truncate text-sm font-semibold">{title}</h3><p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[10px] font-medium capitalize text-muted-foreground">{status}</span></div>{error ? <p className="mt-3 line-clamp-2 text-xs text-destructive">{error}</p> : null}<div className="mt-4 flex gap-2 border-t border-border pt-3"><Button size="sm" variant="ghost" onClick={onEdit}><Pencil size={13} />Edit</Button><Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={onRemove}><Trash2 size={13} />Remove</Button></div></article>; }
+function AccountCard({ avatar, fallback, title, subtitle, status, error, onEdit, onReconnect, reconnecting, onRemove }: { avatar?: string; fallback: React.ReactNode; title: string; subtitle: string; status: string; error?: string; onEdit: () => void; onReconnect?: () => void; reconnecting?: boolean; onRemove: () => void }) { return <article className="group rounded-xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/35"><div className="flex items-start gap-3">{avatar ? <img className="size-11 rounded-full object-cover" src={avatar} alt="" /> : <div className="grid size-11 place-items-center rounded-full bg-secondary text-muted-foreground">{fallback}</div>}<div className="min-w-0 flex-1"><h3 className="truncate text-sm font-semibold">{title}</h3><p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[10px] font-medium capitalize text-muted-foreground">{status}</span></div>{error ? <p className="mt-3 line-clamp-2 text-xs text-destructive">{error}</p> : null}<div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3"><Button size="sm" variant="ghost" onClick={onEdit}><Pencil size={13} />Edit</Button>{onReconnect ? <Button size="sm" variant="ghost" onClick={onReconnect} disabled={reconnecting}>{reconnecting ? <Loader2 className="size-3 animate-spin" /> : <ExternalLink size={13} />}Reconnect</Button> : null}<Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={onRemove}><Trash2 size={13} />Remove</Button></div></article>; }
