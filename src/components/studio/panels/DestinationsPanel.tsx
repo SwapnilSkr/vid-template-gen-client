@@ -21,7 +21,14 @@ import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
-type ChannelChoice = { key: string; platform: "youtube" | "instagram"; channelId: string; label: string };
+type ChannelChoice = {
+  key: string;
+  platform: "youtube" | "instagram";
+  channelId: string;
+  label: string;
+  disabled?: boolean;
+  note?: string;
+};
 
 const statusTone: Record<ReelDestination["status"], string> = {
   ready: "text-emerald-500",
@@ -56,20 +63,40 @@ export function DestinationsPanel({
 
   const primaryPlatform: "youtube" | "instagram" = reel.outroInstagramChannelId ? "instagram" : "youtube";
   const primaryChannelId = reel.outroInstagramChannelId || reel.outroChannelId || "";
+  const primaryKey = `${primaryPlatform}:${primaryChannelId}`;
+
+  const labelByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of yt) map.set(`youtube:${c.id}`, channelDisplayName(c));
+    for (const c of ig) map.set(`instagram:${c.id}`, `Instagram · ${c.username ? `@${c.username}` : c.label}`);
+    return map;
+  }, [yt, ig]);
+
+  // Friendly name for the primary channel, resolved from the connected lists (falls back to the raw key).
+  const primaryLabel = primaryChannelId ? labelByKey.get(primaryKey) ?? primaryChannelId : "Auto by niche";
 
   const usedKeys = useMemo(() => {
-    const set = new Set<string>([`${primaryPlatform}:${primaryChannelId}`]);
+    const set = new Set<string>();
     for (const dest of extras) set.add(`${dest.platform}:${dest.channelId}`);
     return set;
-  }, [extras, primaryPlatform, primaryChannelId]);
+  }, [extras]);
 
+  // Every connected channel, with already-assigned ones kept visible but disabled so it's clear why they can't be re-added.
   const options: ChannelChoice[] = useMemo(() => {
     const all: ChannelChoice[] = [
       ...yt.map((c) => ({ key: `youtube:${c.id}`, platform: "youtube" as const, channelId: c.id, label: channelDisplayName(c) })),
       ...ig.map((c) => ({ key: `instagram:${c.id}`, platform: "instagram" as const, channelId: c.id, label: `Instagram · ${c.username ? `@${c.username}` : c.label}` })),
     ];
-    return all.filter((option) => !usedKeys.has(option.key));
-  }, [yt, ig, usedKeys]);
+    return all
+      .map((option) => {
+        if (option.key === primaryKey) return { ...option, disabled: true, note: "already the primary" };
+        if (usedKeys.has(option.key)) return { ...option, disabled: true, note: "already added" };
+        return option;
+      })
+      .sort((a, b) => Number(a.disabled ?? false) - Number(b.disabled ?? false));
+  }, [yt, ig, usedKeys, primaryKey]);
+
+  const hasSelectable = options.some((option) => !option.disabled);
 
   const draftFor = (dest: ReelDestination): OutroSettings => drafts[dest.id] ?? dest.outro ?? {};
   const patchDraft = (id: string, patch: Partial<OutroSettings>) =>
@@ -77,7 +104,7 @@ export function DestinationsPanel({
 
   const addChannel = () => {
     const choice = options.find((option) => option.key === addValue);
-    if (!choice) return;
+    if (!choice || choice.disabled) return;
     void run(() => addReelDestination(reelKey, { platform: choice.platform, channelId: choice.channelId }));
     setAddValue("");
   };
@@ -97,7 +124,7 @@ export function DestinationsPanel({
       <div className="rounded-md border border-border bg-card px-3 py-2">
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="min-w-0 truncate font-medium text-foreground">
-            {primaryChannelId || "Auto by niche"}
+            {primaryLabel}
             <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
               Primary
             </span>
@@ -248,9 +275,7 @@ export function DestinationsPanel({
       <div className="grid gap-2 rounded-md border border-dashed border-border px-3 py-2.5">
         <span className="text-[11px] font-medium text-muted-foreground">Add a channel</span>
         {options.length === 0 ? (
-          <p className="m-0 text-[11px] text-muted-foreground/70">
-            No more connected channels available to add.
-          </p>
+          <p className="m-0 text-[11px] text-muted-foreground/70">No connected channels yet.</p>
         ) : (
           <div className="flex items-center gap-2">
             <Select
@@ -259,10 +284,10 @@ export function DestinationsPanel({
               onChange={(event) => setAddValue(event.target.value)}
               className="min-w-0 flex-1"
             >
-              <option value="">Choose a channel…</option>
+              <option value="">{hasSelectable ? "Choose a channel…" : "All channels already assigned"}</option>
               {options.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
+                <option key={option.key} value={option.key} disabled={option.disabled}>
+                  {option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}
                 </option>
               ))}
             </Select>
