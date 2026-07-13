@@ -66,6 +66,7 @@ export function OutroPanel({
 
   const selected = channels.find((channel) => channel.id === outroChannelId);
   const selectedInstagram = instagramChannels.find((channel) => channel.id === outroInstagramChannelId);
+  const defaultCta = outroInstagramChannelId ? "FOLLOW" : "SUBSCRIBE";
   const patchOutro = (patch: Partial<OutroSettings>) =>
     setOutro((current) => ({ ...current, ...patch }));
   const showPartTeaser = hasPartTeaser(reel);
@@ -188,10 +189,11 @@ export function OutroPanel({
         <div className="grid gap-2 sm:grid-cols-2">
           <Label className="text-xs text-muted-foreground">
             CTA button
+            <span className="ml-1 font-normal text-muted-foreground/70">(blank uses {defaultCta})</span>
             <Input
               disabled={busy || !brandedEnabled}
               value={outro.cta ?? ""}
-              placeholder="SUBSCRIBE"
+              placeholder={defaultCta}
               onChange={(event) => patchOutro({ cta: event.target.value })}
             />
           </Label>
