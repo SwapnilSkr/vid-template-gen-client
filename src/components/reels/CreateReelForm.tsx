@@ -1,4 +1,4 @@
-import { Film, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft } from "lucide-react";
+import { Film, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { getReelDefaults, listInstagramChannels, type CreateReelInput, type ImageModelOption, type InstagramChannelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
@@ -457,6 +457,91 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           This controls the channel name, logo, and spoken outro burned into the generated video. The publish
           destination will default to this same channel later, but can still be changed before upload.
         </p>
+
+        {/* Additional channels — one extra video per channel, each with its own outro */}
+        <div className="grid gap-2 border-t border-border pt-3">
+          <span className="text-xs font-semibold text-foreground">Additional channels (optional)</span>
+          <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+            Generate a separate video for each extra channel — same story and body, its own branded
+            outro. Only each extra outro's voiceover adds cost.
+          </p>
+          {(form.destinations ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(form.destinations ?? []).map((dest) => {
+                const yt = youtubeChannels.find((c) => c.id === dest.channelId);
+                const ig = instagramChannels.find((c) => c.id === dest.channelId);
+                const label =
+                  dest.platform === "instagram"
+                    ? ig?.username
+                      ? `@${ig.username}`
+                      : (ig?.label ?? dest.channelId)
+                    : yt
+                      ? channelName(yt)
+                      : dest.channelId;
+                return (
+                  <span
+                    key={`${dest.platform}:${dest.channelId}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-1 text-[11px] text-foreground"
+                  >
+                    {label}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${label}`}
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          destinations: (current.destinations ?? []).filter(
+                            (d) => !(d.platform === dest.platform && d.channelId === dest.channelId),
+                          ),
+                        }))
+                      }
+                      className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
+          <Select
+            value=""
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) return;
+              const platform = value.startsWith("instagram:") ? "instagram" : "youtube";
+              const channelId = platform === "instagram" ? value.slice("instagram:".length) : value;
+              setForm((current) => ({
+                ...current,
+                destinations: [...(current.destinations ?? []), { platform, channelId }],
+              }));
+            }}
+          >
+            <option value="">Add another channel…</option>
+            {youtubeChannels
+              .filter(
+                (c) =>
+                  c.id !== form.outroChannelId &&
+                  !(form.destinations ?? []).some((d) => d.platform === "youtube" && d.channelId === c.id),
+              )
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {channelName(c)} · {channelPurpose(c)}
+                </option>
+              ))}
+            {instagramChannels
+              .filter(
+                (c) =>
+                  c.id !== form.outroInstagramChannelId &&
+                  !(form.destinations ?? []).some((d) => d.platform === "instagram" && d.channelId === c.id),
+              )
+              .map((c) => (
+                <option key={`instagram:${c.id}`} value={`instagram:${c.id}`}>
+                  Instagram · {c.username ? `@${c.username}` : c.label}
+                </option>
+              ))}
+          </Select>
+        </div>
       </div>
 
       <Label>

@@ -142,6 +142,22 @@ export interface OutroSettings {
   footer?: string;
 }
 
+/** One publish destination: a channel + its own outro + its own rendered video. */
+export interface ReelDestination {
+  id: string;
+  platform: "youtube" | "instagram";
+  channelId: string;
+  channelLabel?: string;
+  outro?: OutroSettings;
+  skipBrandedOutro?: boolean;
+  outroAudioUrl?: string;
+  outputUrl?: string;
+  durationAdded?: number;
+  status: "pending" | "rendering" | "ready" | "failed";
+  error?: string;
+  createdAt?: string;
+}
+
 export interface Reel {
   _id?: string;
   id?: string;
@@ -209,6 +225,8 @@ export interface Reel {
   outroChannelId?: string;
   outroInstagramChannelId?: string;
   outro?: OutroSettings;
+  /** Multi-channel destinations — one rendered video per destination. */
+  destinations?: ReelDestination[];
   /** Skip multi-part "Stay tuned for part N" (Reddit mid-series only). */
   skipPartOutro?: boolean;
   /** Skip branded channel end card + subscribe TTS. */
@@ -310,6 +328,8 @@ export interface CreateReelInput {
   outroChannelId?: string;
   outroInstagramChannelId?: string;
   outro?: OutroSettings;
+  /** Multi-channel destinations — one video per destination, each with its own outro. */
+  destinations?: { platform: "youtube" | "instagram"; channelId: string; outro?: OutroSettings }[];
   thumbnailMode?: "frame" | "ai";
   imageModel?: string;
   artStyleId?: string;
@@ -1091,4 +1111,37 @@ export async function moveSeriesBoundary(
  *  Returns the previous part that absorbed the content. */
 export async function mergePartIntoPrevious(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/merge-into-previous`, { method: "POST" });
+}
+
+// ---- Multi-channel destinations ----
+
+export async function listReelDestinations(id: string): Promise<ReelDestination[]> {
+  return request<ReelDestination[]>(`/reels/${id}/destinations`);
+}
+
+/** Add a channel destination. Renders its outro now when the reel is produced. */
+export async function addReelDestination(
+  id: string,
+  input: { platform: "youtube" | "instagram"; channelId: string; outro?: OutroSettings },
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/destinations`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function removeReelDestination(id: string, destId: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/destinations/${destId}`, { method: "DELETE" });
+}
+
+/** Update one destination's outro copy; re-renders that outro when produced. */
+export async function updateReelDestinationOutro(
+  id: string,
+  destId: string,
+  outro: OutroSettings,
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/destinations/${destId}/outro`, {
+    method: "PUT",
+    body: JSON.stringify({ outro }),
+  });
 }

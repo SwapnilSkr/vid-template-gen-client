@@ -651,6 +651,7 @@ export function StudioScreen() {
             tab={inspectorTab}
             onTabChange={changeInspectorTab}
             reel={reel}
+            seriesReels={seriesReels}
             busy={studioLocked}
             isGameplay={isGameplay}
             run={run}

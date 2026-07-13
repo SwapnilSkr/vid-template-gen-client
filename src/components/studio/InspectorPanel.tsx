@@ -23,6 +23,11 @@ const OutroPanel = lazy(() =>
     default: m.OutroPanel,
   })),
 );
+const DestinationsPanel = lazy(() =>
+  import("@/components/studio/panels/DestinationsPanel").then((m) => ({
+    default: m.DestinationsPanel,
+  })),
+);
 const PresetsPanel = lazy(() =>
   import("@/components/studio/panels/PresetsPanel").then((m) => ({
     default: m.PresetsPanel,
@@ -64,6 +69,7 @@ export function InspectorPanel({
   tab,
   onTabChange,
   reel,
+  seriesReels,
   busy,
   isGameplay,
   run,
@@ -72,6 +78,7 @@ export function InspectorPanel({
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   reel: Reel;
+  seriesReels: Reel[];
   busy: boolean;
   isGameplay: boolean;
   run: StudioRun;
@@ -152,12 +159,15 @@ export function InspectorPanel({
             />
           ) : null}
           {tab === "outro" ? (
-            <OutroPanel
-              reel={reel}
-              busy={busy}
-              run={run}
-              requestConfirm={requestConfirm}
-            />
+            <div className="grid gap-4">
+              {isGameplay ? <DestinationsPanel reel={reel} busy={busy} run={run} /> : null}
+              <OutroPanel
+                reel={reel}
+                busy={busy}
+                run={run}
+                requestConfirm={requestConfirm}
+              />
+            </div>
           ) : null}
           {tab === "thumbnail" ? <ThumbnailPanel reel={reel} /> : null}
           {tab === "captions" ? (
@@ -182,7 +192,7 @@ export function InspectorPanel({
                 run={run}
                 requestConfirm={requestConfirm}
               />
-              <CostPanel reel={reel} />
+              <CostPanel reel={reel} seriesReels={seriesReels} />
             </div>
           ) : null}
         </Suspense>
