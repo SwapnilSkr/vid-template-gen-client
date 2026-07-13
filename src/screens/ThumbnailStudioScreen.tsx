@@ -40,6 +40,7 @@ import {
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import {
   defaultDoc,
+  defaultRedditShortsCoverDoc,
   defaultShapeLayer,
   defaultStickerLayer,
   defaultTextLayer,
@@ -114,6 +115,7 @@ export function ThumbnailStudioScreen() {
   const [bgLoading, setBgLoading] = useState(false);
   const bgCacheRef = useRef(new Map<string, string>());
   const bgRequestRef = useRef(0);
+  const refreshVersionRef = useRef(0);
 
   const [aiPrompt, setAiPrompt] = useState("");
   const initializedRef = useRef<string | undefined>(undefined);
@@ -124,14 +126,17 @@ export function ThumbnailStudioScreen() {
 
   // ---- reel loading + polling while generation is active ----
   const refresh = useCallback(async () => {
+    const version = ++refreshVersionRef.current;
     try {
       const next = await getReel(id);
+      if (version !== refreshVersionRef.current) return;
       setReel(next);
       setError(undefined);
     } catch (err) {
+      if (version !== refreshVersionRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load reel");
     } finally {
-      setLoading(false);
+      if (version === refreshVersionRef.current) setLoading(false);
     }
   }, [id]);
 
@@ -216,7 +221,9 @@ export function ThumbnailStudioScreen() {
 
       if (sessionDoc) {
         history.replaceAll(sessionDoc);
-        const fresh = defaultDoc("9:16", defaultTitleText(reel));
+        const fresh = reel.strategy === "gameplay_overlay"
+          ? defaultRedditShortsCoverDoc(defaultTitleText(reel))
+          : defaultDoc("9:16", defaultTitleText(reel));
         if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
           fresh.background.sourceType = "frame";
         }
@@ -272,7 +279,9 @@ export function ThumbnailStudioScreen() {
     // Gameplay / Shorts reels default to vertical — 16:9 customs are often
     // replaced by YouTube's auto 4:5 crop on mobile browse surfaces.
     const defaultAspect: ThumbAspect = isShorts || reel.strategy === "gameplay_overlay" ? "9:16" : "16:9";
-    const fresh = defaultDoc(defaultAspect, defaultTitleText(reel));
+    const fresh = isShorts && reel.strategy === "gameplay_overlay"
+      ? defaultRedditShortsCoverDoc(defaultTitleText(reel))
+      : defaultDoc(defaultAspect, defaultTitleText(reel));
     if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
       fresh.background.sourceType = "frame";
     } else if (isShorts && reel.thumbnailSceneIndex !== undefined) {
@@ -344,12 +353,16 @@ export function ThumbnailStudioScreen() {
   }, [doc, docRef, history, id, sceneStills]);
 
   // ---- background image fetching (debounced, cached per source key) ----
-  const canUseFrame = Boolean(reel?.outputUrl);
+  // Planned Reddit reels can preview their original gameplay clip before an
+  // MP4 exists, so the opening cover is genuinely editable in plan review.
+  const canUseFrame = Boolean(reel?.outputUrl) || Boolean(
+    isShorts && reel?.strategy === "gameplay_overlay" && reel?.gameplayKey
+  );
   const bg = doc.background;
   const bgSourceKey = useMemo(() => {
     if (bg.sourceType === "frame") {
       return canUseFrame
-        ? `frame:${bg.atSeconds.toFixed(1)}:${doc.aspectRatio}:${isShorts && isGameplay ? "clean-gameplay" : "rendered"}`
+        ? `frame:${bg.atSeconds.toFixed(1)}:${doc.aspectRatio}:${isShorts && isGameplay ? `clean-gameplay:${reel?.shortsCover?.replacesTitleCard ? "cover-only" : "with-card"}` : "rendered"}`
         : undefined;
     }
     if (bg.sourceType === "scene") {
@@ -358,7 +371,7 @@ export function ThumbnailStudioScreen() {
         : undefined;
     }
     return reel?.review?.thumbnailUrl ? `saved:${reel.review.thumbnailUrl}:${doc.aspectRatio}` : undefined;
-  }, [bg.sourceType, bg.atSeconds, bg.sceneIndex, doc.aspectRatio, canUseFrame, sceneStills.length, reel?.review?.thumbnailUrl, isShorts, isGameplay]);
+  }, [bg.sourceType, bg.atSeconds, bg.sceneIndex, doc.aspectRatio, canUseFrame, sceneStills.length, reel?.review?.thumbnailUrl, reel?.shortsCover?.replacesTitleCard, isShorts, isGameplay]);
 
   useEffect(() => {
     if (!reel || !bgSourceKey) {
@@ -393,6 +406,7 @@ export function ThumbnailStudioScreen() {
           sceneIndex: bg.sourceType === "scene" ? bg.sceneIndex : undefined,
           aspectRatio: doc.aspectRatio,
           cleanGameplay: isShorts && isGameplay,
+          includeTitleCard: true,
         });
         if (requestId !== bgRequestRef.current) return;
         bgCacheRef.current.set(bgSourceKey, result.imageDataUrl);
@@ -599,7 +613,9 @@ export function ThumbnailStudioScreen() {
   const buildFreshShortsDoc = useCallback((): ThumbDoc => {
     if (!reel) return defaultDoc("9:16", "");
     const defaultAspect: ThumbAspect = reel.strategy === "gameplay_overlay" ? "9:16" : "9:16";
-    const fresh = defaultDoc(defaultAspect, defaultTitleText(reel));
+    const fresh = reel.strategy === "gameplay_overlay"
+      ? defaultRedditShortsCoverDoc(defaultTitleText(reel))
+      : defaultDoc(defaultAspect, defaultTitleText(reel));
     if (reel.strategy === "gameplay_overlay" || !reel.scenes?.length) {
       fresh.background.sourceType = "frame";
     } else if (reel.thumbnailSceneIndex !== undefined) {
@@ -651,10 +667,11 @@ export function ThumbnailStudioScreen() {
   const uploadShortsCover = useCallback(() => run(async () => {
     const saved = await saveShortsCover(id, {
     imageDataUrl: exportDataUrl(),
-    sourceType: isGameplay ? "video_frame" : "scene",
+    sourceType: isGameplay ? "reddit_title_card" : "scene",
     sceneIndex: isGameplay ? undefined : bg.sceneIndex,
     atSeconds: isGameplay ? bg.atSeconds : undefined,
     placement: "opening",
+    replacesTitleCard: false,
     holdSeconds: 0.75,
     editorState: doc as unknown as Record<string, unknown>,
     sourceFingerprint: isGameplay
@@ -794,7 +811,7 @@ export function ThumbnailStudioScreen() {
 
         {isShorts && isGameplay ? (
           <div className="mb-3 rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-primary">
-            <strong>Live gameplay overlay:</strong> the gameplay frame is preview-only and is not saved into the cover PNG. The rendered gameplay keeps moving underneath; the existing Reddit title card remains, and only layers or transparent overlay effects added here are composited above it.
+            <strong>Opening cover:</strong> the Reddit title card stays at the top. Keep your editable cover copy below the card-clear zone; gameplay continues underneath both layers.
           </div>
         ) : null}
 

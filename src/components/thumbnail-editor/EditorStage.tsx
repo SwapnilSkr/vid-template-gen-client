@@ -410,6 +410,13 @@ export function EditorStage({
           <div className="absolute inset-x-0 top-1/3 h-px bg-white/12" />
           <div className="absolute inset-x-0 top-2/3 h-px bg-white/12" />
           <div className="absolute inset-[4%] rounded border border-dashed border-white/15" />
+          {doc.aspectRatio === "9:16" ? (
+            <div className="absolute left-[5%] right-[5%] top-[12%] h-[32%] rounded border border-dashed border-destructive/55 bg-destructive/5">
+              <span className="absolute left-2 top-1 rounded bg-background/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-destructive/90">
+                Reddit title card — keep clear
+              </span>
+            </div>
+          ) : null}
           {/* YouTube duration badge zone */}
           {doc.aspectRatio === "16:9" ? (
             <div className="absolute bottom-[4%] right-[3%] flex h-[11%] w-[17%] items-center justify-center rounded-sm border border-dashed border-red-400/50 bg-red-500/10">

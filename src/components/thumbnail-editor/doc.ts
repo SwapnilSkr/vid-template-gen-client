@@ -260,6 +260,34 @@ export function defaultDoc(aspect: ThumbAspect, headline: string): ThumbDoc {
   };
 }
 
+/**
+ * A bounded opening-title layout for vertical Reddit Shorts. The first frame
+ * lives below the Reddit title-card area and inside platform-safe edges.
+ */
+export function defaultRedditShortsCoverDoc(headline: string): ThumbDoc {
+  const compact = headline.replace(/\s+/g, " ").trim();
+  const coverHeadline = compact.length <= 60
+    ? compact
+    : `${compact.slice(0, 57).replace(/\s+\S*$/, "").trim()}…`;
+  return {
+    version: 2,
+    aspectRatio: "9:16",
+    background: { ...DEFAULT_BACKGROUND, sourceType: "frame", atSeconds: 0, vignette: 0 },
+    layers: [defaultTextLayer({
+      text: coverHeadline || "YOUR HEADLINE",
+      x: 0.5,
+      y: 0.66,
+      widthPct: 0.82,
+      sizePct: coverHeadline.length > 45 ? 0.068 : 0.078,
+      bgColor: "#000000",
+      bgOpacity: 0.64,
+      bgRadiusPct: 0.28,
+      bgPadPct: 0.28,
+      shadowYPct: 0.06,
+    })],
+  };
+}
+
 /** Best-effort revive of a doc from opaque JSON (session cache or a server
  *  draft's editorState). Returns undefined for anything unrecognizable. */
 export function reviveDoc(raw: unknown): ThumbDoc | undefined {

@@ -121,7 +121,7 @@ export function CaptionEditor({
       void updateCaptions(
         reelKey,
         captionStylePayload(styleRef.current, CAPTION_STYLE_DEFAULTS),
-      ).catch(() => {});
+      ).catch(() => undefined);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);

@@ -1,6 +1,7 @@
 import type { Reel } from "@/api/reels";
 import {
   defaultDoc,
+  defaultRedditShortsCoverDoc,
   docFromLegacyDraftInput,
   reviveDoc,
   type ThumbDoc,
@@ -49,6 +50,19 @@ export function buildDocFromSavedShortsCover(reel: Reel): ThumbDoc | undefined {
   const cover = reel.shortsCover;
   if (!cover?.imageUrl && !cover?.editorState) return undefined;
 
+  // Upgrade the first automatic-cover layout in the editor without touching
+  // creator-made covers. V1 placed text in the Reddit-card area; V2 reserves
+  // that band and is persisted on the next plan/produce or explicit save.
+  if (
+    reel.strategy === "gameplay_overlay" &&
+    (
+      cover.sourceFingerprint?.startsWith("reddit-opening-cover:v1:") ||
+      (cover.sourceType === "reddit_title_card" && cover.replacesTitleCard === true)
+    )
+  ) {
+    return defaultRedditShortsCoverDoc(defaultTitleText(reel));
+  }
+
   if (cover.editorState) {
     const revived = reviveDoc(cover.editorState) ?? docFromLegacyDraftInput(cover.editorState, "9:16");
     if (revived) return revived;
@@ -56,7 +70,9 @@ export function buildDocFromSavedShortsCover(reel: Reel): ThumbDoc | undefined {
 
   if (!cover.imageUrl) return undefined;
 
-  const doc = defaultDoc("9:16", defaultTitleText(reel));
+  const doc = reel.strategy === "gameplay_overlay"
+    ? defaultRedditShortsCoverDoc(defaultTitleText(reel))
+    : defaultDoc("9:16", defaultTitleText(reel));
   if (cover.sourceType === "video_frame" || cover.sourceType === "reddit_title_card") {
     doc.background.sourceType = "frame";
     if (cover.atSeconds !== undefined) doc.background.atSeconds = cover.atSeconds;
@@ -68,4 +84,3 @@ export function buildDocFromSavedShortsCover(reel: Reel): ThumbDoc | undefined {
   }
   return doc;
 }
-
