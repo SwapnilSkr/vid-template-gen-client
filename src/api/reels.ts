@@ -214,7 +214,13 @@ export interface Reel {
     updatedAt?: string;
     publishedAt?: string;
   }>;
-  instagramSettings?: { caption?: string; shareToFeed?: boolean };
+  instagramSettings?: {
+    caption?: string;
+    shareToFeed?: boolean;
+    source?: "ai" | "manual" | "fallback";
+    generatedAt?: string;
+    model?: string;
+  };
   seriesId?: string;
   partNumber?: number;
   partCount?: number;
@@ -629,7 +635,9 @@ export async function createReel(input: CreateReelInput): Promise<{ id: string; 
 }
 
 export async function getReel(id: string): Promise<Reel> {
-  return request<Reel>(`/reels/${id}/status`);
+  // Studio uses this after metadata writes as an authoritative readback. Do
+  // not allow a browser cache to turn a completed save into a stale snapshot.
+  return request<Reel>(`/reels/${id}/status`, { cache: "no-store" });
 }
 
 export function mediaUrl(url?: string): string | undefined {
@@ -658,6 +666,18 @@ export async function regenerateThumbnail(id: string, review: Partial<ReelReview
     method: "POST",
     body: JSON.stringify(review),
   });
+}
+
+/** Generates only a new YouTube Shorts title and description. It does not
+ * change upload tags, thumbnail, Instagram copy, or rendered media. */
+export async function regenerateReviewCopy(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/review/copy`, { method: "POST" });
+}
+
+/** Generates only the platform-specific Instagram caption; it does not change
+ * YouTube review metadata or re-render the video. */
+export async function regenerateInstagramCaption(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/instagram-caption`, { method: "POST" });
 }
 
 export async function publishReel(

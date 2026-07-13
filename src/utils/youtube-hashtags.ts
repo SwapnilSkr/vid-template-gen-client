@@ -11,6 +11,22 @@ export function extractHashtags(value: string): string[] {
   return [...new Set((value.match(HASHTAG_PATTERN) ?? []).map(normalizeHashtag).filter(Boolean))];
 }
 
+/** Counts every hashtag occurrence, including repeats. Platform limits apply to
+ * occurrences rather than the number of unique normalized tags. */
+export function countHashtagOccurrences(value: string): number {
+  return (value.match(HASHTAG_PATTERN) ?? []).length;
+}
+
+/** Keeps the first `maximum` hashtags in a free-form caption. This is used at
+ * input time so a pasted caption cannot accidentally exceed a platform cap. */
+export function limitHashtagOccurrences(value: string, maximum: number): string {
+  let count = 0;
+  return value.replace(HASHTAG_PATTERN, (hashtag) => {
+    count += 1;
+    return count <= maximum ? hashtag : "";
+  });
+}
+
 export function stripHashtagsFromText(value: string): string {
   const withoutBlock = value
     .trimEnd()

@@ -1,10 +1,12 @@
-import { Check, ExternalLink, Hash, Instagram, Send, X, Youtube } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, ExternalLink, Hash, Instagram, Send, Sparkles, X, Youtube } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getReel,
   distributeReel,
   listInstagramChannels,
   listYouTubeChannels,
+  regenerateInstagramCaption,
+  regenerateReviewCopy,
   updateReview,
   updateReelSettings,
   type Reel,
@@ -23,11 +25,46 @@ import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 import {
+  countHashtagOccurrences,
   countHashtags,
   extractHashtags,
+  limitHashtagOccurrences,
   normalizeHashtag,
   relevantHashtags,
 } from "@/utils/youtube-hashtags";
+
+const INSTAGRAM_CAPTION_MAX_HASHTAGS = 5;
+
+/** An explicit saved empty string remains intentionally empty. Legacy reels
+ * use the paid AI generation action instead of silently copying YouTube text. */
+function initialInstagramCaption(reel: Reel): string {
+  if (typeof reel.instagramSettings?.caption === "string") {
+    return reel.instagramSettings.caption;
+  }
+  return "";
+}
+
+interface PublishDraftSnapshot {
+  reelKey: string;
+  title: string;
+  description: string;
+  tagsText: string;
+  instagramCaption: string;
+  shareToFeed: boolean;
+}
+
+type DraftSaveState = "unsaved" | "saved" | "ai_saved";
+
+function persistedPublishDraft(reel: Reel, reelKey: string): PublishDraftSnapshot {
+  return {
+    reelKey,
+    title: reel.review?.title ?? reel.title ?? "",
+    description: reel.review?.description ?? "",
+    tagsText: (reel.review?.tags ?? []).join(", "),
+    instagramCaption: initialInstagramCaption(reel),
+    shareToFeed: reel.instagramSettings?.shareToFeed ?? true,
+  };
+}
 
 export function PublishPanel({
   reel,
@@ -48,15 +85,66 @@ export function PublishPanel({
   const [title, setTitle] = useState(() => reel.review?.title ?? reel.title ?? "");
   const [description, setDescription] = useState(() => reel.review?.description ?? "");
   const [tagsText, setTagsText] = useState((reel.review?.tags ?? []).join(", "));
-  // Platform copy is intentionally isolated: Instagram never derives from the
-  // YouTube review description, either in this form or at publish time.
-  const [instagramCaption, setInstagramCaption] = useState(
-    () => reel.instagramSettings?.caption ?? "",
-  );
+  const [instagramCaption, setInstagramCaption] = useState(() => initialInstagramCaption(reel));
+  const [instagramCaptionLimitNotice, setInstagramCaptionLimitNotice] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(() => reel.instagramSettings?.shareToFeed ?? true);
   const [hashtagInput, setHashtagInput] = useState("");
   const [hashtagTarget, setHashtagTarget] = useState<"title" | "description">("description");
   const [trendSummary, setTrendSummary] = useState<TrendGenreSummary | undefined>();
+  const [youtubeSaveState, setYoutubeSaveState] = useState<DraftSaveState>();
+  const [instagramSaveState, setInstagramSaveState] = useState<DraftSaveState>();
+  const reviewTagsKey = (reel.review?.tags ?? []).join("\u0001");
+  const persistedDraftRef = useRef<PublishDraftSnapshot>(persistedPublishDraft(reel, reelKey));
+  const youtubeCopyDirtyRef = useRef(false);
+  const youtubeTagsDirtyRef = useRef(false);
+  const instagramCaptionDirtyRef = useRef(false);
+  const instagramShareDirtyRef = useRef(false);
+
+  // Studio status polling and paid generation both replace the reel object.
+  // Rehydrate one persisted field at a time, never an entire form: an
+  // Instagram refresh must not erase a pending YouTube draft, and vice versa.
+  useEffect(() => {
+    const next = persistedPublishDraft(reel, reelKey);
+    const previous = persistedDraftRef.current;
+    if (previous.reelKey !== next.reelKey) {
+      setTitle(next.title);
+      setDescription(next.description);
+      setTagsText(next.tagsText);
+      setInstagramCaption(next.instagramCaption);
+      setShareToFeed(next.shareToFeed);
+      setInstagramCaptionLimitNotice(false);
+      youtubeCopyDirtyRef.current = false;
+      youtubeTagsDirtyRef.current = false;
+      instagramCaptionDirtyRef.current = false;
+      instagramShareDirtyRef.current = false;
+      setYoutubeSaveState(undefined);
+      setInstagramSaveState(undefined);
+    } else {
+      if (!youtubeCopyDirtyRef.current) {
+        if (next.title !== previous.title) setTitle(next.title);
+        if (next.description !== previous.description) setDescription(next.description);
+      }
+      if (!youtubeTagsDirtyRef.current && next.tagsText !== previous.tagsText) {
+        setTagsText(next.tagsText);
+      }
+      if (!instagramCaptionDirtyRef.current && next.instagramCaption !== previous.instagramCaption) {
+        setInstagramCaption(next.instagramCaption);
+        setInstagramCaptionLimitNotice(false);
+      }
+      if (!instagramShareDirtyRef.current && next.shareToFeed !== previous.shareToFeed) {
+        setShareToFeed(next.shareToFeed);
+      }
+    }
+    persistedDraftRef.current = next;
+  }, [
+    reelKey,
+    reel.title,
+    reel.review?.title,
+    reel.review?.description,
+    reviewTagsKey,
+    reel.instagramSettings?.caption,
+    reel.instagramSettings?.shareToFeed,
+  ]);
 
   // Publishing is intentionally constrained to outputs rendered for the exact
   // channel. The canonical output is only the primary destination's video;
@@ -124,33 +212,157 @@ export function PublishPanel({
     () => countHashtags(title, description),
     [description, title],
   );
+  const instagramHashtagCount = useMemo(
+    () => countHashtagOccurrences(instagramCaption),
+    [instagramCaption],
+  );
 
   const addHashtag = (raw: string, target = hashtagTarget) => {
     const tag = normalizeHashtag(raw);
     if (!tag || hashtags.includes(tag) || hashtags.length >= 15) return;
+    youtubeCopyDirtyRef.current = true;
+    setYoutubeSaveState("unsaved");
     if (target === "title") setTitle((current) => `${current.trimEnd()}${current.trim() ? " " : ""}${tag}`);
     else setDescription((current) => `${current.trimEnd()}${current.trim() ? "\n\n" : ""}${tag}`);
     setHashtagInput("");
   };
   const removeHashtag = (tag: string) => {
     const pattern = new RegExp(`(^|\\s)${tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, "g");
+    youtubeCopyDirtyRef.current = true;
+    setYoutubeSaveState("unsaved");
     setTitle((current) => current.replace(pattern, "$1").replace(/\s{2,}/g, " ").trim());
     setDescription((current) => current.replace(pattern, "$1").replace(/[ \t]{2,}/g, " ").trim());
   };
+  const updateInstagramCaption = (value: string) => {
+    const limited = limitHashtagOccurrences(value, INSTAGRAM_CAPTION_MAX_HASHTAGS);
+    instagramCaptionDirtyRef.current = true;
+    setInstagramSaveState("unsaved");
+    setInstagramCaption(limited);
+    setInstagramCaptionLimitNotice(limited !== value);
+  };
 
-  const saveMetadata = () => run(async () => {
-    await updateReview(reelKey, {
+  /** A save is not considered successful until both the mutation response and
+   * a no-cache status read agree on the exact metadata that will be published. */
+  const persistYoutubeMetadata = async (): Promise<Reel> => {
+    const requestedTags = tagsText.split(",").map((tag) => tag.trim()).filter(Boolean);
+    const saved = await updateReview(reelKey, {
       title,
       description,
-      tags: tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
+      tags: requestedTags,
     });
-    return getReel(reelKey);
+    if (saved.title !== title || saved.description !== description) {
+      throw new Error("YouTube metadata was not accepted exactly as entered. Nothing was marked saved.");
+    }
+    const confirmed = await getReel(reelKey);
+    const confirmedTags = confirmed.review?.tags ?? [];
+    if (
+      confirmed.review?.title !== saved.title
+      || confirmed.review?.description !== saved.description
+      || confirmedTags.join("\u0001") !== (saved.tags ?? []).join("\u0001")
+    ) {
+      throw new Error("YouTube metadata readback did not match the saved response. Please retry; publishing is blocked from claiming this was saved.");
+    }
+    return confirmed;
+  };
+
+  const persistInstagramMetadata = async (): Promise<Reel> => {
+    const saved = await updateReelSettings(reelKey, {
+      instagram: { caption: instagramCaption, shareToFeed },
+    });
+    const matches = (candidate: Reel) =>
+      candidate.instagramSettings?.caption === instagramCaption
+      && candidate.instagramSettings?.shareToFeed === shareToFeed;
+    if (!matches(saved)) {
+      throw new Error("Instagram metadata was not accepted exactly as entered. Nothing was marked saved.");
+    }
+    const confirmed = await getReel(reelKey);
+    if (!matches(confirmed)) {
+      throw new Error("Instagram metadata readback did not match the saved response. Please retry; publishing is blocked from claiming this was saved.");
+    }
+    return confirmed;
+  };
+
+  const saveMetadata = async () => {
+    const result = await run(persistYoutubeMetadata);
+    if (result.ok) {
+      youtubeCopyDirtyRef.current = false;
+      youtubeTagsDirtyRef.current = false;
+      setYoutubeSaveState("saved");
+    }
+    return result;
+  };
+  const saveInstagramMetadata = async () => {
+    const result = await run(persistInstagramMetadata);
+    if (result.ok) {
+      instagramCaptionDirtyRef.current = false;
+      instagramShareDirtyRef.current = false;
+      setInstagramSaveState("saved");
+    }
+    return result;
+  };
+  const regenerateInstagramCaptionDraft = async () => {
+    let generated: Reel | undefined;
+    const result = await run(async () => {
+      generated = await regenerateInstagramCaption(reelKey);
+      return generated;
+    });
+    if (result.ok && generated) {
+      const next = persistedPublishDraft(generated, reelKey);
+      setInstagramCaption(next.instagramCaption);
+      setInstagramCaptionLimitNotice(false);
+      instagramCaptionDirtyRef.current = false;
+      persistedDraftRef.current = next;
+      setInstagramSaveState(instagramShareDirtyRef.current ? "unsaved" : "ai_saved");
+    }
+    return result;
+  };
+  const regenerateYoutubeCopyDraft = async () => {
+    let generated: Reel | undefined;
+    const result = await run(async () => {
+      generated = await regenerateReviewCopy(reelKey);
+      return generated;
+    });
+    if (result.ok && generated) {
+      const next = persistedPublishDraft(generated, reelKey);
+      setTitle(next.title);
+      setDescription(next.description);
+      youtubeCopyDirtyRef.current = false;
+      persistedDraftRef.current = next;
+      setYoutubeSaveState(youtubeTagsDirtyRef.current ? "unsaved" : "ai_saved");
+    }
+    return result;
+  };
+  const requestInstagramCaptionGeneration = () => requestConfirm({
+    title: reel.instagramSettings?.caption ? "Regenerate Instagram caption?" : "Generate Instagram caption?",
+    body: "Creates a fresh, platform-specific Instagram caption from the story—not from your YouTube description.",
+    details: [
+      "Uses the configured LLM and records the actual usage in this reel’s cost breakdown.",
+      "Includes a hook, story-specific framing, light CTA, and at most five hashtags.",
+      "Does not change the video, YouTube title, YouTube description, tags, or thumbnail.",
+    ],
+    confirmLabel: reel.instagramSettings?.caption ? "Regenerate caption" : "Generate caption",
+    costTone: "paid",
+    onConfirm: regenerateInstagramCaptionDraft,
   });
-  const saveInstagramMetadata = () => run(async () => updateReelSettings(reelKey, { instagram: { caption: instagramCaption, shareToFeed } }));
+  const requestYoutubeCopyGeneration = () => requestConfirm({
+    title: "Regenerate YouTube Shorts copy?",
+    body: "Creates a fresh AI title and description from this story.",
+    details: [
+      "Uses the configured LLM and records the actual usage in this reel’s cost breakdown.",
+      "Keeps upload tags, thumbnail, Instagram caption, destinations, and rendered media unchanged.",
+      "Replaces the displayed title and description, including any unsaved edits in these fields.",
+    ],
+    confirmLabel: "Regenerate copy",
+    costTone: "paid",
+    onConfirm: regenerateYoutubeCopyDraft,
+  });
 
   if (reel.status !== "completed") return null;
   const yt = reel.youtube;
   const targetCount = selectedYoutubeIds.length + selectedInstagramIds.length;
+  const instagramCaptionRequired = selectedInstagramIds.length > 0 && !instagramCaption.trim();
+  const instagramCaptionInvalid = instagramHashtagCount > INSTAGRAM_CAPTION_MAX_HASHTAGS;
+  const instagramPublishBlocked = instagramCaptionRequired || instagramCaptionInvalid || instagramCaption.length > 2200;
   const instagramPublishByChannel = new Map((reel.instagram ?? []).map((publish) => [publish.channelId, publish]));
   const activeInstagram = (reel.instagram ?? []).filter((publish) => publish.status === "pending" || publish.status === "uploading");
   const republishingInstagram = selectedInstagramIds.filter((id) => instagramPublishByChannel.get(id)?.status === "published");
@@ -165,15 +377,15 @@ export function PublishPanel({
       <div className="grid gap-2.5 rounded-md border border-border bg-background/35 p-2.5">
         <Label className="text-xs text-muted-foreground">
           YouTube title
-          <Input value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} />
+          <Input value={title} disabled={busy} onChange={(event) => { youtubeCopyDirtyRef.current = true; setYoutubeSaveState("unsaved"); setTitle(event.target.value); }} />
           <span className={cn("justify-self-end text-[11px]", title.length > 90 ? "text-warning" : "text-muted-foreground/80")}>
             {title.length}/100 · {titleHashtags.length} hashtag{titleHashtags.length === 1 ? "" : "s"}
           </span>
-          <span className="text-[11px] text-muted-foreground/80">Type hashtags directly here; this is the exact title YouTube receives.</span>
+          <span className="text-[11px] text-muted-foreground/80">AI keeps titles hashtag-free; YouTube hashtags belong on the description&apos;s final line.</span>
         </Label>
         <Label className="text-xs text-muted-foreground">
           YouTube description
-          <Textarea value={description} maxLength={5000} rows={7} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
+          <Textarea value={description} maxLength={5000} rows={7} disabled={busy} onChange={(event) => { youtubeCopyDirtyRef.current = true; setYoutubeSaveState("unsaved"); setDescription(event.target.value); }} />
           <span className={cn("justify-self-end text-[11px]", description.length > 4800 ? "text-warning" : "text-muted-foreground/80")}>
             {description.length}/5,000 · {descriptionHashtags.length} hashtag{descriptionHashtags.length === 1 ? "" : "s"}
           </span>
@@ -206,7 +418,7 @@ export function PublishPanel({
 
         <Label className="text-xs text-muted-foreground">
           Upload tags (comma-separated, optional)
-          <Input value={tagsText} disabled={busy} onChange={(event) => setTagsText(event.target.value)} placeholder="shorts, reddit stories, aita" />
+          <Input value={tagsText} disabled={busy} onChange={(event) => { youtubeTagsDirtyRef.current = true; setYoutubeSaveState("unsaved"); setTagsText(event.target.value); }} placeholder="shorts, reddit stories, aita" />
           <span className={cn("justify-self-end text-[11px]", tagsText.length > 500 ? "text-destructive" : "text-muted-foreground/80")}>{tagsText.length}/500</span>
         </Label>
         <Button
@@ -224,15 +436,23 @@ export function PublishPanel({
         >
           <Check size={14} /> Save publishing details
         </Button>
+        <DraftSaveNotice platform="youtube" state={youtubeSaveState} />
+        <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestYoutubeCopyGeneration}>
+          <Sparkles size={14} /> Regenerate AI title &amp; description
+        </Button>
         <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Youtube size={12} className="text-red-500" />YouTube Shorts preview</div><p className="m-0 font-semibold text-foreground">{title || "Your YouTube title"}</p><p className="mb-0 mt-1 whitespace-pre-wrap text-muted-foreground">{description || "Your YouTube description"}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Thumbnail: {reel.review?.thumbnailUrl ? "YouTube thumbnail ready." : "No uploaded thumbnail yet."}</p></div>
       </div>
 
       <div className="grid gap-2.5 rounded-md border border-pink-500/20 bg-pink-500/[0.035] p-2.5">
         <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2 text-sm font-semibold"><Instagram size={15} className="text-pink-500" />Instagram Reel</span><span className="text-[11px] text-muted-foreground">Platform-specific</span></div>
-        <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Write the Reel caption, hook, CTA, and hashtags…" onChange={(event) => setInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {extractHashtags(instagramCaption).length} hashtags</span><span className="text-[11px] text-muted-foreground/80">Only Instagram receives this caption. It never follows YouTube copy.</span></Label>
-        <label className="flex cursor-pointer items-center gap-2 rounded border border-border bg-card/60 px-2.5 py-2 text-xs"><input type="checkbox" checked={shareToFeed} disabled={busy} onChange={(event) => setShareToFeed(event.target.checked)} /><span className="font-medium">Also share to Feed</span><span className="ml-auto text-muted-foreground">{shareToFeed ? "Reels + Feed" : "Reels tab only"}</span></label>
+        <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Generate an AI draft, then edit the Reel caption, hook, CTA, and hashtags…" onChange={(event) => updateInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 || instagramCaptionInvalid ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {instagramHashtagCount}/{INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags</span><span className="text-[11px] text-muted-foreground/80">{reel.instagramSettings?.source === "ai" ? `AI-generated with ${reel.instagramSettings.model ?? "the configured model"}.` : reel.instagramSettings?.source === "fallback" ? "AI was unavailable; this is a guarded fallback draft." : "Instagram copy is independent from YouTube metadata."}</span></Label>
+        {instagramCaptionLimitNotice ? <p role="status" className="m-0 text-xs text-warning">Instagram captions are limited to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags. Extra hashtags from the last edit were not added.</p> : null}
+        {instagramCaptionInvalid ? <p role="alert" className="m-0 text-xs text-destructive">Reduce this caption to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags before saving or publishing.</p> : null}
+        <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestInstagramCaptionGeneration}><Sparkles size={14} />{reel.instagramSettings?.caption ? "Regenerate AI caption" : "Generate AI caption"}</Button>
+        <label className="flex cursor-pointer items-center gap-2 rounded border border-border bg-card/60 px-2.5 py-2 text-xs"><input type="checkbox" checked={shareToFeed} disabled={busy} onChange={(event) => { instagramShareDirtyRef.current = true; setInstagramSaveState("unsaved"); setShareToFeed(event.target.checked); }} /><span className="font-medium">Also share to Feed</span><span className="ml-auto text-muted-foreground">{shareToFeed ? "Reels + Feed" : "Reels tab only"}</span></label>
         <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Instagram size={12} />Reel preview</div><p className="m-0 whitespace-pre-wrap text-muted-foreground">{instagramCaption || "Your Instagram caption will appear here."}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Cover: {reel.shortsCover?.imageUrl ? "Instagram selects the first frame from the rendered MP4. Re-render after saving the Vertical Cover so it is baked into that opening frame." : "Instagram will use the first video frame. Create a Vertical Cover, then re-render for a controlled result."}</p></div>
-        <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
+        <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200 || instagramCaptionInvalid} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
+        <DraftSaveNotice platform="instagram" state={instagramSaveState} />
       </div>
 
       {yt ? (
@@ -298,45 +518,85 @@ export function PublishPanel({
       </div>
       {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} message={publish.message} icon={<Instagram size={12} />} />)}</div> : null}
       {activeInstagram.length ? <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"><strong>Publishing in progress.</strong> {activeInstagram.map((publish) => `${publish.channelLabel ?? publish.channelId}: ${publish.message ?? publish.status}`).join(" · ")} The Studio is locked until these destinations settle.</div> : null}
+      {instagramCaptionRequired ? <div role="alert" className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">Generate or add a non-empty Instagram caption before publishing. It is saved separately from YouTube metadata.</div> : null}
 
       <Button
         type="button"
         variant="default"
-        disabled={busy || targetCount === 0 || instagramCaption.length > 2200}
+        disabled={busy || targetCount === 0 || (selectedInstagramIds.length > 0 && instagramPublishBlocked)}
         onClick={() =>
           requestConfirm({
             title: republishingInstagram.length ? "Republish to Instagram?" : "Publish to selected accounts?",
             body: republishingInstagram.length ? `This sends another Reel to ${republishingInstagram.join(", ")}. Only continue if you intentionally removed or want to replace the previous post.` : `Queues the ready channel-specific render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
             details: [
-              "Saves the YouTube title, description, tags, and Instagram caption shown here before queuing uploads.",
+              selectedInstagramIds.length
+                ? "Saves the YouTube title, description, tags, and Instagram caption shown here before queuing uploads."
+                : "Saves the YouTube title, description, and tags shown here before queuing uploads.",
               "Every selected account uploads only its own rendered destination output and branded outro.",
               "The upload runs in the background — status appears above.",
             ],
             confirmLabel: "Publish",
-            onConfirm: () =>
-              run(async () => {
-                await updateReview(reelKey, {
-                  title,
-                  description,
-                  tags: tagsText.split(",").map((tag) => tag.trim()).filter(Boolean),
-                });
-                // This must finish before enqueueing distribution. The Instagram
+            onConfirm: async () => {
+              const result = await run(async () => {
+                await persistYoutubeMetadata();
+                // This must finish before an Instagram publish is queued. The
                 // worker reads persisted settings, not this component's local
-                // state, so omitting it published stale captions.
-                await updateReelSettings(reelKey, {
-                  instagram: { caption: instagramCaption, shareToFeed },
-                });
+                // state, so omitting it could publish a stale caption.
+                if (selectedInstagramIds.length) {
+                  await persistInstagramMetadata();
+                }
                 // The confirmation modal is the explicit user authorization for
                 // a resend. Do not infer it from a potentially stale reel
                 // snapshot after a previous failed request.
                 return distributeReel(reelKey, { youtubeChannelIds: selectedYoutubeIds, instagramChannelIds: selectedInstagramIds, forceRepublish: selectedInstagramIds.length > 0 });
-              }),
+              });
+              if (result.ok) {
+                youtubeCopyDirtyRef.current = false;
+                youtubeTagsDirtyRef.current = false;
+                setYoutubeSaveState("saved");
+                if (selectedInstagramIds.length) {
+                  instagramCaptionDirtyRef.current = false;
+                  instagramShareDirtyRef.current = false;
+                  setInstagramSaveState("saved");
+                }
+              }
+              return result;
+            },
           })
         }
       >
         <Send size={15} /> Publish to {targetCount || "…"} account{targetCount === 1 ? "" : "s"}
       </Button>
     </div>
+  );
+}
+
+function DraftSaveNotice({
+  platform,
+  state,
+}: {
+  platform: "youtube" | "instagram";
+  state?: DraftSaveState;
+}) {
+  if (!state) return null;
+  const label = platform === "youtube" ? "YouTube" : "Instagram";
+  const message = state === "unsaved"
+    ? `Unsaved ${label} changes — click Save ${platform === "youtube" ? "publishing details" : "Instagram details"} before leaving this reel.`
+    : state === "ai_saved"
+      ? `AI ${label} draft saved. If you edit it, click Save before publishing.`
+      : `Saved — these ${label} details will be used for the next ${label === "YouTube" ? "YouTube Shorts" : "Instagram Reel"} upload.`;
+  return (
+    <p
+      role="status"
+      className={cn(
+        "m-0 rounded border px-2.5 py-2 text-xs",
+        state === "unsaved"
+          ? "border-warning/40 bg-warning/10 text-warning"
+          : "border-success/40 bg-success/10 text-success",
+      )}
+    >
+      {message}
+    </p>
   );
 }
 
