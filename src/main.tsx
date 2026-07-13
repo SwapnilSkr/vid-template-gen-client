@@ -12,6 +12,7 @@ import { ThumbnailStudioScreen } from "@/screens/ThumbnailStudioScreen";
 import { YtSearchScreen } from "@/screens/YtSearchScreen";
 import { YtImportDetailScreen } from "@/screens/YtImportDetailScreen";
 import { AccountsScreen } from "@/screens/AccountsScreen";
+import { OperationsScreen } from "@/screens/OperationsScreen";
 import { getYtImport } from "@/api/yt-imports";
 import "@/styles.css";
 
@@ -78,6 +79,8 @@ export const ytImportDetailRoute = createRoute({
 
 export const accountsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/accounts", component: AccountsScreen });
 
+export const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsScreen });
+
 const routeTree = rootRoute.addChildren([
   reviewRoute,
   trendsRoute,
@@ -88,6 +91,7 @@ const routeTree = rootRoute.addChildren([
   ytSearchRoute,
   ytImportDetailRoute,
   accountsRoute,
+  operationsRoute,
 ]);
 
 const router = createRouter({

@@ -8,6 +8,7 @@ import {
   Layers3,
   ListVideo,
   Play,
+  Activity,
   Send,
   TrendingUp,
   UsersRound,
@@ -139,6 +140,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       <Link to="/accounts" onClick={onNavigate} className={navLinkClass(pathname === "/accounts")}>
         <UsersRound size={15} />
         <span>Accounts</span>
+      </Link>
+      <Link to="/operations" onClick={onNavigate} className={navLinkClass(pathname === "/operations")}>
+        <Activity size={15} />
+        <span>Operations</span>
       </Link>
       <Link
         to="/youtube"
