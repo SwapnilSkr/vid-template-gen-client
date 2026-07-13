@@ -1,5 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Merge,
+  Trash2,
+} from "lucide-react";
 import { type Reel } from "@/api/reels";
 import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { buttonClassName } from "@/components/ui/button";
@@ -11,13 +19,17 @@ export function ReelContextBar({
   seriesReels,
   currentId,
   onDeletePart,
-  deletePartDisabled,
+  onMoveBoundary,
+  onMergePart,
+  partActionsDisabled,
 }: {
   reel: Reel;
   seriesReels: Reel[];
   currentId: string;
   onDeletePart: (part: Reel) => void;
-  deletePartDisabled: boolean;
+  onMoveBoundary: (direction: "pushLastToNext" | "pullFirstFromNext") => void;
+  onMergePart: () => void;
+  partActionsDisabled: boolean;
 }) {
   const isSeries = Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
   if (!isSeries) {
@@ -31,7 +43,19 @@ export function ReelContextBar({
     );
   }
 
-  const parts = seriesReels.length ? seriesReels : [reel];
+  const parts = [...(seriesReels.length ? seriesReels : [reel])].sort(
+    (a, b) => (a.partNumber ?? 1) - (b.partNumber ?? 1),
+  );
+  const currentIdx = parts.findIndex((part) => reelKey(part) === currentId);
+  const nextPart = currentIdx >= 0 ? parts[currentIdx + 1] : undefined;
+  const prevPart = currentIdx >= 0 ? parts[currentIdx - 1] : undefined;
+  const currentNumber = reel.partNumber ?? currentIdx + 1;
+  const currentLines = reel.scenes?.length ?? 0;
+  const nextLines = nextPart?.scenes?.length ?? 0;
+  const canPushLast = Boolean(nextPart) && currentLines > 1;
+  const canPullFirst = Boolean(nextPart) && nextLines > 1;
+  const pillClass =
+    "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40";
   return (
     <div className="grid gap-2 rounded-md border border-border bg-background px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -78,7 +102,7 @@ export function ReelContextBar({
               </Link>
               <button
                 type="button"
-                disabled={deletePartDisabled}
+                disabled={partActionsDisabled}
                 title={`Delete Part ${part.partNumber ?? 1}`}
                 aria-label={`Delete Part ${part.partNumber ?? 1}`}
                 onClick={() => onDeletePart(part)}
@@ -89,6 +113,58 @@ export function ReelContextBar({
             </div>
           );
         })}
+      </div>
+
+      <div className="grid gap-1.5 rounded-md border border-dashed border-border px-2.5 py-2">
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Rebalance Part {currentNumber}
+        </span>
+        <div className="flex flex-wrap gap-1">
+          {nextPart ? (
+            <>
+              <button
+                type="button"
+                disabled={partActionsDisabled || !canPushLast}
+                title={
+                  canPushLast
+                    ? `Move this part's last line to Part ${currentNumber + 1}`
+                    : "A part must keep at least one line"
+                }
+                onClick={() => onMoveBoundary("pushLastToNext")}
+                className={pillClass}
+              >
+                <ArrowDownToLine size={12} /> Last line → P{currentNumber + 1}
+              </button>
+              <button
+                type="button"
+                disabled={partActionsDisabled || !canPullFirst}
+                title={
+                  canPullFirst
+                    ? `Pull Part ${currentNumber + 1}'s first line into this part`
+                    : "The next part must keep at least one line"
+                }
+                onClick={() => onMoveBoundary("pullFirstFromNext")}
+                className={pillClass}
+              >
+                <ArrowUpToLine size={12} /> Pull ← P{currentNumber + 1}
+              </button>
+            </>
+          ) : null}
+          {prevPart ? (
+            <button
+              type="button"
+              disabled={partActionsDisabled}
+              title={`Merge this part into Part ${currentNumber - 1}`}
+              onClick={onMergePart}
+              className={pillClass}
+            >
+              <Merge size={12} /> Merge into P{currentNumber - 1}
+            </button>
+          ) : null}
+        </div>
+        <span className="text-[10px] text-muted-foreground/70">
+          Move a line across the seam or consolidate parts — no re-plan, keeps your edits.
+        </span>
       </div>
     </div>
   );

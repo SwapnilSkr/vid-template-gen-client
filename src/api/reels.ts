@@ -1074,3 +1074,21 @@ export async function replanReelSeries(
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/replan-series`, { method: "POST", body: JSON.stringify(patch) });
 }
+
+/** Move one spoken line across the seam between this part and the next.
+ *  Returns the updated current part. */
+export async function moveSeriesBoundary(
+  id: string,
+  direction: "pushLastToNext" | "pullFirstFromNext",
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/move-boundary`, {
+    method: "POST",
+    body: JSON.stringify({ direction }),
+  });
+}
+
+/** Merge this part's lines into the previous part and delete this part.
+ *  Returns the previous part that absorbed the content. */
+export async function mergePartIntoPrevious(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/merge-into-previous`, { method: "POST" });
+}

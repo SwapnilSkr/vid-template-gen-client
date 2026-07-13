@@ -17,6 +17,8 @@ import {
   ffmpegBlockFromError,
   getReel,
   listReelSeries,
+  mergePartIntoPrevious,
+  moveSeriesBoundary,
   mediaUrl,
   regenerateReel,
   resumeFailedReel,
@@ -265,6 +267,29 @@ export function StudioScreen() {
     },
     [seriesReels, deletePart],
   );
+
+  // Nudge the boundary between the current part and the next by one line.
+  const moveBoundary = useCallback(
+    (direction: "pushLastToNext" | "pullFirstFromNext") =>
+      void run(() => moveSeriesBoundary(id, direction)),
+    [id, run],
+  );
+
+  // Merge the current part into the previous one (confirm — it removes a part).
+  const requestMergePart = useCallback(() => {
+    const currentNumber = reel?.partNumber ?? 1;
+    setConfirmAction({
+      title: `Merge Part ${currentNumber} into Part ${currentNumber - 1}?`,
+      body: `Append Part ${currentNumber}'s lines onto Part ${currentNumber - 1}, then remove Part ${currentNumber}.`,
+      details: [
+        "No narration is lost — the lines (and their audio) move into the previous part.",
+        `Later parts renumber down by one.`,
+      ],
+      confirmLabel: "Merge parts",
+      costTone: "free",
+      onConfirm: () => run(() => mergePartIntoPrevious(id)),
+    });
+  }, [id, reel?.partNumber, run]);
 
   useEffect(() => {
     const count = reel?.scenes?.length ?? 0;
@@ -574,7 +599,9 @@ export function StudioScreen() {
             selectedSceneIndex={selectedSceneIndex}
             onSelectScene={selectScene}
             onDeletePart={requestDeletePart}
-            deletePartDisabled={studioLocked}
+            onMoveBoundary={moveBoundary}
+            onMergePart={requestMergePart}
+            partActionsDisabled={studioLocked}
           />
         </aside>
 
