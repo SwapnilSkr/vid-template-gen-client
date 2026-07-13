@@ -45,9 +45,11 @@ interface ApiResponse<T> {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json", ...init?.headers },
       ...init,
+      headers,
     });
     const json = (await res.json()) as ApiResponse<T>;
     if (!res.ok || !json.success) {

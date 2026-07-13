@@ -4,11 +4,15 @@ import {
   listGameplay,
   replanReel,
   replanReelSeries,
+  restructureSeriesParts,
+  getSeriesStructureAdvice,
+  chooseSeriesStructure,
   regenerateReel,
   updateRedditCard,
   updateReelSettings,
   type GameplayClip,
   type Reel,
+  type SeriesStructureAdvice,
 } from "@/api/reels";
 import type { StorySource } from "@/api/stories";
 import {
@@ -54,6 +58,20 @@ function isMultiPartSeries(reel: Reel): boolean {
   return Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
 }
 
+function breakSummary(advice: SeriesStructureAdvice): string {
+  if (advice.breaks.length === 0) return "No episode seam is needed.";
+  const strong = advice.breaks.filter((item) => item.quality === "strong").length;
+  const serviceable = advice.breaks.filter((item) => item.quality === "serviceable").length;
+  const weak = advice.breaks.length - strong - serviceable;
+  return [
+    strong ? `${strong} strong hook${strong === 1 ? "" : "s"}` : "",
+    serviceable ? `${serviceable} serviceable` : "",
+    weak ? `${weak} duration-driven` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function RedditSourcePanel({
   reel,
   busy,
@@ -81,10 +99,14 @@ export function RedditSourcePanel({
     isMultiPartSeries(reel) ? "series" : "episode"
   );
   const [seriesParts, setSeriesParts] = useState<SeriesParts>(() => defaultSeriesParts(reel));
+  const [restructureTo, setRestructureTo] = useState<SeriesParts>(() => defaultSeriesParts(reel));
+  const [structureAdvice, setStructureAdvice] = useState<SeriesStructureAdvice>();
+  const [structureAdviceLoading, setStructureAdviceLoading] = useState(false);
 
   useEffect(() => {
     setReplanScope(isMultiPartSeries(reel) ? "series" : "episode");
     setSeriesParts(defaultSeriesParts(reel));
+    setRestructureTo(defaultSeriesParts(reel));
   }, [reel._id, reel.id, reel.seriesId, reel.partCount]);
 
   useEffect(() => {
@@ -102,6 +124,28 @@ export function RedditSourcePanel({
       .then(setClips)
       .catch(() => setClips([]));
   }, []);
+
+  useEffect(() => {
+    if (!reelKey || !story?.body) {
+      setStructureAdvice(undefined);
+      return;
+    }
+    let cancelled = false;
+    setStructureAdviceLoading(true);
+    void getSeriesStructureAdvice(reelKey)
+      .then((advice) => {
+        if (!cancelled) setStructureAdvice(advice);
+      })
+      .catch(() => {
+        if (!cancelled) setStructureAdvice(undefined);
+      })
+      .finally(() => {
+        if (!cancelled) setStructureAdviceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reelKey, story?.body]);
 
   const cardDirty =
     title !== (story?.title ?? reel.title ?? "") ||
@@ -352,6 +396,123 @@ export function RedditSourcePanel({
         </div>
       ) : null}
 
+      {canReplanStory ? (
+        <div className="grid gap-2 rounded-lg border border-border bg-black/15 p-3">
+          <span className="text-sm font-semibold text-foreground">Series structure</span>
+          <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+            An AI editor assesses the assembled story&apos;s duration, balanced scene count, and available cliffhangers. Its measured LLM cost appears in the ledger; the result is cached until the story changes.
+            Re-split keeps the same words; each reel stays ~1–2 min.
+            {isMultiPartSeries(reel) ? " Applies across every episode." : " Splits this reel into a series."}
+          </p>
+          {structureAdviceLoading ? (
+            <p className="m-0 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Loader2 size={13} className="animate-spin" /> AI is assessing story structure…
+            </p>
+          ) : structureAdvice ? (
+            <div className="grid gap-2 rounded-md border border-primary/25 bg-primary/5 p-2.5 text-xs">
+              <p className="m-0 font-medium text-foreground">
+                AI recommendation: {structureAdvice.recommendedParts} {structureAdvice.recommendedParts === 1 ? "reel" : "parts"}
+                <span className="font-normal text-muted-foreground">
+                  {` · ~${Math.ceil(structureAdvice.estimatedDurationSeconds / 60)} min total · ${structureAdvice.wordCount} words`}
+                </span>
+              </p>
+              <p className="m-0 leading-relaxed text-muted-foreground">{structureAdvice.reason}</p>
+              <p className="m-0 text-[11px] text-muted-foreground">
+                Proposed seams: {breakSummary(structureAdvice)}
+              </p>
+              {structureAdvice.hasWeakBreaks ? (
+                <p className="m-0 leading-relaxed text-amber-300">
+                  At least one break is driven by the two-minute cap rather than a strong cliffhanger.
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || structureAdvice.recommendedParts === structureAdvice.currentParts}
+                  onClick={() =>
+                    requestConfirm({
+                      title: "Use AI-recommended structure?",
+                      body: `This will re-plan the story into ${structureAdvice.recommendedParts} ${structureAdvice.recommendedParts === 1 ? "reel" : "parts"}: ${structureAdvice.reason}`,
+                      details: [
+                        "The AI assessment cost is already recorded; applying this also uses LLM cut-selection credits.",
+                        "Every affected episode is re-planned; scene assets are cleared until you approve and produce again.",
+                      ],
+                      confirmLabel: "Use recommendation",
+                      costTone: "paid",
+                      onConfirm: () => run(() => chooseSeriesStructure(reelKey, "recommended")),
+                    })
+                  }
+                >
+                  <Wand2 size={14} />
+                  {structureAdvice.recommendedParts === structureAdvice.currentParts
+                    ? "Current structure matches"
+                    : "Use recommendation"}
+                </Button>
+                {structureAdvice.recommendedParts !== structureAdvice.currentParts ? (
+                  <span className="text-[11px] text-muted-foreground">Or choose a manual override below, then confirm it.</span>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => run(() => chooseSeriesStructure(reelKey, "manual"))}
+                >
+                  Keep current plan
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <div className="flex items-end gap-2">
+            <Label className="flex-1">
+              Parts
+              <Select
+                value={String(restructureTo)}
+                disabled={busy}
+                onChange={(event) => setRestructureTo(parsePartsValue(event.target.value))}
+              >
+                <option value="auto">Auto (by length)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </Select>
+            </Label>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                requestConfirm({
+                  title: "Restructure series?",
+                  body: "Re-splits the current story across the chosen number of parts, keeping your words.",
+                  details: [
+                    "LLM cut-selection credits will be charged.",
+                    "Every affected episode is re-planned; scene assets are cleared until you approve and produce again.",
+                  ],
+                  confirmLabel: "Spend credits & restructure",
+                  costTone: "paid",
+                  onConfirm: () =>
+                    run(() => restructureSeriesParts(reelKey, restructureTo === "off" ? 1 : restructureTo)),
+                })
+              }
+            >
+              <Wand2 size={15} /> Re-split
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <PanelTitle className="text-foreground">Title card</PanelTitle>
       <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
         Shown over gameplay while the title is spoken. Saving metadata is free —
@@ -496,4 +657,3 @@ export function RedditSourcePanel({
     </div>
   );
 }
-

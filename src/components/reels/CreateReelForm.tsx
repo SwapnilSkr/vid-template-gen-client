@@ -20,10 +20,18 @@ const StoryPickerStep = lazy(() =>
 );
 
 type CreateStep = "settings" | "story";
-type SourcePostMode = "browse" | "custom" | "auto";
+type SourcePostMode = "browse" | "link" | "custom" | "auto";
 
 function defaultSourcePostMode(source?: CreateReelInput["source"]): SourcePostMode {
   return source === "llm" ? "auto" : "browse";
+}
+
+/** Parse a newline/comma-separated followup-link textarea into a URL list. */
+function parseManualUpdateUrls(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** The Lurker house look — the out-of-box art style for horror reels. Mirrors
@@ -128,6 +136,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const [step, setStep] = useState<CreateStep>("settings");
   const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
   const [voiceMode, setVoiceMode] = useState<"default" | "custom">("default");
+  const [manualUpdatesText, setManualUpdatesText] = useState("");
   const [resolvedDefaults, setResolvedDefaults] = useState<ReelDefaults | undefined>();
   const [horrorReferences, setHorrorReferences] = useState<HorrorReference[]>([]);
   const isGameplayNiche = form.niche === "reddit";
@@ -235,6 +244,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             : sourcePostMode === "custom"
               ? form.topic || undefined
               : "auto";
+        const manualUpdateUrls = parseManualUpdateUrls(manualUpdatesText);
+        const supportsUpdates = isGameplayNiche && form.source !== "llm";
         const result = await create({
           ...form,
           ...storySelectionToCreateFields(storySelection),
@@ -246,6 +257,10 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           horrorAudioKey: form.horrorAudioKey || undefined,
           outroChannelId: form.outroChannelId || undefined,
           thumbnailMode: form.thumbnailMode ?? "frame",
+          selectedSeedUrl:
+            sourcePostMode === "link" ? form.selectedSeedUrl?.trim() || undefined : storySelectionToCreateFields(storySelection).selectedSeedUrl,
+          fetchUpdates: supportsUpdates ? (form.fetchUpdates ?? form.source === "verbatim") : undefined,
+          manualUpdateUrls: supportsUpdates && manualUpdateUrls.length ? manualUpdateUrls : undefined,
         });
         if (result.ok) onCreated?.({ id: result.id, pipelineMode: result.pipelineMode });
       }}
@@ -551,7 +566,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             type="button"
             onClick={() => {
               setSourcePostMode("browse");
-              setForm((current) => ({ ...current, topic: "auto" }));
+              setForm((current) => ({ ...current, topic: "auto", selectedSeedUrl: undefined }));
             }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-medium",
@@ -562,11 +577,28 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           >
             Browse
           </button>
+          {form.source !== "llm" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSourcePostMode("link");
+                setForm((current) => ({ ...current, topic: "auto" }));
+              }}
+              className={cn(
+                "rounded-md border px-3 py-1.5 text-xs font-medium",
+                sourcePostMode === "link"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-foreground hover:bg-accent"
+              )}
+            >
+              Paste link
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
               setSourcePostMode("custom");
-              setForm((current) => ({ ...current, topic: "" }));
+              setForm((current) => ({ ...current, topic: "", selectedSeedUrl: undefined }));
             }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-medium",
@@ -581,7 +613,7 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             type="button"
             onClick={() => {
               setSourcePostMode("auto");
-              setForm((current) => ({ ...current, topic: "auto" }));
+              setForm((current) => ({ ...current, topic: "auto", selectedSeedUrl: undefined }));
             }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-medium",
@@ -606,6 +638,21 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
         ) : null}
         {selectedOutroInstagram ? <div className="flex items-center gap-3 rounded-md border border-pink-500/20 bg-pink-500/[0.04] p-2.5"><Instagram className="size-5 text-pink-500" /><div className="text-sm"><div className="font-semibold">@{selectedOutroInstagram.username ?? selectedOutroInstagram.label}</div><div className="text-xs text-muted-foreground">Instagram handle and profile image will brand the outro.</div></div></div> : null}
           </p>
+        ) : sourcePostMode === "link" ? (
+          <div className="grid gap-1.5">
+            <Input
+              value={form.selectedSeedUrl ?? ""}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, selectedSeedUrl: event.target.value }))
+              }
+              placeholder="https://www.reddit.com/r/AmItheAsshole/comments/… (or a /s/ share link)"
+              autoFocus
+            />
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+              Source the story from this exact post. Share links (reddit.com/…/s/…) are resolved automatically.
+              {form.source === "verbatim" ? " Its updates are folded in per the Updates settings below." : ""}
+            </p>
+          </div>
         ) : sourcePostMode === "auto" ? (
           <p className="m-0 rounded-md border border-border bg-black/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {isGameplayNiche
@@ -637,6 +684,32 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           </div>
         )}
       </Label>
+
+      {isGameplayNiche && form.source !== "llm" ? (
+        <div className="grid gap-2.5 rounded-lg border border-border bg-black/15 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-foreground">Story updates &amp; follow-ups</span>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground">
+              <input
+                type="checkbox"
+                checked={form.fetchUpdates ?? form.source === "verbatim"}
+                onChange={(event) => setForm((current) => ({ ...current, fetchUpdates: event.target.checked }))}
+              />
+              Auto-fetch updates
+            </label>
+          </div>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            When on, we find the OP&apos;s later updates (their profile and links in the post) and
+            stage them for approval in verbatim plan review. Hybrid uses approved signals in its one-time rewrite; manual links are included directly. Off by default for hybrid, on for verbatim.
+          </p>
+          <Textarea
+            value={manualUpdatesText}
+            onChange={(event) => setManualUpdatesText(event.target.value)}
+            placeholder="Have the follow-up link(s)? Paste one Reddit URL per line to source them directly — no auto-fetch needed."
+            rows={2}
+          />
+        </div>
+      ) : null}
 
       {isGameplayNiche && (
         <Label>

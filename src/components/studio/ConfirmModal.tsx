@@ -1,5 +1,6 @@
-import { Loader2, X } from "lucide-react";
-import type { ConfirmAction } from "@/components/studio/types";
+import { AlertCircle, Loader2, X } from "lucide-react";
+import { useState } from "react";
+import type { ConfirmAction, StudioActionResult } from "@/components/studio/types";
 import { CostChip } from "@/components/reels/RenderCostHint";
 import { Button } from "@/components/ui/button";
 
@@ -12,13 +13,19 @@ export function ConfirmModal({
   busy: boolean;
   onClose: () => void;
 }) {
+  const [confirmError, setConfirmError] = useState<string>();
   if (!action) return null;
   const dismiss = () => {
     action.onCancel?.();
     onClose();
   };
   const confirm = async () => {
-    await action.onConfirm();
+    setConfirmError(undefined);
+    const result = await action.onConfirm();
+    if (isFailedStudioAction(result)) {
+      setConfirmError(result.error ?? "This action could not be completed.");
+      return;
+    }
     onClose();
   };
   const costLabel =
@@ -63,6 +70,12 @@ export function ConfirmModal({
             ))}
           </div>
         ) : null}
+        {confirmError ? (
+          <div role="alert" className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs leading-relaxed text-destructive">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span>{confirmError}</span>
+          </div>
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button
             type="button"
@@ -89,3 +102,8 @@ export function ConfirmModal({
   );
 }
 
+function isFailedStudioAction(
+  value: void | StudioActionResult,
+): value is StudioActionResult {
+  return Boolean(value && !value.ok);
+}

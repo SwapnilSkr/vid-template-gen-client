@@ -16,6 +16,7 @@ import {
   deleteSeriesPart,
   ffmpegBlockFromError,
   getReel,
+  getThumbnailSource,
   listReelSeries,
   mergePartIntoPrevious,
   moveSeriesBoundary,
@@ -69,6 +70,7 @@ export function StudioScreen() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("source");
   /** Temporary program-monitor override for a ready voice variant (before promote). */
   const [variantPreviewUrl, setVariantPreviewUrl] = useState<string | undefined>();
+  const [openingCoverPreviewUrl, setOpeningCoverPreviewUrl] = useState<string | undefined>();
   // A slow poll response must never replace a more recent local edit response.
   const refreshVersionRef = useRef(0);
 
@@ -102,6 +104,44 @@ export function StudioScreen() {
   useEffect(() => {
     setVariantPreviewUrl(undefined);
   }, [id]);
+
+  // Before a Reddit MP4 exists, show the same first-frame composition that
+  // will be rendered: chosen gameplay, Reddit card, and transparent cover.
+  useEffect(() => {
+    const reelId = reel?._id ?? reel?.id;
+    const needsFallback = Boolean(
+      reelId &&
+      reel?.niche === "reddit" &&
+      reel.strategy === "gameplay_overlay" &&
+      reel.gameplayKey &&
+      reel.shortsCover?.imageUrl &&
+      !reel.outputUrl &&
+      !reel.editDraft?.outputUrl &&
+      !variantPreviewUrl
+    );
+    if (!needsFallback || !reelId) {
+      setOpeningCoverPreviewUrl(undefined);
+      return;
+    }
+    let cancelled = false;
+    void getThumbnailSource(reelId, {
+      sourceType: "frame",
+      atSeconds: 0,
+      aspectRatio: "9:16",
+      cleanGameplay: true,
+      includeTitleCard: true,
+      includeShortsCover: true,
+    })
+      .then((result) => {
+        if (!cancelled) setOpeningCoverPreviewUrl(result.imageDataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setOpeningCoverPreviewUrl(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reel?._id, reel?.id, reel?.niche, reel?.strategy, reel?.gameplayKey, reel?.shortsCover?.imageUrl, reel?.outputUrl, reel?.editDraft?.outputUrl, variantPreviewUrl]);
 
   useEffect(() => {
     if (!reel?.seriesId) {
@@ -181,14 +221,17 @@ export function StudioScreen() {
       if (nextId && nextId !== id) {
         void navigate({ to: "/studio/$id", params: { id: nextId }, replace: true });
       }
+      return { ok: true };
     } catch (err) {
       const block = ffmpegBlockFromError(err);
       if (block) setFfmpegBlock(block);
-      setError(err instanceof Error ? err.message : "Action failed");
+      const message = err instanceof Error ? err.message : "Action failed";
+      setError(message);
       // Distribution errors may be returned after a worker already changed a
       // target's state. Refresh so retry/republish controls never reason from
       // an old reel snapshot.
       void refresh();
+      return { ok: false, error: message };
     } finally {
       setBusy(false);
     }
@@ -354,6 +397,14 @@ export function StudioScreen() {
       )}`
     : undefined;
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
+  const seriesStructureLedger = seriesReels[0]?.redditStory ?? reel.redditStory;
+  const structureDecisionRequired = Boolean(
+    isGameplay &&
+      reel.redditStory?.body &&
+      (!seriesStructureLedger?.structureAdvice?.fingerprint ||
+        seriesStructureLedger.structureAdvice.fingerprint !==
+          seriesStructureLedger.structureDecision?.fingerprint),
+  );
 
   return (
     <section className="studio-workspace w-full min-w-0 overflow-x-clip text-foreground">
@@ -435,7 +486,7 @@ export function StudioScreen() {
 
       <div className="px-3 pb-6 pt-3 sm:px-4 lg:px-5">
       {error ? (
-        <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div role="alert" className="sticky top-14 z-30 mb-3 rounded-lg border border-destructive/40 bg-destructive/15 px-3 py-2 text-xs text-destructive shadow-pop" aria-live="assertive">
           {error}
         </div>
       ) : null}
@@ -511,7 +562,14 @@ export function StudioScreen() {
         busy={studioLocked}
         run={run}
         requestConfirm={setConfirmAction}
-        onApprove={() =>
+        onApprove={() => {
+          if (structureDecisionRequired) {
+            changeInspectorTab("source");
+            setError(
+              "Review the AI Series structure first: choose Keep current plan or Use recommendation in Story source, then generate.",
+            );
+            return;
+          }
           setConfirmAction({
             title:
               reel.partCount && reel.partCount > 1
@@ -536,8 +594,8 @@ export function StudioScreen() {
             ].filter(Boolean),
             confirmLabel: "Generate",
             onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
-          })
-        }
+          });
+        }}
       />
 
       {pendingRegen ? (
@@ -609,6 +667,7 @@ export function StudioScreen() {
           <ProgramMonitor
             reel={reel}
             previewUrl={previewUrl}
+            fallbackPreviewUrl={openingCoverPreviewUrl}
             variantPreview={Boolean(variantPreviewUrl)}
             onClearVariantPreview={() => setVariantPreviewUrl(undefined)}
           />

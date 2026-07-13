@@ -256,6 +256,7 @@ export interface Reel {
     sceneIndex?: number;
     atSeconds?: number;
     placement: "opening" | "source_scene";
+    replacesTitleCard?: boolean;
     holdSeconds?: number;
     editorState?: Record<string, unknown>;
     sourceFingerprint?: string;
@@ -280,6 +281,30 @@ export interface StoryBible {
   finalTwist: string;
 }
 
+export type UpdateCandidateKind = "embedded_link" | "author_post" | "manual";
+export type UpdateDecision = "include" | "candidate" | "rejected";
+
+export interface UpdateCandidate {
+  key: string;
+  kind: UpdateCandidateKind;
+  title: string;
+  body: string;
+  url: string;
+  createdUtc: number;
+  matchedSignals: string[];
+  signalScore: number;
+  aiConfidence?: number;
+  aiReason?: string;
+  decision: UpdateDecision;
+}
+
+export interface UpdateDiscovery {
+  scannedAt: string;
+  method: "ai" | "signals" | "hybrid";
+  candidates: UpdateCandidate[];
+  includedKeys: string[];
+}
+
 export interface RedditStoryPayload {
   title: string;
   body: string;
@@ -295,6 +320,10 @@ export interface RedditStoryPayload {
   seedUrl?: string;
   partNumber?: number;
   partCount?: number;
+  updateDiscovery?: UpdateDiscovery;
+  sourceSegment?: string;
+  structureAdvice?: { fingerprint: string };
+  structureDecision?: { fingerprint: string; choice: "recommended" | "manual" };
 }
 
 export interface HorrorReferencePayload {
@@ -344,8 +373,12 @@ export interface CreateReelInput {
   ttsFormat?: "mp3" | "pcm";
   /** Bank story picked in browse step */
   selectedStoryId?: string;
-  /** Live Reddit post picked in browse step */
+  /** Live Reddit post picked in browse step (or pasted link) */
   selectedSeedUrl?: string;
+  /** Auto-discover the OP's followups/updates (default on for verbatim) */
+  fetchUpdates?: boolean;
+  /** User-pasted canonical followup URLs, sourced directly */
+  manualUpdateUrls?: string[];
 }
 
 export interface GameplayClip {
@@ -533,9 +566,11 @@ function throwApiFailure(json: ApiResponse<unknown>, status: number): never {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json", ...init?.headers },
       ...init,
+      headers,
     });
     const json = (await res.json()) as ApiResponse<T>;
     if (!res.ok || !json.success) throwApiFailure(json, res.status);
@@ -841,6 +876,8 @@ export interface ThumbnailSourceRequest {
   sceneIndex?: number;
   aspectRatio?: ThumbnailAspectRatio;
   cleanGameplay?: boolean;
+  includeTitleCard?: boolean;
+  includeShortsCover?: boolean;
 }
 
 export async function getThumbnailSource(
@@ -884,6 +921,7 @@ export async function saveShortsCover(id: string, payload: {
   sceneIndex?: number;
   atSeconds?: number;
   placement?: "opening" | "source_scene";
+  replacesTitleCard?: boolean;
   holdSeconds?: number;
   editorState?: Record<string, unknown>;
   sourceFingerprint?: string;
@@ -1093,6 +1131,83 @@ export async function replanReelSeries(
   }
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/replan-series`, { method: "POST", body: JSON.stringify(patch) });
+}
+
+/** Re-scan the OP's followups/updates; optionally add a manual followup link. */
+export async function rescanReelUpdates(id: string, manualUrl?: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/updates/rescan`, {
+    method: "POST",
+    body: JSON.stringify(manualUrl ? { manualUrl } : {}),
+  });
+}
+
+/** Fold the chosen updates into the story and recompute parts. */
+export async function applyReelUpdates(
+  id: string,
+  patch: { includedKeys: string[]; mode: "append" | "recut" }
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/updates`, { method: "PUT", body: JSON.stringify(patch) });
+}
+
+/** Manually restructure the Reddit series into a chosen number of parts. */
+export async function restructureSeriesParts(id: string, parts: number | "auto"): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/restructure-parts`, {
+    method: "POST",
+    body: JSON.stringify({ parts }),
+  });
+}
+
+export interface SeriesStructureAdvice {
+  wordCount: number;
+  sentenceCount: number;
+  estimatedDurationSeconds: number;
+  minimumParts: number;
+  recommendedParts: number;
+  currentParts: number;
+  reason: string;
+  hasWeakBreaks: boolean;
+  breaks: Array<{
+    partNumber: number;
+    sentenceNumber: number;
+    ending: string;
+    score: number;
+    quality: "strong" | "serviceable" | "weak";
+    rationale?: string;
+  }>;
+}
+
+/** Paid LLM editorial recommendation, cached until the assembled story changes. */
+export async function getSeriesStructureAdvice(id: string): Promise<SeriesStructureAdvice> {
+  return request<SeriesStructureAdvice>(`/reels/${id}/structure-advice`);
+}
+
+/** Explicitly accept the AI plan or retain the current manual structure. */
+export async function chooseSeriesStructure(
+  id: string,
+  choice: "recommended" | "manual"
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/structure-decision`, {
+    method: "POST",
+    body: JSON.stringify({ choice }),
+  });
+}
+
+export interface ResolvedStory {
+  title: string;
+  author?: string;
+  subreddit?: string;
+  url: string;
+  wordCount: number;
+  updateCandidates: number;
+  updateDiscovery?: UpdateDiscovery;
+}
+
+/** Resolve a pasted Reddit permalink / share link into a source-post preview. */
+export async function resolveStory(url: string, fetchUpdates?: boolean): Promise<ResolvedStory> {
+  return request<ResolvedStory>(`/stories/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ url, fetchUpdates }),
+  });
 }
 
 /** Move one spoken line across the seam between this part and the next.

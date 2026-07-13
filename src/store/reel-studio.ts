@@ -238,14 +238,21 @@ export const useReelStudio = create<ReelStudioState>((set, get) => ({
   async pollSelected() {
     const id = get().selectedId;
     if (!id) return;
-    const reel = await getReel(id);
-    set((state) => ({
-      reels: state.reels.map((item) => (reelId(item) === id ? { ...item, ...reel } : item)),
-      draftReview: reel.review ?? state.draftReview,
-    }));
-    if (reel.status === "completed" && !get().draftReview) {
-      const review = await getReview(id);
-      set({ draftReview: review });
+    try {
+      const reel = await getReel(id);
+      set((state) => ({
+        reels: state.reels.map((item) => (reelId(item) === id ? { ...item, ...reel } : item)),
+        draftReview: reel.review ?? state.draftReview,
+        error: undefined,
+      }));
+      if (reel.status === "completed" && !get().draftReview) {
+        const review = await getReview(id);
+        set({ draftReview: review });
+      }
+    } catch (error) {
+      // Polling is intentionally non-throwing: an intermittent status request
+      // must not become an unhandled rejection or stop the next poll cycle.
+      set({ error: error instanceof Error ? error.message : "Failed to refresh reel status" });
     }
   },
 

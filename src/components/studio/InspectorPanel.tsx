@@ -43,6 +43,11 @@ const RedditSourcePanel = lazy(() =>
     default: m.RedditSourcePanel,
   })),
 );
+const UpdatesPanel = lazy(() =>
+  import("@/components/studio/panels/UpdatesPanel").then((m) => ({
+    default: m.UpdatesPanel,
+  })),
+);
 const RegeneratePanel = lazy(() =>
   import("@/components/studio/panels/RegeneratePanel").then((m) => ({
     default: m.RegeneratePanel,
@@ -124,12 +129,20 @@ export function InspectorPanel({
         <Suspense fallback={<InspectorTabFallback />}>
           {tab === "source" ? (
             isGameplay ? (
-              <RedditSourcePanel
-                reel={reel}
-                busy={busy}
-                run={run}
-                requestConfirm={requestConfirm}
-              />
+              <div className="grid gap-4">
+                <RedditSourcePanel
+                  reel={reel}
+                  busy={busy}
+                  run={run}
+                  requestConfirm={requestConfirm}
+                />
+                <UpdatesPanel
+                  reel={reel}
+                  busy={busy}
+                  run={run}
+                  requestConfirm={requestConfirm}
+                />
+              </div>
             ) : (
               <StoryPanel
                 reel={reel}
