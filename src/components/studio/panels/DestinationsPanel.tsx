@@ -97,6 +97,7 @@ export function DestinationsPanel({
   const [promptScope, setPromptScope] = useState<PromptScope>("inheriting");
   const [primaryTarget, setPrimaryTarget] = useState("");
   const [primaryScope, setPrimaryScope] = useState<PrimaryScope>("reel");
+  const [removalNotice, setRemovalNotice] = useState<string>();
   const primaryDraftDirty = useRef(false);
   const questionDirty = useRef(false);
 
@@ -229,6 +230,37 @@ export function DestinationsPanel({
       });
       return next;
     });
+
+  const requestDestinationRemoval = (destination: ReelDestination) => {
+    const label = destination.channelLabel || destination.channelId;
+    const assetCount = Number(Boolean(destination.outputUrl)) + Number(Boolean(destination.outroAudioUrl));
+    requestConfirm({
+      title: `Remove ${label} from this reel?`,
+      body: "This removes only this channel from this reel. The connected social account itself is not deleted.",
+      details: [
+        assetCount
+          ? `${assetCount} recorded channel-specific ${assetCount === 1 ? "asset" : "assets"} will be deleted from S3.`
+          : "This channel has no recorded final video or outro audio to delete.",
+        "The primary account and every other channel remain unchanged.",
+        "The result will report the S3 cleanup outcome here and in Operations.",
+      ],
+      confirmLabel: "Remove channel & reclaim media",
+      variant: "destructive",
+      costTone: "free",
+      onConfirm: () => run(async () => {
+        const next = await removeReelDestination(reelKey, destination.id);
+        const result = next.lastDestinationRemoval;
+        if (result?.cleanup.failed) {
+          setRemovalNotice(`Removed ${label}, but ${result.cleanup.failed} S3 delete request${result.cleanup.failed === 1 ? "" : "s"} failed. See Operations for the affected cleanup warning.`);
+        } else if (result?.cleanup.deleted) {
+          setRemovalNotice(`Removed ${label}. S3 cleanup completed for ${result.cleanup.deleted} recorded ${result.cleanup.deleted === 1 ? "asset" : "assets"}.`);
+        } else {
+          setRemovalNotice(`Removed ${label}. No recorded S3 media needed deletion.`);
+        }
+        return next;
+      }),
+    });
+  };
 
   const requestPrimaryChange = (previousPrimary: "keep" | "remove") => {
     if (!selectedPrimary || !primaryChanged) return;
@@ -413,6 +445,11 @@ export function DestinationsPanel({
 
       <section className="grid gap-2.5">
         <span className="text-xs font-semibold text-foreground">Additional channel outputs</span>
+        {removalNotice ? (
+          <p role="status" className="m-0 rounded border border-primary/25 bg-primary/[0.04] px-2.5 py-2 text-[11px] text-muted-foreground">
+            {removalNotice}
+          </p>
+        ) : null}
         {extras.map((destination) => {
           const open = expanded === destination.id;
           const draft = draftFor(destination);
@@ -429,7 +466,7 @@ export function DestinationsPanel({
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className={cn("text-[11px]", statusTone[destination.status])}>{isPlanReview && destination.status === "pending" ? "planned" : destination.status}</span>
-                  <button type="button" disabled={busy} title="Remove this channel from the reel and delete its channel-specific media" aria-label={`Remove ${destination.channelLabel ?? destination.channelId}`} onClick={() => void run(() => removeReelDestination(reelKey, destination.id))} className="grid h-6 w-6 place-items-center rounded text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40">
+                  <button type="button" disabled={busy} title="Remove this channel from the reel and reclaim its channel-specific media" aria-label={`Remove ${destination.channelLabel ?? destination.channelId}`} onClick={() => requestDestinationRemoval(destination)} className="grid h-6 w-6 place-items-center rounded text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40">
                     <Trash2 size={13} />
                   </button>
                 </div>

@@ -161,6 +161,13 @@ export interface ReelDestination {
   createdAt?: string;
 }
 
+export interface DestinationRemovalSummary {
+  requested: number;
+  deleted: number;
+  skipped: number;
+  failed: number;
+}
+
 export interface Reel {
   _id?: string;
   id?: string;
@@ -248,6 +255,11 @@ export interface Reel {
   outro?: OutroSettings;
   /** Multi-channel destinations — one rendered video per destination. */
   destinations?: ReelDestination[];
+  /** Ephemeral response metadata from a destination-delete mutation. */
+  lastDestinationRemoval?: {
+    destination: { id: string; platform: "youtube" | "instagram"; channelId: string; channelLabel?: string };
+    cleanup: DestinationRemovalSummary;
+  };
   /** Skip multi-part "Stay tuned for part N" (Reddit mid-series only). */
   skipPartOutro?: boolean;
   /** Skip branded channel end card + subscribe TTS. */
@@ -1326,7 +1338,14 @@ export async function setReelPrimaryDestination(
 }
 
 export async function removeReelDestination(id: string, destId: string): Promise<Reel> {
-  return request<Reel>(`/reels/${id}/destinations/${destId}`, { method: "DELETE" });
+  const result = await request<{
+    reel: Reel;
+    destination: { id: string; platform: "youtube" | "instagram"; channelId: string; channelLabel?: string };
+    cleanup: DestinationRemovalSummary;
+  }>(`/reels/${id}/destinations/${destId}`, { method: "DELETE" });
+  // The Studio action runner still receives a normal Reel, while the panel can
+  // display this one-shot verified cleanup outcome without another API call.
+  return Object.assign(result.reel, { lastDestinationRemoval: result });
 }
 
 /** Update one destination's outro copy; re-renders that outro when produced. */
