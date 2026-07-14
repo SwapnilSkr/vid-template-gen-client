@@ -18,11 +18,6 @@ const EffectsPanel = lazy(() =>
     default: m.EffectsPanel,
   })),
 );
-const OutroPanel = lazy(() =>
-  import("@/components/studio/panels/OutroPanel").then((m) => ({
-    default: m.OutroPanel,
-  })),
-);
 const DestinationsPanel = lazy(() =>
   import("@/components/studio/panels/DestinationsPanel").then((m) => ({
     default: m.DestinationsPanel,
@@ -172,15 +167,12 @@ export function InspectorPanel({
             />
           ) : null}
           {tab === "outro" ? (
-            <div className="grid gap-4">
-              {isGameplay ? <DestinationsPanel reel={reel} busy={busy} run={run} /> : null}
-              <OutroPanel
-                reel={reel}
-                busy={busy}
-                run={run}
-                requestConfirm={requestConfirm}
-              />
-            </div>
+            <DestinationsPanel
+              reel={reel}
+              busy={busy}
+              run={run}
+              requestConfirm={requestConfirm}
+            />
           ) : null}
           {tab === "thumbnail" ? <ThumbnailPanel reel={reel} /> : null}
           {tab === "captions" ? (

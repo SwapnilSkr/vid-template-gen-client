@@ -15,6 +15,22 @@ export function compactOutroSettings(outro: OutroSettings): OutroSettings {
   ) as OutroSettings;
 }
 
+export const DEFAULT_OUTRO_COMMENT_PROMPT =
+  "What would you have done in this situation?";
+
+export function defaultOutroCta(platform: "youtube" | "instagram"): "SUBSCRIBE" | "FOLLOW" {
+  return platform === "instagram" ? "FOLLOW" : "SUBSCRIBE";
+}
+
+export function defaultOutroSpokenLine(
+  platform: "youtube" | "instagram",
+  channelName = "Channel Name",
+): string {
+  return platform === "instagram"
+    ? `Follow ${channelName} for more stories.`
+    : `Subscribe to ${channelName} for more stories.`;
+}
+
 export function channelDisplayName(channel: YouTubeChannelOption): string {
   return channel.googleChannelTitle || channel.label;
 }
@@ -55,4 +71,3 @@ export function captionStyleFromReel(captionStyle: Reel["captionStyle"]) {
     outlineColor: normalizeHexColor(next.outlineColor, CAPTION_DEFAULTS.outlineColor),
   };
 }
-

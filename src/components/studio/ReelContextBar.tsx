@@ -66,7 +66,7 @@ export function ReelContextBar({
           </span>
         </div>
         <span className="text-[11px] font-medium text-muted-foreground/80">
-          Edit and generate each part independently.
+          Story, visuals, and renders are per part; a manual Voice-panel choice locks every part.
         </span>
       </div>
       <div className="grid min-w-0 gap-1.5">
@@ -169,4 +169,3 @@ export function ReelContextBar({
     </div>
   );
 }
-

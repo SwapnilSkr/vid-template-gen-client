@@ -85,6 +85,7 @@ export interface ReelReview {
   title?: string;
   description?: string;
   tags: string[];
+  thumbnailText?: string;
   thumbnailUrl?: string;
   thumbnailPrompt?: string;
   thumbnailEditorState?: Record<string, unknown>;
@@ -135,6 +136,7 @@ export interface ThumbnailDraft {
 export interface OutroSettings {
   channelName?: string;
   channelHandle?: string;
+  commentPrompt?: string;
   spokenLine?: string;
   title?: string;
   subtitle?: string;
@@ -151,6 +153,7 @@ export interface ReelDestination {
   outro?: OutroSettings;
   skipBrandedOutro?: boolean;
   outroAudioUrl?: string;
+  outroAudioSignature?: string;
   outputUrl?: string;
   durationAdded?: number;
   status: "pending" | "rendering" | "ready" | "failed";
@@ -184,7 +187,10 @@ export interface Reel {
   titleAudioUrl?: string;
   partOutroAudioUrl?: string;
   outroAudioUrl?: string;
+  outroAudioSignature?: string;
   thumbnailMode?: "frame" | "ai";
+  /** Short hook shared by the automatic opening cover and thumbnail. */
+  thumbnailHook?: string;
   costUsd?: number;
   costBreakdown?: ReelCostBreakdown;
   error?: string;
@@ -220,6 +226,15 @@ export interface Reel {
     source?: "ai" | "manual" | "fallback";
     generatedAt?: string;
     model?: string;
+    /** Creator-only copy for a manually added native Instagram poll. */
+    poll?: {
+      question?: string;
+      optionA?: string;
+      optionB?: string;
+      source?: "ai" | "manual" | "fallback";
+      generatedAt?: string;
+      model?: string;
+    };
   };
   seriesId?: string;
   partNumber?: number;
@@ -680,6 +695,29 @@ export async function regenerateInstagramCaption(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/instagram-caption`, { method: "POST" });
 }
 
+/** Generates a creator-only draft for a native poll sticker. It is never sent
+ * to Meta's Reel publishing endpoint. */
+export async function regenerateInstagramPollSuggestion(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/instagram-poll`, { method: "POST" });
+}
+
+/** Generates compact thumbnail overlay copy without rendering an image. */
+export async function regenerateThumbnailText(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/review/thumbnail-text`, { method: "POST" });
+}
+
+/** Generates one short, story-and-part-specific question for the branded outro.
+ * It only invalidates affected outro outputs; body scenes and narration stay cached. */
+export async function regenerateOutroCommentPrompt(
+  id: string,
+  scope: "primary" | "inheriting" | "all" = "inheriting",
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/outro/comment-prompt`, {
+    method: "POST",
+    body: JSON.stringify({ scope }),
+  });
+}
+
 export async function publishReel(
   id: string,
   channelId?: string
@@ -1014,9 +1052,14 @@ export interface ReelSettingsInput {
   skipPartOutro?: boolean;
   skipBrandedOutro?: boolean;
   voice?: { model?: string; voice?: string; format?: "mp3" | "pcm" };
+  voiceScope?: "reel" | "series";
   audioPost?: AudioPost;
   editEffects?: EditEffects;
-  instagram?: { caption?: string; shareToFeed?: boolean };
+  instagram?: {
+    caption?: string;
+    shareToFeed?: boolean;
+    poll?: { question?: string; optionA?: string; optionB?: string };
+  };
 }
 
 export async function updateReelSettings(id: string, patch: ReelSettingsInput): Promise<Reel> {
@@ -1260,6 +1303,23 @@ export async function addReelDestination(
   input: { platform: "youtube" | "instagram"; channelId: string; outro?: OutroSettings },
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/destinations`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Select a connected account as primary. Keeping the prior primary demotes it
+ * to an extra destination; removing it deletes only this reel/story's media. */
+export async function setReelPrimaryDestination(
+  id: string,
+  input: {
+    platform: "youtube" | "instagram";
+    channelId: string;
+    previousPrimary: "keep" | "remove";
+    scope: "reel" | "series";
+  },
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/destinations/primary`, {
     method: "POST",
     body: JSON.stringify(input),
   });
