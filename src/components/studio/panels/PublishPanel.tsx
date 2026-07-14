@@ -6,7 +6,9 @@ import {
   listInstagramChannels,
   listYouTubeChannels,
   regenerateInstagramCaption,
+  regenerateInstagramPollSuggestion,
   regenerateReviewCopy,
+  regenerateThumbnailText,
   updateReview,
   updateReelSettings,
   type Reel,
@@ -35,6 +37,12 @@ import {
 
 const INSTAGRAM_CAPTION_MAX_HASHTAGS = 5;
 
+interface InstagramPollDraft {
+  question: string;
+  optionA: string;
+  optionB: string;
+}
+
 /** An explicit saved empty string remains intentionally empty. Legacy reels
  * use the paid AI generation action instead of silently copying YouTube text. */
 function initialInstagramCaption(reel: Reel): string {
@@ -44,12 +52,22 @@ function initialInstagramCaption(reel: Reel): string {
   return "";
 }
 
+function initialInstagramPoll(reel: Reel): InstagramPollDraft {
+  return {
+    question: reel.instagramSettings?.poll?.question ?? "",
+    optionA: reel.instagramSettings?.poll?.optionA ?? "",
+    optionB: reel.instagramSettings?.poll?.optionB ?? "",
+  };
+}
+
 interface PublishDraftSnapshot {
   reelKey: string;
   title: string;
   description: string;
   tagsText: string;
+  thumbnailText: string;
   instagramCaption: string;
+  instagramPoll: InstagramPollDraft;
   shareToFeed: boolean;
 }
 
@@ -61,7 +79,9 @@ function persistedPublishDraft(reel: Reel, reelKey: string): PublishDraftSnapsho
     title: reel.review?.title ?? reel.title ?? "",
     description: reel.review?.description ?? "",
     tagsText: (reel.review?.tags ?? []).join(", "),
+    thumbnailText: reel.review?.thumbnailText ?? reel.thumbnailHook ?? "",
     instagramCaption: initialInstagramCaption(reel),
+    instagramPoll: initialInstagramPoll(reel),
     shareToFeed: reel.instagramSettings?.shareToFeed ?? true,
   };
 }
@@ -85,7 +105,9 @@ export function PublishPanel({
   const [title, setTitle] = useState(() => reel.review?.title ?? reel.title ?? "");
   const [description, setDescription] = useState(() => reel.review?.description ?? "");
   const [tagsText, setTagsText] = useState((reel.review?.tags ?? []).join(", "));
+  const [thumbnailText, setThumbnailText] = useState(() => reel.review?.thumbnailText ?? reel.thumbnailHook ?? "");
   const [instagramCaption, setInstagramCaption] = useState(() => initialInstagramCaption(reel));
+  const [instagramPoll, setInstagramPoll] = useState<InstagramPollDraft>(() => initialInstagramPoll(reel));
   const [instagramCaptionLimitNotice, setInstagramCaptionLimitNotice] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(() => reel.instagramSettings?.shareToFeed ?? true);
   const [hashtagInput, setHashtagInput] = useState("");
@@ -97,7 +119,9 @@ export function PublishPanel({
   const persistedDraftRef = useRef<PublishDraftSnapshot>(persistedPublishDraft(reel, reelKey));
   const youtubeCopyDirtyRef = useRef(false);
   const youtubeTagsDirtyRef = useRef(false);
+  const thumbnailTextDirtyRef = useRef(false);
   const instagramCaptionDirtyRef = useRef(false);
+  const instagramPollDirtyRef = useRef(false);
   const instagramShareDirtyRef = useRef(false);
 
   // Studio status polling and paid generation both replace the reel object.
@@ -110,12 +134,16 @@ export function PublishPanel({
       setTitle(next.title);
       setDescription(next.description);
       setTagsText(next.tagsText);
+      setThumbnailText(next.thumbnailText);
       setInstagramCaption(next.instagramCaption);
+      setInstagramPoll(next.instagramPoll);
       setShareToFeed(next.shareToFeed);
       setInstagramCaptionLimitNotice(false);
       youtubeCopyDirtyRef.current = false;
       youtubeTagsDirtyRef.current = false;
+      thumbnailTextDirtyRef.current = false;
       instagramCaptionDirtyRef.current = false;
+      instagramPollDirtyRef.current = false;
       instagramShareDirtyRef.current = false;
       setYoutubeSaveState(undefined);
       setInstagramSaveState(undefined);
@@ -127,9 +155,19 @@ export function PublishPanel({
       if (!youtubeTagsDirtyRef.current && next.tagsText !== previous.tagsText) {
         setTagsText(next.tagsText);
       }
+      if (!thumbnailTextDirtyRef.current && next.thumbnailText !== previous.thumbnailText) {
+        setThumbnailText(next.thumbnailText);
+      }
       if (!instagramCaptionDirtyRef.current && next.instagramCaption !== previous.instagramCaption) {
         setInstagramCaption(next.instagramCaption);
         setInstagramCaptionLimitNotice(false);
+      }
+      if (!instagramPollDirtyRef.current && (
+        next.instagramPoll.question !== previous.instagramPoll.question
+        || next.instagramPoll.optionA !== previous.instagramPoll.optionA
+        || next.instagramPoll.optionB !== previous.instagramPoll.optionB
+      )) {
+        setInstagramPoll(next.instagramPoll);
       }
       if (!instagramShareDirtyRef.current && next.shareToFeed !== previous.shareToFeed) {
         setShareToFeed(next.shareToFeed);
@@ -142,7 +180,12 @@ export function PublishPanel({
     reel.review?.title,
     reel.review?.description,
     reviewTagsKey,
+    reel.review?.thumbnailText,
+    reel.thumbnailHook,
     reel.instagramSettings?.caption,
+    reel.instagramSettings?.poll?.question,
+    reel.instagramSettings?.poll?.optionA,
+    reel.instagramSettings?.poll?.optionB,
     reel.instagramSettings?.shareToFeed,
   ]);
 
@@ -240,6 +283,11 @@ export function PublishPanel({
     setInstagramCaption(limited);
     setInstagramCaptionLimitNotice(limited !== value);
   };
+  const updateInstagramPoll = (field: keyof InstagramPollDraft, value: string) => {
+    instagramPollDirtyRef.current = true;
+    setInstagramSaveState("unsaved");
+    setInstagramPoll((current) => ({ ...current, [field]: value }));
+  };
 
   /** A save is not considered successful until both the mutation response and
    * a no-cache status read agree on the exact metadata that will be published. */
@@ -249,8 +297,9 @@ export function PublishPanel({
       title,
       description,
       tags: requestedTags,
+      thumbnailText,
     });
-    if (saved.title !== title || saved.description !== description) {
+    if (saved.title !== title || saved.description !== description || saved.thumbnailText !== thumbnailText) {
       throw new Error("YouTube metadata was not accepted exactly as entered. Nothing was marked saved.");
     }
     const confirmed = await getReel(reelKey);
@@ -258,6 +307,7 @@ export function PublishPanel({
     if (
       confirmed.review?.title !== saved.title
       || confirmed.review?.description !== saved.description
+      || confirmed.review?.thumbnailText !== saved.thumbnailText
       || confirmedTags.join("\u0001") !== (saved.tags ?? []).join("\u0001")
     ) {
       throw new Error("YouTube metadata readback did not match the saved response. Please retry; publishing is blocked from claiming this was saved.");
@@ -267,11 +317,14 @@ export function PublishPanel({
 
   const persistInstagramMetadata = async (): Promise<Reel> => {
     const saved = await updateReelSettings(reelKey, {
-      instagram: { caption: instagramCaption, shareToFeed },
+      instagram: { caption: instagramCaption, shareToFeed, poll: instagramPoll },
     });
     const matches = (candidate: Reel) =>
       candidate.instagramSettings?.caption === instagramCaption
-      && candidate.instagramSettings?.shareToFeed === shareToFeed;
+      && candidate.instagramSettings?.shareToFeed === shareToFeed
+      && candidate.instagramSettings?.poll?.question === instagramPoll.question
+      && candidate.instagramSettings?.poll?.optionA === instagramPoll.optionA
+      && candidate.instagramSettings?.poll?.optionB === instagramPoll.optionB;
     if (!matches(saved)) {
       throw new Error("Instagram metadata was not accepted exactly as entered. Nothing was marked saved.");
     }
@@ -287,6 +340,7 @@ export function PublishPanel({
     if (result.ok) {
       youtubeCopyDirtyRef.current = false;
       youtubeTagsDirtyRef.current = false;
+      thumbnailTextDirtyRef.current = false;
       setYoutubeSaveState("saved");
     }
     return result;
@@ -295,6 +349,7 @@ export function PublishPanel({
     const result = await run(persistInstagramMetadata);
     if (result.ok) {
       instagramCaptionDirtyRef.current = false;
+      instagramPollDirtyRef.current = false;
       instagramShareDirtyRef.current = false;
       setInstagramSaveState("saved");
     }
@@ -312,7 +367,9 @@ export function PublishPanel({
       setInstagramCaptionLimitNotice(false);
       instagramCaptionDirtyRef.current = false;
       persistedDraftRef.current = next;
-      setInstagramSaveState(instagramShareDirtyRef.current ? "unsaved" : "ai_saved");
+      setInstagramSaveState(
+        instagramPollDirtyRef.current || instagramShareDirtyRef.current ? "unsaved" : "ai_saved",
+      );
     }
     return result;
   };
@@ -328,7 +385,41 @@ export function PublishPanel({
       setDescription(next.description);
       youtubeCopyDirtyRef.current = false;
       persistedDraftRef.current = next;
-      setYoutubeSaveState(youtubeTagsDirtyRef.current ? "unsaved" : "ai_saved");
+      setYoutubeSaveState(
+        thumbnailTextDirtyRef.current || youtubeTagsDirtyRef.current ? "unsaved" : "ai_saved",
+      );
+    }
+    return result;
+  };
+  const regenerateThumbnailTextDraft = async () => {
+    let generated: Reel | undefined;
+    const result = await run(async () => {
+      generated = await regenerateThumbnailText(reelKey);
+      return generated;
+    });
+    if (result.ok && generated) {
+      const nextText = generated.review?.thumbnailText ?? "";
+      setThumbnailText(nextText);
+      thumbnailTextDirtyRef.current = false;
+      persistedDraftRef.current = { ...persistedDraftRef.current, thumbnailText: nextText };
+      setYoutubeSaveState(youtubeCopyDirtyRef.current || youtubeTagsDirtyRef.current ? "unsaved" : "ai_saved");
+    }
+    return result;
+  };
+  const regenerateInstagramPollDraft = async () => {
+    let generated: Reel | undefined;
+    const result = await run(async () => {
+      generated = await regenerateInstagramPollSuggestion(reelKey);
+      return generated;
+    });
+    if (result.ok && generated) {
+      const nextPoll = initialInstagramPoll(generated);
+      setInstagramPoll(nextPoll);
+      instagramPollDirtyRef.current = false;
+      persistedDraftRef.current = { ...persistedDraftRef.current, instagramPoll: nextPoll };
+      setInstagramSaveState(
+        instagramCaptionDirtyRef.current || instagramShareDirtyRef.current ? "unsaved" : "ai_saved",
+      );
     }
     return result;
   };
@@ -355,6 +446,30 @@ export function PublishPanel({
     confirmLabel: "Regenerate copy",
     costTone: "paid",
     onConfirm: regenerateYoutubeCopyDraft,
+  });
+  const requestThumbnailTextGeneration = () => requestConfirm({
+    title: "Regenerate thumbnail hook?",
+    body: "Creates a fresh, short on-image hook that is deliberately distinct from the YouTube title and Reddit title card.",
+    details: [
+      "Uses the cheap configured LLM and records the actual usage in this reel’s cost breakdown.",
+      "Does not render or replace the thumbnail image until you generate a thumbnail in Thumbnail Studio.",
+      "Does not change YouTube metadata, Instagram copy, or video output.",
+    ],
+    confirmLabel: "Regenerate hook",
+    costTone: "paid",
+    onConfirm: regenerateThumbnailTextDraft,
+  });
+  const requestInstagramPollGeneration = () => requestConfirm({
+    title: reel.instagramSettings?.poll ? "Regenerate Instagram poll draft?" : "Generate Instagram poll draft?",
+    body: "Creates one question and two balanced options for you to add manually as Instagram’s native poll sticker.",
+    details: [
+      "Uses the cheap configured LLM and records the actual usage in this reel’s cost breakdown.",
+      "This is creator-only guidance: the Meta publishing API cannot attach a native poll sticker.",
+      "Does not change the caption, rendered video, or YouTube metadata.",
+    ],
+    confirmLabel: reel.instagramSettings?.poll ? "Regenerate poll" : "Generate poll",
+    costTone: "paid",
+    onConfirm: regenerateInstagramPollDraft,
   });
 
   if (reel.status !== "completed") return null;
@@ -421,6 +536,23 @@ export function PublishPanel({
           <Input value={tagsText} disabled={busy} onChange={(event) => { youtubeTagsDirtyRef.current = true; setYoutubeSaveState("unsaved"); setTagsText(event.target.value); }} placeholder="shorts, reddit stories, aita" />
           <span className={cn("justify-self-end text-[11px]", tagsText.length > 500 ? "text-destructive" : "text-muted-foreground/80")}>{tagsText.length}/500</span>
         </Label>
+        <Label className="text-xs text-muted-foreground">
+          Thumbnail hook
+          <Input
+            value={thumbnailText}
+            maxLength={60}
+            disabled={busy}
+            placeholder="A short, curiosity-led on-image hook"
+            onChange={(event) => {
+              thumbnailTextDirtyRef.current = true;
+              setYoutubeSaveState("unsaved");
+              setThumbnailText(event.target.value);
+            }}
+          />
+          <span className="text-[11px] text-muted-foreground/80">
+            {thumbnailText.length}/60 · Used by the automatic Reddit opening cover and as the default overlay in Thumbnail Studio/AI thumbnails. It is separate from the title card and YouTube title; rerender to bake a changed hook into an existing reel.
+          </span>
+        </Label>
         <Button
           type="button"
           variant="outline"
@@ -440,7 +572,10 @@ export function PublishPanel({
         <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestYoutubeCopyGeneration}>
           <Sparkles size={14} /> Regenerate AI title &amp; description
         </Button>
-        <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Youtube size={12} className="text-red-500" />YouTube Shorts preview</div><p className="m-0 font-semibold text-foreground">{title || "Your YouTube title"}</p><p className="mb-0 mt-1 whitespace-pre-wrap text-muted-foreground">{description || "Your YouTube description"}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Thumbnail: {reel.review?.thumbnailUrl ? "YouTube thumbnail ready." : "No uploaded thumbnail yet."}</p></div>
+        <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestThumbnailTextGeneration}>
+          <Sparkles size={14} /> Regenerate AI thumbnail hook
+        </Button>
+        <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Youtube size={12} className="text-red-500" />YouTube Shorts preview</div><p className="m-0 font-semibold text-foreground">{title || "Your YouTube title"}</p><p className="mb-0 mt-1 whitespace-pre-wrap text-muted-foreground">{description || "Your YouTube description"}</p><p className="mb-0 mt-2 font-semibold text-foreground">Thumbnail hook: {thumbnailText || "Generate a short hook"}</p><p className="mb-0 mt-1 text-[11px] text-muted-foreground">Thumbnail: {reel.review?.thumbnailUrl ? "YouTube thumbnail ready." : "No uploaded thumbnail yet."}</p></div>
       </div>
 
       <div className="grid gap-2.5 rounded-md border border-pink-500/20 bg-pink-500/[0.035] p-2.5">
@@ -449,6 +584,14 @@ export function PublishPanel({
         {instagramCaptionLimitNotice ? <p role="status" className="m-0 text-xs text-warning">Instagram captions are limited to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags. Extra hashtags from the last edit were not added.</p> : null}
         {instagramCaptionInvalid ? <p role="alert" className="m-0 text-xs text-destructive">Reduce this caption to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags before saving or publishing.</p> : null}
         <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestInstagramCaptionGeneration}><Sparkles size={14} />{reel.instagramSettings?.caption ? "Regenerate AI caption" : "Generate AI caption"}</Button>
+        <div className="grid gap-2 rounded border border-pink-500/20 bg-card/60 p-2.5">
+          <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-foreground">Native poll draft</span><span className="text-[10px] text-muted-foreground">Manual in Instagram</span></div>
+          <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">Copy these into Instagram&apos;s Poll sticker before posting manually. They are never attached to API-published Reels.</p>
+          <Label className="text-xs text-muted-foreground">Question<Input value={instagramPoll.question} maxLength={90} disabled={busy} placeholder="Who was more wrong?" onChange={(event) => updateInstagramPoll("question", event.target.value)} /><span className="justify-self-end text-[10px] text-muted-foreground/80">{instagramPoll.question.length}/90</span></Label>
+          <div className="grid grid-cols-2 gap-2"><Label className="text-xs text-muted-foreground">Option A<Input value={instagramPoll.optionA} maxLength={30} disabled={busy} placeholder="OP" onChange={(event) => updateInstagramPoll("optionA", event.target.value)} /><span className="justify-self-end text-[10px] text-muted-foreground/80">{instagramPoll.optionA.length}/30</span></Label><Label className="text-xs text-muted-foreground">Option B<Input value={instagramPoll.optionB} maxLength={30} disabled={busy} placeholder="The other person" onChange={(event) => updateInstagramPoll("optionB", event.target.value)} /><span className="justify-self-end text-[10px] text-muted-foreground/80">{instagramPoll.optionB.length}/30</span></Label></div>
+          <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestInstagramPollGeneration}><Sparkles size={14} />{reel.instagramSettings?.poll ? "Regenerate AI poll draft" : "Generate AI poll draft"}</Button>
+          <span className="text-[11px] text-muted-foreground/80">{reel.instagramSettings?.poll?.source === "ai" ? `AI-generated with ${reel.instagramSettings.poll.model ?? "the cheap configured model"}.` : reel.instagramSettings?.poll?.source === "fallback" ? "AI was unavailable; this is a guarded fallback draft." : "Edit and save this draft before you leave the reel."}</span>
+        </div>
         <label className="flex cursor-pointer items-center gap-2 rounded border border-border bg-card/60 px-2.5 py-2 text-xs"><input type="checkbox" checked={shareToFeed} disabled={busy} onChange={(event) => { instagramShareDirtyRef.current = true; setInstagramSaveState("unsaved"); setShareToFeed(event.target.checked); }} /><span className="font-medium">Also share to Feed</span><span className="ml-auto text-muted-foreground">{shareToFeed ? "Reels + Feed" : "Reels tab only"}</span></label>
         <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Instagram size={12} />Reel preview</div><p className="m-0 whitespace-pre-wrap text-muted-foreground">{instagramCaption || "Your Instagram caption will appear here."}</p><p className="mb-0 mt-2 text-[11px] text-muted-foreground">Cover: {reel.shortsCover?.imageUrl ? "Instagram selects the first frame from the rendered MP4. Re-render after saving the Vertical Cover so it is baked into that opening frame." : "Instagram will use the first video frame. Create a Vertical Cover, then re-render for a controlled result."}</p></div>
         <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200 || instagramCaptionInvalid} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
@@ -532,6 +675,9 @@ export function PublishPanel({
               selectedInstagramIds.length
                 ? "Saves the YouTube title, description, tags, and Instagram caption shown here before queuing uploads."
                 : "Saves the YouTube title, description, and tags shown here before queuing uploads.",
+              ...(selectedInstagramIds.length
+                ? ["Native poll drafts are creator-only notes; Meta cannot attach a poll sticker to this API upload."]
+                : []),
               "Every selected account uploads only its own rendered destination output and branded outro.",
               "The upload runs in the background — status appears above.",
             ],

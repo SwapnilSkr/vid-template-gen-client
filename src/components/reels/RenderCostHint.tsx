@@ -47,15 +47,21 @@ export function describeRenderCost(
 ): { tone: CostTone; headline: string; detail: string } {
   const isGameplay = reel.strategy === "gameplay_overlay";
   const missing = gameplayMissingTtsSegmentCount(reel);
+  const outroAudioReady = Boolean(reel.outroAudioUrl && reel.outroAudioSignature);
 
   if (intent === "outro") {
     if (canOutroOnlyRerender(reel)) {
+      if (!outroAudioReady) {
+        return {
+          tone: "paid",
+          headline: "Outro-only · 1 TTS refresh",
+          detail: "Cached body is ready, but the outro narration needs one fresh TTS pass for the current comment prompt, channel line, or voice.",
+        };
+      }
       return {
         tone: "free",
         headline: "Outro-only · free body rebuild",
-        detail: reel.outroAudioUrl
-          ? "Cached body + outro audio ready. TTS only if the spoken line or brand changes."
-          : "Cached body ready. Only the outro clip is rebuilt (small TTS if the spoken line is new).",
+        detail: "Cached body + outro audio match. TTS runs only if the comment prompt, channel line, or voice changes.",
       };
     }
     if (isGameplay && missing > 0) {
@@ -146,7 +152,11 @@ export function RenderCacheStatus({
       : { label: "No body cache", tone: "warm" }
   );
   if (reel.outroAudioUrl) {
-    chips.push({ label: "Outro audio cached", tone: "free" });
+    chips.push(
+      reel.outroAudioSignature
+        ? { label: "Outro audio cached", tone: "free" }
+        : { label: "Outro audio needs refresh", tone: "paid" },
+    );
   }
 
   return (

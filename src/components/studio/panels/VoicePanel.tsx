@@ -18,21 +18,34 @@ export function VoicePanel({ reel, busy, run, requestConfirm }: {
   const selectedVoice = reel.voiceOverride?.voice ?? reel.narrationVoice?.voice;
   const isPlanReview = reel.status === "plan_review";
   const isHorror = reel.niche.startsWith("horror");
+  const isSeries = Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
+  const seriesDetail = isSeries
+    ? ` across all ${reel.partCount ?? 2} parts`
+    : "";
 
   const chooseVoice = (voice: TtsVoiceOption) => {
     if (busy || (voice.model === selectedModel && voice.voice === selectedVoice)) return;
     requestConfirm({
     title: `Use ${voice.label}?`,
     body: isPlanReview
-      ? "This records the voice for production. No TTS is generated until you approve the plan."
-      : "This changes the narration voice and clears cached narration so it can be regenerated.",
+      ? `This locks the exact voice${seriesDetail} for production. No TTS is generated until you approve the plan.`
+      : `This locks the exact narration voice${seriesDetail} and clears cached narration so it can be regenerated.`,
     details: isPlanReview
-      ? ["No charge now.", "The approved produce run will use this exact model and voice.", "Scene images are unaffected."]
-      : ["No OpenRouter call happens immediately.", "The next produce run spends TTS credits for narration.", "Scene images are kept."],
+      ? [
+          "No charge now.",
+          `The approved produce run will use this exact model and voice${seriesDetail}; automatic story matching cannot replace it.`,
+          "Scene images are unaffected.",
+        ]
+      : [
+          "No OpenRouter call happens immediately.",
+          `The next produce run spends TTS credits for narration${seriesDetail}.`,
+          "Scene images are kept.",
+        ],
     confirmLabel: isPlanReview ? "Select voice (free now)" : "Change voice",
     costTone: isPlanReview ? "free" : "warm",
     onConfirm: () => run(() => updateReelSettings(reelKey, {
       voice: { model: voice.model, voice: voice.voice, format: voice.format },
+      voiceScope: isSeries ? "series" : "reel",
     })),
     });
   };
@@ -45,8 +58,8 @@ export function VoicePanel({ reel, busy, run, requestConfirm }: {
 
       <div className="rounded-md border border-border bg-card px-2.5 py-2 text-xs text-muted-foreground">
         {isPlanReview
-          ? "Plan review: listen and choose now. This only saves the setting; TTS credits are used after approval."
-          : "Listen before switching. Changing an already-generated voice requires new narration audio, but keeps all images."}
+          ? `Plan review: listen and choose now. This only saves the setting${seriesDetail}; TTS credits are used after approval.`
+          : `Listen before switching. Changing an already-generated voice requires new narration audio${seriesDetail}, but keeps all images.`}
       </div>
 
       <VoicePickerList

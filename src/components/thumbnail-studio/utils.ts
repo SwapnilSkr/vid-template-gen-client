@@ -16,6 +16,8 @@ export const AI_PROMPT_CHIPS = [
 
 export function defaultTitleText(reel: Reel): string {
   return (
+    reel.review?.thumbnailText?.trim() ||
+    reel.thumbnailHook?.trim() ||
     reel.review?.title?.trim() ||
     reel.redditStory?.title?.trim() ||
     reel.title?.trim() ||
@@ -30,7 +32,7 @@ export function sessionDocKey(reelId: string): string {
 
 /** Browser session cache for the Shorts cover editor canvas. */
 export function shortsSessionDocKey(reelId: string, gameplayOverlay: boolean): string {
-  return `${sessionDocKey(reelId)}${gameplayOverlay ? ":shorts-overlay-v2" : ":shorts"}`;
+  return `${sessionDocKey(reelId)}${gameplayOverlay ? ":shorts-overlay-v3" : ":shorts"}`;
 }
 
 export function clearShortsSessionDoc(reelId: string, gameplayOverlay: boolean): void {
@@ -50,13 +52,13 @@ export function buildDocFromSavedShortsCover(reel: Reel): ThumbDoc | undefined {
   const cover = reel.shortsCover;
   if (!cover?.imageUrl && !cover?.editorState) return undefined;
 
-  // Upgrade the first automatic-cover layout in the editor without touching
-  // creator-made covers. V1 placed text in the Reddit-card area; V2 reserves
-  // that band and is persisted on the next plan/produce or explicit save.
+  // Rebuild any automatic opening cover from the current shared hook without
+  // touching creator-made covers. This clears legacy source-title text while
+  // preserving the Reddit card's separate, verbatim title treatment.
   if (
     reel.strategy === "gameplay_overlay" &&
     (
-      cover.sourceFingerprint?.startsWith("reddit-opening-cover:v1:") ||
+      cover.sourceFingerprint?.startsWith("reddit-opening-cover:") ||
       (cover.sourceType === "reddit_title_card" && cover.replacesTitleCard === true)
     )
   ) {
