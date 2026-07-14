@@ -151,9 +151,15 @@ export function DestinationsPanel({
     [channels, currentPrimaryKey, usedExtraKeys],
   );
   const hasSelectableExtra = addOptions.some((option) => !option.disabled);
-  const primarySelection = primaryTarget || currentPrimaryKey;
-  const selectedPrimary = channels.find((channel) => channel.key === primarySelection);
-  const primaryChanged = Boolean(selectedPrimary && selectedPrimary.key !== currentPrimaryKey);
+  // Do not preselect the current primary as a supposed replacement. That made
+  // the destructive-looking actions disabled with no explanation and left the
+  // creator guessing what they had done wrong.
+  const primaryOptions = useMemo(
+    () => channels.filter((channel) => channel.key !== currentPrimaryKey),
+    [channels, currentPrimaryKey],
+  );
+  const selectedPrimary = primaryOptions.find((channel) => channel.key === primaryTarget);
+  const primaryChanged = Boolean(selectedPrimary);
 
   const draftFor = (destination: ReelDestination): OutroSettings =>
     drafts[destination.id] ?? destination.outro ?? {};
@@ -263,7 +269,7 @@ export function DestinationsPanel({
         <OutroIncludeToggles reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} />
         {!brandedEnabled ? (
           <p className="m-0 rounded border border-amber-500/25 bg-amber-500/[0.04] px-2.5 py-2 text-[11px] text-muted-foreground">
-            Branded outro is off. You can still change destination routing, but story-question and account-card copy are held until you enable it again.
+            Branded outro is off. You can still save its question and account-card copy now; it will be used when you enable the outro again. No outro render is queued while it stays off.
           </p>
         ) : null}
       </div>
@@ -279,7 +285,7 @@ export function DestinationsPanel({
         <Textarea
           rows={2}
           maxLength={160}
-          disabled={busy || !brandedEnabled}
+          disabled={busy}
           value={storyQuestion}
           placeholder="AI-generated for this exact story part"
           onChange={(event) => {
@@ -288,12 +294,12 @@ export function DestinationsPanel({
           }}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={busy || !brandedEnabled} onClick={() => void saveStoryQuestion()}>
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void saveStoryQuestion()}>
             Save question
           </Button>
           <Label className="min-w-[200px] flex-1 text-[11px] text-muted-foreground">
             Apply generated question to
-            <Select value={promptScope} disabled={busy || !brandedEnabled} onChange={(event) => setPromptScope(event.target.value as PromptScope)}>
+            <Select value={promptScope} disabled={busy} onChange={(event) => setPromptScope(event.target.value as PromptScope)}>
               <option value="inheriting">Primary + channels using story default</option>
               <option value="primary">Primary only</option>
               <option value="all">Every channel draft</option>
@@ -302,9 +308,9 @@ export function DestinationsPanel({
           <Button
             type="button"
             size="sm"
-            disabled={busy || !brandedEnabled}
+            disabled={busy}
             onClick={() => {
-              const fast = !isPlanReview && canOutroOnlyRerender(reel);
+              const fast = !isPlanReview && brandedEnabled && canOutroOnlyRerender(reel);
               requestConfirm({
                 title: fast ? "Regenerate question and affected outros?" : "Regenerate the story question?",
                 body: fast
@@ -346,34 +352,43 @@ export function DestinationsPanel({
         ) : null}
 
         <Label className="text-[11px] text-muted-foreground">
-          Make another connected account primary
-          <Select disabled={busy || !channels.length} value={primarySelection} onChange={(event) => setPrimaryTarget(event.target.value)}>
-            {!channels.length ? <option value="">No connected accounts</option> : null}
-            {channels.map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
+          Replace this primary with another connected account
+          <Select disabled={busy || !primaryOptions.length} value={primaryTarget} onChange={(event) => setPrimaryTarget(event.target.value)}>
+            <option value="">{primaryOptions.length ? "Choose a replacement account…" : "No other connected account"}</option>
+            {primaryOptions.map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
           </Select>
         </Label>
-        <div className="flex flex-wrap items-end gap-2">
-          <Label className="min-w-[180px] flex-1 text-[11px] text-muted-foreground">
-            Apply change to
-            <Select value={primaryScope} disabled={busy || !reel.seriesId} onChange={(event) => setPrimaryScope(event.target.value as PrimaryScope)}>
-              <option value="reel">This reel part</option>
-              <option value="series">Every part in this story</option>
-            </Select>
-          </Label>
-          <Button type="button" size="sm" variant="outline" disabled={busy || !primaryChanged} onClick={() => requestPrimaryChange("keep")}>
-            Make primary · keep old
-          </Button>
-          <Button type="button" size="sm" variant="destructive" disabled={busy || !primaryChanged} onClick={() => requestPrimaryChange("remove")}>
-            Replace & reclaim old media
-          </Button>
-        </div>
+        {!primaryOptions.length ? (
+          <p className="m-0 rounded border border-border bg-background/60 px-2.5 py-2 text-[11px] text-muted-foreground">
+            Connect another account before replacing or removing this primary. Every reel must keep one primary publish destination.
+          </p>
+        ) : !selectedPrimary ? (
+          <p className="m-0 text-[11px] text-muted-foreground">
+            Choose a replacement above. The current primary stays untouched until you confirm one of the two choices below.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <Label className="min-w-[180px] flex-1 text-[11px] text-muted-foreground">
+              Apply change to
+              <Select value={primaryScope} disabled={busy || !reel.seriesId} onChange={(event) => setPrimaryScope(event.target.value as PrimaryScope)}>
+                <option value="reel">This reel part</option>
+                <option value="series">Every part in this story</option>
+              </Select>
+            </Label>
+            <Button type="button" size="sm" variant="outline" disabled={busy || !primaryChanged} onClick={() => requestPrimaryChange("keep")}>
+              Make primary · keep old
+            </Button>
+            <Button type="button" size="sm" variant="destructive" disabled={busy || !primaryChanged} onClick={() => requestPrimaryChange("remove")}>
+              Replace & reclaim old media
+            </Button>
+          </div>
+        )}
 
         <PrimaryOutroFields
           value={primaryDraft}
           platform={currentPrimaryPlatform}
           channelName={currentPrimaryLabel}
           busy={busy}
-          enabled={brandedEnabled}
           onChange={patchPrimaryDraft}
           onSave={() => {
             if (!canRerenderDestination) {
@@ -433,7 +448,7 @@ export function DestinationsPanel({
                   platform={destination.platform}
                   channelName={destination.channelLabel || destination.channelId}
                   storyQuestion={storyQuestion || DEFAULT_OUTRO_COMMENT_PROMPT}
-                  busy={busy || !brandedEnabled}
+                  busy={busy}
                   onChange={(patch) => patchDraft(destination.id, patch)}
                   onSave={() => {
                     if (canRerenderDestination && narrationChanged) {
@@ -483,7 +498,6 @@ function PrimaryOutroFields({
   platform,
   channelName,
   busy,
-  enabled,
   onChange,
   onSave,
   saveLabel,
@@ -492,7 +506,6 @@ function PrimaryOutroFields({
   platform: Platform;
   channelName: string;
   busy: boolean;
-  enabled: boolean;
   onChange: (patch: Partial<OutroSettings>) => void;
   onSave: () => void;
   saveLabel: string;
@@ -501,8 +514,8 @@ function PrimaryOutroFields({
     <details className="group rounded border border-border bg-background/40 px-2.5 py-2">
       <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">Edit this primary account's card and call to action</summary>
       <div className="mt-2 grid gap-2">
-        <ChannelOutroForm value={value} platform={platform} channelName={channelName} busy={busy || !enabled} onChange={onChange} />
-        <Button type="button" size="sm" variant="outline" disabled={busy || !enabled} onClick={onSave}>{saveLabel}</Button>
+        <ChannelOutroForm value={value} platform={platform} channelName={channelName} busy={busy} onChange={onChange} />
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onSave}>{saveLabel}</Button>
       </div>
     </details>
   );
