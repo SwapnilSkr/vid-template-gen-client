@@ -19,7 +19,18 @@ export interface ConfirmAction {
   /** Free / credits / compute — shown as a chip on the confirm modal. */
   costTone?: "free" | "paid" | "warm";
   /** A failed Studio action keeps this dialog open and shows its error here. */
-  onConfirm: () => void | Promise<void | StudioActionResult>;
+  /** Optional decision shown inside the confirmation itself before a paid
+   * generate action. This keeps required editorial choices at the moment they
+   * matter rather than hiding them in a distant inspector panel. */
+  seriesStructure?: {
+    currentParts: number;
+    recommendedParts: number;
+    wordCount: number;
+    estimatedDurationSeconds: number;
+    reason: string;
+    hasWeakBreaks: boolean;
+  };
+  onConfirm: (seriesChoice?: "manual" | "recommended") => void | Promise<void | StudioActionResult>;
   /** Called when the modal is dismissed without confirming. */
   onCancel?: () => void;
 }

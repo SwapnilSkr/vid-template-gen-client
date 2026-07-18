@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Instagram, Loader2, Pencil, Plus, Trash2, Youtube } from "lucide-react";
+import { AtSign, CheckCircle2, ExternalLink, Facebook, Instagram, Loader2, Pencil, Plus, Trash2, Youtube } from "lucide-react";
 import {
   deleteInstagramChannel,
   listInstagramChannels,
@@ -9,7 +9,17 @@ import {
   updateInstagramChannel,
   updateYouTubeChannel,
   deleteYouTubeChannel,
+  deleteFacebookPage,
+  listFacebookPages,
+  startFacebookConnect,
+  updateFacebookPage,
+  deleteThreadsChannel,
+  listThreadsChannels,
+  startThreadsConnect,
+  updateThreadsChannel,
+  type FacebookPageOption,
   type InstagramChannelOption,
+  type ThreadsChannelOption,
   type YouTubeChannelOption,
 } from "@/api/reels";
 import { Button } from "@/components/ui/button";
@@ -18,23 +28,66 @@ import { Input } from "@/components/ui/input";
 export function AccountsScreen() {
   const [instagram, setInstagram] = useState<InstagramChannelOption[]>([]);
   const [youtube, setYoutube] = useState<YouTubeChannelOption[]>([]);
+  const [facebook, setFacebook] = useState<FacebookPageOption[]>([]);
+  const [threads, setThreads] = useState<ThreadsChannelOption[]>([]);
   const [label, setLabel] = useState("");
   const [youtubeLabel, setYoutubeLabel] = useState("");
+  const [facebookLabel, setFacebookLabel] = useState("");
+  const [threadsLabel, setThreadsLabel] = useState("");
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [youtubeConnecting, setYoutubeConnecting] = useState(false);
+  const [facebookConnecting, setFacebookConnecting] = useState(false);
+  const [threadsConnecting, setThreadsConnecting] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
 
   async function load() {
     setLoading(true);
-    const [ig, yt] = await Promise.allSettled([listInstagramChannels(), listYouTubeChannels()]);
+    const [ig, yt, fb, th] = await Promise.allSettled([listInstagramChannels(), listYouTubeChannels(), listFacebookPages(), listThreadsChannels()]);
     setInstagram(ig.status === "fulfilled" ? ig.value : []);
     setYoutube(yt.status === "fulfilled" ? yt.value : []);
+    setFacebook(fb.status === "fulfilled" ? fb.value : []);
+    setThreads(th.status === "fulfilled" ? th.value : []);
     const failure = ig.status === "rejected" ? ig.reason : yt.status === "rejected" ? yt.reason : undefined;
     setError(failure instanceof Error ? failure.message : undefined);
     setLoading(false);
   }
+
+  /** Shared OAuth-popup connect for the Meta platforms that postMessage back. */
+  function connectViaPopup(opts: {
+    messageType: string; windowName: string; getAuthUrl: () => Promise<{ authUrl: string }>;
+    setBusy: (v: boolean) => void; clearLabel: () => void; failLabel: string;
+  }) {
+    opts.setBusy(true); setError(undefined); setMessage(undefined);
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== opts.messageType) return;
+      window.removeEventListener("message", onMessage);
+      opts.setBusy(false);
+      if (event.data.success) { opts.clearLabel(); setMessage(event.data.message); void load(); }
+      else setError(event.data.message || opts.failLabel);
+    };
+    window.addEventListener("message", onMessage);
+    opts.getAuthUrl()
+      .then(({ authUrl }) => {
+        const popup = window.open(authUrl, opts.windowName, "width=640,height=820");
+        if (!popup) throw new Error("Your browser blocked the login popup. Allow popups and try again.");
+      })
+      .catch((err) => { window.removeEventListener("message", onMessage); setError(err instanceof Error ? err.message : opts.failLabel); opts.setBusy(false); });
+  }
+
+  function connectFacebook() {
+    if (!facebookLabel.trim()) { setError("Give this Page an internal nickname first."); return; }
+    connectViaPopup({ messageType: "facebook-page-connected", windowName: "facebook-connect", failLabel: "Could not connect Facebook Page.", setBusy: setFacebookConnecting, clearLabel: () => setFacebookLabel(""), getAuthUrl: () => startFacebookConnect({ label: facebookLabel.trim() }) });
+  }
+  function connectThreads() {
+    if (!threadsLabel.trim()) { setError("Give this profile an internal nickname first."); return; }
+    connectViaPopup({ messageType: "threads-channel-connected", windowName: "threads-connect", failLabel: "Could not connect Threads profile.", setBusy: setThreadsConnecting, clearLabel: () => setThreadsLabel(""), getAuthUrl: () => startThreadsConnect({ label: threadsLabel.trim() }) });
+  }
+  async function removeFacebook(id: string) { if (!window.confirm("Disconnect this Facebook Page?")) return; try { await deleteFacebookPage(id); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Could not disconnect Page."); } }
+  async function renameFacebook(page: FacebookPageOption) { const label = window.prompt("Internal nickname", page.label); if (!label || label === page.label) return; try { await updateFacebookPage(page.id, { label }); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Could not update Page."); } }
+  async function removeThreads(id: string) { if (!window.confirm("Disconnect this Threads profile?")) return; try { await deleteThreadsChannel(id); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Could not disconnect profile."); } }
+  async function renameThreads(channel: ThreadsChannelOption) { const label = window.prompt("Internal nickname", channel.label); if (!label || label === channel.label) return; try { await updateThreadsChannel(channel.id, { label }); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Could not update profile."); } }
 
   useEffect(() => { void load(); }, []);
 
@@ -101,7 +154,7 @@ export function AccountsScreen() {
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">Accounts</h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">The channels and creator profiles that receive your finished videos.</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />{instagram.length + youtube.length} connected destination{instagram.length + youtube.length === 1 ? "" : "s"}</div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />{instagram.length + youtube.length + facebook.length + threads.length} connected destination{instagram.length + youtube.length + facebook.length + threads.length === 1 ? "" : "s"}</div>
       </header>
       {error ? <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
       {message ? <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700"><CheckCircle2 className="mr-1 inline size-4" />{message}</div> : null}
@@ -127,6 +180,24 @@ export function AccountsScreen() {
         </div>
         {youtube.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{youtube.map((channel) => <AccountCard key={channel.id} avatar={channel.logoUrl} fallback={<Youtube size={18} />} title={channel.googleChannelTitle || channel.label} subtitle={channel.googleChannelHandle || channel.label} status={channel.status === "needs_reauth" ? "reconnect required" : channel.source === "env" ? "server managed" : channel.privacyStatus} onEdit={() => void renameYoutube(channel)} onReconnect={() => void reconnectYoutube(channel)} reconnecting={youtubeConnecting} onRemove={() => void removeYoutube(channel)} />)}</div> : <EmptyState icon={<Youtube size={18} />} text="No YouTube channels connected." />}
         <p className="text-xs text-muted-foreground"><ExternalLink className="mr-1 inline size-3" />Use Reconnect when Google rejects a credential. It creates a database-backed replacement for an older environment-managed token, without exposing it in the browser.</p>
+      </section>
+
+      <section className="space-y-4">
+        <div><h2 className="inline-flex items-center gap-2 text-base font-semibold"><Facebook size={18} className="text-blue-600" />Facebook Reels</h2><p className="mt-1 text-sm text-muted-foreground">Pages you administer, for Facebook Reels cross-posting. Requires FACEBOOK_REELS_ENABLED and the Page added to your Meta app.</p></div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row"><Input value={facebookLabel} className="sm:max-w-sm" placeholder="Nickname, e.g. Lore Page" onChange={(e) => setFacebookLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") connectFacebook(); }} /><Button onClick={connectFacebook} disabled={facebookConnecting}>{facebookConnecting ? <Loader2 className="size-4 animate-spin" /> : <Plus size={16} />}{facebookConnecting ? "Opening login…" : "Connect Facebook"}</Button></div>
+          <p className="mt-2 text-xs text-muted-foreground">All Pages you administer are imported on connect. Standard Access works for Pages you own — no App Review.</p>
+        </div>
+        {facebook.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{facebook.map((page) => <AccountCard key={page.id} avatar={page.pictureUrl} fallback={<Facebook size={18} />} title={page.name || page.label} subtitle={page.category || page.label} status={page.status} error={page.lastError} onEdit={() => void renameFacebook(page)} onRemove={() => void removeFacebook(page.id)} />)}</div> : <EmptyState icon={<Facebook size={18} />} text="No Facebook Pages connected." />}
+      </section>
+
+      <section className="space-y-4">
+        <div><h2 className="inline-flex items-center gap-2 text-base font-semibold"><AtSign size={18} className="text-foreground" />Threads</h2><p className="mt-1 text-sm text-muted-foreground">Owned Threads profiles for low-effort cross-posting. Requires THREADS_ENABLED and the separate Threads Meta app.</p></div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row"><Input value={threadsLabel} className="sm:max-w-sm" placeholder="Nickname, e.g. Lurker Threads" onChange={(e) => setThreadsLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") connectThreads(); }} /><Button onClick={connectThreads} disabled={threadsConnecting}>{threadsConnecting ? <Loader2 className="size-4 animate-spin" /> : <Plus size={16} />}{threadsConnecting ? "Opening login…" : "Connect Threads"}</Button></div>
+          <p className="mt-2 text-xs text-muted-foreground">Threads uses its own Meta app + OAuth. The same 9:16 render is reused with a strong text hook.</p>
+        </div>
+        {threads.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{threads.map((channel) => <AccountCard key={channel.id} avatar={channel.profilePictureUrl} fallback={<AtSign size={18} />} title={channel.username ? `@${channel.username}` : channel.label} subtitle={channel.label} status={channel.status} error={channel.lastError} onEdit={() => void renameThreads(channel)} onRemove={() => void removeThreads(channel.id)} />)}</div> : <EmptyState icon={<AtSign size={18} />} text="No Threads profiles connected." />}
       </section>
     </main>
   );

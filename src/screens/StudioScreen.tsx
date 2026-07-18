@@ -14,8 +14,10 @@ import {
   approvePlan,
   assertFfmpegReady,
   deleteSeriesPart,
+  chooseSeriesStructure,
   ffmpegBlockFromError,
   getReel,
+  getSeriesStructureAdvice,
   getThumbnailSource,
   listReelSeries,
   mergePartIntoPrevious,
@@ -406,6 +408,71 @@ export function StudioScreen() {
           seriesStructureLedger.structureDecision?.fingerprint),
   );
 
+  const openGenerateConfirmation = () => {
+    const baseAction = {
+      title:
+        reel.partCount && reel.partCount > 1
+          ? `Generate part ${reel.partNumber ?? 1}?`
+          : "Generate reel?",
+      body: "This starts the paid produce run for the reviewed plan.",
+      details: [
+        "Generates missing scene images with OpenRouter.",
+        "Generates missing narration audio with OpenRouter TTS.",
+        reel.skipPartOutro
+          ? "Part teaser skipped."
+          : reel.strategy === "gameplay_overlay" &&
+              (reel.partNumber ?? reel.redditStory?.partNumber ?? 1) <
+                (reel.partCount ?? reel.redditStory?.partCount ?? 1)
+            ? "Includes part teaser (“Stay tuned…”)."
+            : "",
+        reel.skipBrandedOutro
+          ? "Branded outro skipped."
+          : "Includes branded outro (channel card + subscribe TTS).",
+        "Renders captions, horror mix, edit FX, and preview video after assets are ready.",
+        "Spend is recorded on this reel's cost breakdown when the job finishes.",
+      ].filter(Boolean),
+      confirmLabel: "Generate",
+      costTone: "paid" as const,
+    };
+
+    if (!structureDecisionRequired) {
+      setConfirmAction({
+        ...baseAction,
+        onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
+      });
+      return;
+    }
+
+    // Fetch only when the creator explicitly opens Generate. The backend
+    // returns its cached assessment when available, avoiding an inspector-time
+    // request and placing the required choice directly in this confirmation.
+    setBusy(true);
+    setError(undefined);
+    void getSeriesStructureAdvice(id)
+      .then((advice) => {
+        setConfirmAction({
+          ...baseAction,
+          seriesStructure: {
+            currentParts: advice.currentParts,
+            recommendedParts: advice.recommendedParts,
+            wordCount: advice.wordCount,
+            estimatedDurationSeconds: advice.estimatedDurationSeconds,
+            reason: advice.reason,
+            hasWeakBreaks: advice.hasWeakBreaks,
+          },
+          onConfirm: (choice = "manual") => run(async () => {
+            const structured = await chooseSeriesStructure(id, choice);
+            const structuredId = structured._id ?? structured.id ?? id;
+            return approvePlan(structuredId);
+          }, { requireFfmpeg: true }),
+        });
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Could not load the AI series recommendation.");
+      })
+      .finally(() => setBusy(false));
+  };
+
   return (
     <section className="studio-workspace w-full min-w-0 overflow-x-clip text-foreground">
       <header className="sticky top-0 z-20 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4">
@@ -562,40 +629,7 @@ export function StudioScreen() {
         busy={studioLocked}
         run={run}
         requestConfirm={setConfirmAction}
-        onApprove={() => {
-          if (structureDecisionRequired) {
-            changeInspectorTab("source");
-            setError(
-              "Review the AI Series structure first: choose Keep current plan or Use recommendation in Story source, then generate.",
-            );
-            return;
-          }
-          setConfirmAction({
-            title:
-              reel.partCount && reel.partCount > 1
-                ? `Generate part ${reel.partNumber ?? 1}?`
-                : "Generate reel?",
-            body: "This starts the paid produce run for the reviewed plan.",
-            details: [
-              "Generates missing scene images with OpenRouter.",
-              "Generates missing narration audio with OpenRouter TTS.",
-              reel.skipPartOutro
-                ? "Part teaser skipped."
-                : reel.strategy === "gameplay_overlay" &&
-                    (reel.partNumber ?? reel.redditStory?.partNumber ?? 1) <
-                      (reel.partCount ?? reel.redditStory?.partCount ?? 1)
-                  ? "Includes part teaser (“Stay tuned…”)."
-                  : "",
-              reel.skipBrandedOutro
-                ? "Branded outro skipped."
-                : "Includes branded outro (channel card + subscribe TTS).",
-              "Renders captions, horror mix, edit FX, and preview video after assets are ready.",
-              "Spend is recorded on this reel's cost breakdown when the job finishes.",
-            ].filter(Boolean),
-            confirmLabel: "Generate",
-            onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
-          });
-        }}
+        onApprove={openGenerateConfirmation}
       />
 
       {pendingRegen ? (

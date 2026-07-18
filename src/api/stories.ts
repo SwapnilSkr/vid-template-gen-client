@@ -2,6 +2,14 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api
 
 export type StorySource = "llm" | "hybrid" | "verbatim";
 
+/** Server-owned Reddit genre catalog. The Create Reel dropdown reads this
+ * rather than duplicating a stale subset in the client. */
+export interface RedditGenreOption {
+  id: string;
+  label: string;
+  subreddits: string[];
+}
+
 export interface RedditCandidate {
   seedUrl: string;
   seedTitle: string;
@@ -106,6 +114,10 @@ export async function listRedditCandidates(
   return request<ListRedditCandidatesResult>(
     `/stories/candidates${query ? `?${query}` : ""}`
   );
+}
+
+export async function listStoryGenres(): Promise<RedditGenreOption[]> {
+  return request<RedditGenreOption[]>("/stories/genres");
 }
 
 export interface ListStoryBankInput {

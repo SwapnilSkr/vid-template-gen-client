@@ -1,10 +1,14 @@
-import { Check, ExternalLink, Hash, Instagram, Send, Sparkles, X, Youtube } from "lucide-react";
+import { AtSign, Check, Crown, ExternalLink, Facebook, Hash, Instagram, Loader2, Send, Sparkles, X, Youtube } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getReel,
   distributeReel,
+  listFacebookPages,
   listInstagramChannels,
+  listThreadsChannels,
   listYouTubeChannels,
+  publishReelToFacebook,
+  publishReelToThreads,
   regenerateInstagramCaption,
   regenerateInstagramPollSuggestion,
   regenerateReviewCopy,
@@ -12,11 +16,16 @@ import {
   updateReview,
   updateReelSettings,
   type Reel,
+  type FacebookPageOption,
+  type ThreadsChannelOption,
   type YouTubeChannelOption,
   type InstagramChannelOption,
 } from "@/api/reels";
 import { getTrendSummary, type TrendGenreSummary } from "@/api/trends";
 import type { ConfirmAction, StudioRun } from "@/components/studio/types";
+import { CrossPostPanel } from "@/components/studio/panels/CrossPostPanel";
+import { DestinationManagerDialog } from "@/components/studio/panels/DestinationsPanel";
+import { StudioDialog } from "@/components/studio/StudioDialog";
 import {
   channelDisplayName,
   channelPurpose,
@@ -100,8 +109,12 @@ export function PublishPanel({
   const reelKey = reel._id ?? reel.id ?? "";
   const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
   const [instagramChannels, setInstagramChannels] = useState<InstagramChannelOption[]>([]);
+  const [facebookPages, setFacebookPages] = useState<FacebookPageOption[]>([]);
+  const [threadsChannels, setThreadsChannels] = useState<ThreadsChannelOption[]>([]);
   const [selectedYoutubeIds, setSelectedYoutubeIds] = useState<string[]>([]);
   const [selectedInstagramIds, setSelectedInstagramIds] = useState<string[]>([]);
+  const [selectedFacebookIds, setSelectedFacebookIds] = useState<string[]>([]);
+  const [selectedThreadsIds, setSelectedThreadsIds] = useState<string[]>([]);
   const [title, setTitle] = useState(() => reel.review?.title ?? reel.title ?? "");
   const [description, setDescription] = useState(() => reel.review?.description ?? "");
   const [tagsText, setTagsText] = useState((reel.review?.tags ?? []).join(", "));
@@ -115,6 +128,8 @@ export function PublishPanel({
   const [trendSummary, setTrendSummary] = useState<TrendGenreSummary | undefined>();
   const [youtubeSaveState, setYoutubeSaveState] = useState<DraftSaveState>();
   const [instagramSaveState, setInstagramSaveState] = useState<DraftSaveState>();
+  const [distributionDialog, setDistributionDialog] = useState<"youtube" | "instagram" | "facebook" | "threads" | "destinations" | "engagement" | null>(null);
+  const [outroManagerOpen, setOutroManagerOpen] = useState(false);
   const reviewTagsKey = (reel.review?.tags ?? []).join("\u0001");
   const persistedDraftRef = useRef<PublishDraftSnapshot>(persistedPublishDraft(reel, reelKey));
   const youtubeCopyDirtyRef = useRef(false);
@@ -216,9 +231,11 @@ export function PublishPanel({
   }, [reel.destinations, reel.outroChannelId, reel.outroInstagramChannelId, reel.outputUrl]);
 
   useEffect(() => {
-    void Promise.allSettled([listYouTubeChannels(), listInstagramChannels()]).then(([yt, ig]) => {
+    void Promise.allSettled([listYouTubeChannels(), listInstagramChannels(), listFacebookPages(), listThreadsChannels()]).then(([yt, ig, fb, th]) => {
       setChannels(yt.status === "fulfilled" ? yt.value : []);
       setInstagramChannels(ig.status === "fulfilled" ? ig.value : []);
+      setFacebookPages(fb.status === "fulfilled" ? fb.value : []);
+      setThreadsChannels(th.status === "fulfilled" ? th.value : []);
     });
   }, []);
 
@@ -233,7 +250,13 @@ export function PublishPanel({
   useEffect(() => {
     setSelectedYoutubeIds((current) => current.filter((id) => destinationByAccount.get(`youtube:${id}`)?.ready));
     setSelectedInstagramIds((current) => current.filter((id) => destinationByAccount.get(`instagram:${id}`)?.ready));
-  }, [destinationByAccount]);
+    setSelectedFacebookIds((current) => current.filter((id) =>
+      (Boolean(reel.outputUrl) && !destinationByAccount.has(`facebook:${id}`)) || destinationByAccount.get(`facebook:${id}`)?.ready,
+    ));
+    setSelectedThreadsIds((current) => current.filter((id) =>
+      (Boolean(reel.outputUrl) && !destinationByAccount.has(`threads:${id}`)) || destinationByAccount.get(`threads:${id}`)?.ready,
+    ));
+  }, [destinationByAccount, reel.outputUrl]);
 
   const observedHashtags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -474,14 +497,65 @@ export function PublishPanel({
 
   if (reel.status !== "completed") return null;
   const yt = reel.youtube;
-  const targetCount = selectedYoutubeIds.length + selectedInstagramIds.length;
+  const targetCount = selectedYoutubeIds.length + selectedInstagramIds.length + selectedFacebookIds.length + selectedThreadsIds.length;
   const instagramCaptionRequired = selectedInstagramIds.length > 0 && !instagramCaption.trim();
   const instagramCaptionInvalid = instagramHashtagCount > INSTAGRAM_CAPTION_MAX_HASHTAGS;
   const instagramPublishBlocked = instagramCaptionRequired || instagramCaptionInvalid || instagramCaption.length > 2200;
   const instagramPublishByChannel = new Map((reel.instagram ?? []).map((publish) => [publish.channelId, publish]));
   const activeInstagram = (reel.instagram ?? []).filter((publish) => publish.status === "pending" || publish.status === "uploading");
-  const republishingInstagram = selectedInstagramIds.filter((id) => instagramPublishByChannel.get(id)?.status === "published");
   const toggle = (id: string, setIds: React.Dispatch<React.SetStateAction<string[]>>) => setIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  const crossPostOutput = (platform: "facebook" | "threads", channelId: string) => {
+    const destination = destinationByAccount.get(`${platform}:${channelId}`);
+    if (!destination) return { ready: Boolean(reel.outputUrl), detail: reel.outputUrl ? "using primary render" : "primary render needs completion" };
+    return destination;
+  };
+  const finalApproved = reel.review?.status === "approved";
+  const requestFinalApproval = () => requestConfirm({
+    title: "Approve final video and reclaim render caches?",
+    body: "This marks the publishing review approved and removes rebuild-only S3 media for this reel.",
+    details: [
+      "Kept: the primary and destination final MP4s, thumbnail/cover, and voice variants needed for publishing.",
+      "Deleted: scene images, narration/outro audio, body/assembly files, and the standalone subtitle file.",
+      "The captions remain burned into every final MP4, but a later re-render will need to regenerate the released assets.",
+    ],
+    confirmLabel: "Approve final & reclaim caches",
+    variant: "destructive",
+    costTone: "free",
+    onConfirm: () => run(async () => {
+      await updateReview(reelKey, { status: "approved" });
+      return getReel(reelKey);
+    }),
+  });
+  const publishSelectedAccounts = async () => {
+    const result = await run(async () => {
+      if (selectedYoutubeIds.length) await persistYoutubeMetadata();
+      // The adapters read persisted settings, so save before asking them to
+      // publish. Independent Facebook/Threads publishes can run in parallel.
+      if (selectedInstagramIds.length) await persistInstagramMetadata();
+      if (selectedYoutubeIds.length || selectedInstagramIds.length) {
+        await distributeReel(reelKey, {
+          youtubeChannelIds: selectedYoutubeIds,
+          instagramChannelIds: selectedInstagramIds,
+          forceRepublish: selectedInstagramIds.length > 0,
+        });
+      }
+      await Promise.all([
+        ...selectedFacebookIds.map((channelId) => publishReelToFacebook(reelKey, channelId)),
+        ...selectedThreadsIds.map((channelId) => publishReelToThreads(reelKey, channelId)),
+      ]);
+      return getReel(reelKey);
+    });
+    if (!result.ok) return;
+    youtubeCopyDirtyRef.current = false;
+    youtubeTagsDirtyRef.current = false;
+    setYoutubeSaveState("saved");
+    if (selectedInstagramIds.length) {
+      instagramCaptionDirtyRef.current = false;
+      instagramShareDirtyRef.current = false;
+      setInstagramSaveState("saved");
+    }
+    setDistributionDialog(null);
+  };
 
   return (
     <div className="grid gap-2">
@@ -489,6 +563,70 @@ export function PublishPanel({
         <Send size={15} className="text-primary" /> Distribution
       </PanelTitle>
 
+      <section className={cn("grid gap-2 rounded-md border p-3", finalApproved ? "border-success/35 bg-success/[0.045]" : "border-warning/35 bg-warning/[0.045]")}>
+        <div className="grid gap-0.5">
+          <span className="text-xs font-semibold text-foreground">Final approval &amp; storage</span>
+          <span className="text-[11px] leading-relaxed text-muted-foreground">
+            {finalApproved
+              ? "Final review is approved. Publishable outputs were kept; rebuild caches were reclaimed."
+              : "Approve only after you are happy with the rendered video, captions, account outros, and publishing copy."}
+          </span>
+        </div>
+        {finalApproved ? (
+          <span className="justify-self-start rounded bg-success/15 px-2 py-1 text-[11px] font-medium text-success">Approved · caches reclaimed</span>
+        ) : (
+          <Button type="button" size="sm" variant="outline" className="justify-self-start border-warning/45 hover:border-destructive/45" disabled={busy} onClick={requestFinalApproval}>
+            Approve final &amp; reclaim caches
+          </Button>
+        )}
+      </section>
+
+      <section className="grid gap-2 rounded-md border border-border bg-background/35 p-3">
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">Open only the publishing surface you need. Your edits stay local until you save or publish.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <DistributionLink
+            icon={<Youtube size={16} className="text-red-500" />}
+            title="YouTube Shorts"
+            detail={title.trim() ? `${title.length}/100 title characters · ${description.length}/5,000 description characters` : "Add a title, description, tags, and thumbnail hook"}
+            onClick={() => setDistributionDialog("youtube")}
+          />
+          <DistributionLink
+            icon={<Instagram size={16} className="text-pink-500" />}
+            title="Instagram Reel"
+            detail={instagramCaption.trim() ? `${instagramCaption.length}/2,200 caption characters · ${instagramHashtagCount}/${INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags` : "Add a caption, feed choice, and optional poll draft"}
+            onClick={() => setDistributionDialog("instagram")}
+          />
+          <DistributionLink
+            icon={<Facebook size={16} className="text-blue-600" />}
+            title="Facebook Reels"
+            detail={facebookPages.length ? `${facebookPages.length} connected Page${facebookPages.length === 1 ? "" : "s"} · edit Page-only description` : "Connect a Facebook Page"}
+            onClick={() => setDistributionDialog("facebook")}
+          />
+          <DistributionLink
+            icon={<AtSign size={16} className="text-foreground" />}
+            title="Threads"
+            detail={threadsChannels.length ? `${threadsChannels.length} connected profile${threadsChannels.length === 1 ? "" : "s"} · edit Threads-only post text` : "Connect a Threads profile"}
+            onClick={() => setDistributionDialog("threads")}
+          />
+          <DistributionLink
+            icon={<Send size={16} className="text-primary" />}
+            title="Publish accounts"
+            detail={targetCount ? `${targetCount} selected for the next publish` : "Choose ready YouTube, Instagram, Facebook, or Threads accounts"}
+            onClick={() => setDistributionDialog("destinations")}
+          />
+          <DistributionLink
+            icon={<Crown size={16} className="text-primary" />}
+            title="Reel accounts & outros"
+            detail={`${1 + (reel.destinations?.length ?? 0)} assigned output${(reel.destinations?.length ?? 0) ? "s" : ""} · primary and secondary routing`}
+            onClick={() => setOutroManagerOpen(true)}
+          />
+        </div>
+        <button type="button" onClick={() => setDistributionDialog("engagement")} className="justify-self-start text-left text-[11px] font-medium text-primary underline-offset-2 hover:underline">
+          First-comment tools and all Meta destinations
+        </button>
+      </section>
+
+      {distributionDialog === "youtube" ? <StudioDialog title="YouTube Shorts distribution" description="Edit the YouTube-only title, description, upload tags, and thumbnail hook." onClose={() => setDistributionDialog(null)}>
       <div className="grid gap-2.5 rounded-md border border-border bg-background/35 p-2.5">
         <Label className="text-xs text-muted-foreground">
           YouTube title
@@ -577,7 +715,9 @@ export function PublishPanel({
         </Button>
         <div className="rounded border border-border bg-card/60 p-2.5 text-xs"><div className="mb-1 inline-flex items-center gap-1 font-medium"><Youtube size={12} className="text-red-500" />YouTube Shorts preview</div><p className="m-0 font-semibold text-foreground">{title || "Your YouTube title"}</p><p className="mb-0 mt-1 whitespace-pre-wrap text-muted-foreground">{description || "Your YouTube description"}</p><p className="mb-0 mt-2 font-semibold text-foreground">Thumbnail hook: {thumbnailText || "Generate a short hook"}</p><p className="mb-0 mt-1 text-[11px] text-muted-foreground">Thumbnail: {reel.review?.thumbnailUrl ? "YouTube thumbnail ready." : "No uploaded thumbnail yet."}</p></div>
       </div>
+      </StudioDialog> : null}
 
+      {distributionDialog === "instagram" ? <StudioDialog title="Instagram Reel distribution" description="Edit Instagram-only copy and native-posting notes without mixing them into YouTube metadata." onClose={() => setDistributionDialog(null)}>
       <div className="grid gap-2.5 rounded-md border border-pink-500/20 bg-pink-500/[0.035] p-2.5">
         <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2 text-sm font-semibold"><Instagram size={15} className="text-pink-500" />Instagram Reel</span><span className="text-[11px] text-muted-foreground">Platform-specific</span></div>
         <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Generate an AI draft, then edit the Reel caption, hook, CTA, and hashtags…" onChange={(event) => updateInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 || instagramCaptionInvalid ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {instagramHashtagCount}/{INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags</span><span className="text-[11px] text-muted-foreground/80">{reel.instagramSettings?.source === "ai" ? `AI-generated with ${reel.instagramSettings.model ?? "the configured model"}.` : reel.instagramSettings?.source === "fallback" ? "AI was unavailable; this is a guarded fallback draft." : "Instagram copy is independent from YouTube metadata."}</span></Label>
@@ -597,6 +737,7 @@ export function PublishPanel({
         <Button type="button" variant="outline" disabled={busy || instagramCaption.length > 2200 || instagramCaptionInvalid} onClick={() => void saveInstagramMetadata()}><Check size={14} />Save Instagram details</Button>
         <DraftSaveNotice platform="instagram" state={instagramSaveState} />
       </div>
+      </StudioDialog> : null}
 
       {yt ? (
         <div
@@ -652,67 +793,36 @@ export function PublishPanel({
         </div>
       ) : null}
 
+      {distributionDialog === "destinations" ? <StudioDialog title="Choose publish accounts" description="Select ready platform outputs. YouTube/Instagram require their own ready render; Facebook/Threads use the primary render unless you added a dedicated branded output." onClose={() => setDistributionDialog(null)}>
       <div className="grid gap-2 rounded-md border border-border bg-background/35 p-2.5">
         <div className="text-xs font-semibold text-foreground">Publish destinations</div>
-        <p className="text-[11px] text-muted-foreground">Only accounts with a ready, channel-specific outro can be selected. Each upload uses that destination&apos;s own rendered video—not another channel&apos;s primary output.</p>
+        <p className="text-[11px] text-muted-foreground">Each selected account shows the exact output it will receive. Facebook and Threads intentionally remain cheap primary-render cross-posts until you add a dedicated branded output in Reel accounts &amp; outros.</p>
         {channels.length ? <DestinationGroup icon={<Youtube size={14} className="text-red-500" />} title="YouTube Shorts">{channels.map((channel) => { const destination = destinationByAccount.get(`youtube:${channel.id}`); const ready = Boolean(destination?.ready); return <DestinationOption key={channel.id} checked={selectedYoutubeIds.includes(channel.id)} disabled={busy || !ready} onChange={() => toggle(channel.id, setSelectedYoutubeIds)} label={channel.googleChannelTitle || channel.label} detail={ready ? `${destination?.detail} · ${channel.privacyStatus}` : `${destination?.detail ?? "add in Channels"} · unavailable`} />; })}</DestinationGroup> : null}
         {instagramChannels.length ? <DestinationGroup icon={<Instagram size={14} className="text-pink-500" />} title="Instagram Reels">{instagramChannels.map((channel) => { const publish = instagramPublishByChannel.get(channel.id); const active = publish?.status === "pending" || publish?.status === "uploading"; const destination = destinationByAccount.get(`instagram:${channel.id}`); const ready = Boolean(destination?.ready); return <DestinationOption key={channel.id} checked={selectedInstagramIds.includes(channel.id)} disabled={busy || channel.status !== "active" || active || !ready} onChange={() => toggle(channel.id, setSelectedInstagramIds)} label={channel.username ? `@${channel.username}` : channel.label} detail={active ? `${publish?.status} · ${publish?.message ?? "working"}` : !ready ? `${destination?.detail ?? "add in Channels"} · unavailable` : publish?.status === "published" ? "published · select to republish" : destination?.detail ?? channel.label} />; })}</DestinationGroup> : null}
-        {!channels.length && !instagramChannels.length ? <div className="text-xs text-warning">Connect an account from Accounts before publishing.</div> : null}
+        {facebookPages.length ? <DestinationGroup icon={<Facebook size={14} className="text-blue-600" />} title="Facebook Reels">{facebookPages.map((page) => { const destination = crossPostOutput("facebook", page.id); const ready = Boolean(destination.ready); return <DestinationOption key={page.id} checked={selectedFacebookIds.includes(page.id)} disabled={busy || page.status !== "active" || !ready} onChange={() => toggle(page.id, setSelectedFacebookIds)} label={page.name || page.label} detail={ready ? destination.detail : `${destination.detail} · unavailable`} />; })}</DestinationGroup> : null}
+        {threadsChannels.length ? <DestinationGroup icon={<AtSign size={14} />} title="Threads">{threadsChannels.map((channel) => { const destination = crossPostOutput("threads", channel.id); const ready = Boolean(destination.ready); return <DestinationOption key={channel.id} checked={selectedThreadsIds.includes(channel.id)} disabled={busy || channel.status !== "active" || !ready} onChange={() => toggle(channel.id, setSelectedThreadsIds)} label={channel.username ? `@${channel.username}` : channel.name || channel.label} detail={ready ? destination.detail : `${destination.detail} · unavailable`} />; })}</DestinationGroup> : null}
+        {!channels.length && !instagramChannels.length && !facebookPages.length && !threadsChannels.length ? <div className="text-xs text-warning">Connect an account from Accounts before publishing.</div> : null}
+        {instagramCaptionRequired ? <div role="alert" className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">Generate or add a non-empty Instagram caption before publishing. It is saved separately from YouTube metadata.</div> : null}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <span className="text-[11px] text-muted-foreground">The selected accounts will use their saved platform-specific publishing details.</span>
+          <Button type="button" disabled={busy || targetCount === 0 || (selectedInstagramIds.length > 0 && instagramPublishBlocked)} onClick={() => void publishSelectedAccounts()}>
+            {busy ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />} Publish to {targetCount || "…"} account{targetCount === 1 ? "" : "s"}
+          </Button>
+        </div>
       </div>
+      </StudioDialog> : null}
       {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} message={publish.message} icon={<Instagram size={12} />} />)}</div> : null}
       {activeInstagram.length ? <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"><strong>Publishing in progress.</strong> {activeInstagram.map((publish) => `${publish.channelLabel ?? publish.channelId}: ${publish.message ?? publish.status}`).join(" · ")} The Studio is locked until these destinations settle.</div> : null}
-      {instagramCaptionRequired ? <div role="alert" className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">Generate or add a non-empty Instagram caption before publishing. It is saved separately from YouTube metadata.</div> : null}
-
-      <Button
-        type="button"
-        variant="default"
-        disabled={busy || targetCount === 0 || (selectedInstagramIds.length > 0 && instagramPublishBlocked)}
-        onClick={() =>
-          requestConfirm({
-            title: republishingInstagram.length ? "Republish to Instagram?" : "Publish to selected accounts?",
-            body: republishingInstagram.length ? `This sends another Reel to ${republishingInstagram.join(", ")}. Only continue if you intentionally removed or want to replace the previous post.` : `Queues the ready channel-specific render for ${targetCount} destination${targetCount === 1 ? "" : "s"}. YouTube receives its title, tags, and thumbnail; Instagram receives the Reel and caption.`,
-            details: [
-              selectedInstagramIds.length
-                ? "Saves the YouTube title, description, tags, and Instagram caption shown here before queuing uploads."
-                : "Saves the YouTube title, description, and tags shown here before queuing uploads.",
-              ...(selectedInstagramIds.length
-                ? ["Native poll drafts are creator-only notes; Meta cannot attach a poll sticker to this API upload."]
-                : []),
-              "Every selected account uploads only its own rendered destination output and branded outro.",
-              "The upload runs in the background — status appears above.",
-            ],
-            confirmLabel: "Publish",
-            onConfirm: async () => {
-              const result = await run(async () => {
-                await persistYoutubeMetadata();
-                // This must finish before an Instagram publish is queued. The
-                // worker reads persisted settings, not this component's local
-                // state, so omitting it could publish a stale caption.
-                if (selectedInstagramIds.length) {
-                  await persistInstagramMetadata();
-                }
-                // The confirmation modal is the explicit user authorization for
-                // a resend. Do not infer it from a potentially stale reel
-                // snapshot after a previous failed request.
-                return distributeReel(reelKey, { youtubeChannelIds: selectedYoutubeIds, instagramChannelIds: selectedInstagramIds, forceRepublish: selectedInstagramIds.length > 0 });
-              });
-              if (result.ok) {
-                youtubeCopyDirtyRef.current = false;
-                youtubeTagsDirtyRef.current = false;
-                setYoutubeSaveState("saved");
-                if (selectedInstagramIds.length) {
-                  instagramCaptionDirtyRef.current = false;
-                  instagramShareDirtyRef.current = false;
-                  setInstagramSaveState("saved");
-                }
-              }
-              return result;
-            },
-          })
-        }
-      >
-        <Send size={15} /> Publish to {targetCount || "…"} account{targetCount === 1 ? "" : "s"}
-      </Button>
+      {distributionDialog === "facebook" ? <StudioDialog title="Facebook Reels publishing settings" description="Edit and save Page-only description. Choose the Page and send the Reel from Publish accounts." onClose={() => setDistributionDialog(null)}>
+        <CrossPostPanel reel={reel} busy={busy} run={run} focus="facebook" onOpenPublishAccounts={() => setDistributionDialog("destinations")} />
+      </StudioDialog> : null}
+      {distributionDialog === "threads" ? <StudioDialog title="Threads publishing settings" description="Edit and save Threads-only post text. Choose the profile and send the post from Publish accounts." onClose={() => setDistributionDialog(null)}>
+        <CrossPostPanel reel={reel} busy={busy} run={run} focus="threads" onOpenPublishAccounts={() => setDistributionDialog("destinations")} />
+      </StudioDialog> : null}
+      {distributionDialog === "engagement" ? <StudioDialog title="Facebook, Threads & engagement" description="Manage cross-post copy and the supported first-comment or first-reply actions." onClose={() => setDistributionDialog(null)}>
+        <CrossPostPanel reel={reel} busy={busy} run={run} onOpenPublishAccounts={() => setDistributionDialog("destinations")} />
+      </StudioDialog> : null}
+      {outroManagerOpen ? <DestinationManagerDialog reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} onClose={() => setOutroManagerOpen(false)} /> : null}
     </div>
   );
 }
@@ -748,6 +858,7 @@ function DraftSaveNotice({
 
 function DestinationGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) { return <div className="grid gap-1"><div className="inline-flex items-center gap-1 text-xs font-medium text-foreground">{icon}{title}</div>{children}</div>; }
 function DestinationOption({ checked, disabled, onChange, label, detail }: { checked: boolean; disabled: boolean; onChange: () => void; label: string; detail: string }) { return <label className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1.5 text-xs hover:bg-secondary"><input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} /><span className="min-w-0 flex-1 truncate font-medium">{label}</span><span className="truncate text-muted-foreground">{detail}</span></label>; }
+function DistributionLink({ icon, title, detail, onClick }: { icon: React.ReactNode; title: string; detail: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="grid cursor-pointer gap-1 rounded-md border border-border bg-card p-2.5 text-left transition-colors hover:border-primary/35 hover:bg-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">{icon}{title}</span><span className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{detail}</span><span className="text-[11px] font-medium text-primary">Open settings →</span></button>; }
 function PublishOutcome({ label, status, url, error, message, icon }: { label: string; status: string; url?: string; error?: string; message?: string; icon: React.ReactNode }) { return <div className="flex items-center gap-2 rounded border border-border px-2 py-1.5 text-xs"><span>{icon}</span><span className="min-w-0 flex-1 truncate font-medium">{label}</span><span className="capitalize text-muted-foreground">{status}</span>{url ? <a href={url} target="_blank" rel="noreferrer" className="text-primary"><ExternalLink size={12} /></a> : null}<span className={cn("max-w-64 truncate", error ? "text-destructive" : "text-muted-foreground")} title={error || message}>{error || message}</span></div>; }
 
 function HashtagSuggestions({ label, tags, selected, onAdd }: { label: string; tags: string[]; selected: string[]; onAdd: (tag: string) => void }) {

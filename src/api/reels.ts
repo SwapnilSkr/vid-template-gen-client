@@ -147,7 +147,7 @@ export interface OutroSettings {
 /** One publish destination: a channel + its own outro + its own rendered video. */
 export interface ReelDestination {
   id: string;
-  platform: "youtube" | "instagram";
+  platform: "youtube" | "instagram" | "facebook" | "threads";
   channelId: string;
   channelLabel?: string;
   outro?: OutroSettings;
@@ -214,6 +214,9 @@ export interface Reel {
     /** Whether Shorts vertical cover (oar2) changed after custom thumb upload. */
     shortsCoverStatus?: "applied" | "unchanged" | "unknown";
     publishedAt?: string;
+    firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
+    firstCommentId?: string;
+    firstCommentError?: string;
   };
   instagram?: Array<{
     channelId: string;
@@ -224,6 +227,34 @@ export interface Reel {
     url?: string;
     error?: string;
     message?: string;
+    updatedAt?: string;
+    publishedAt?: string;
+    firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
+    firstCommentId?: string;
+    firstCommentError?: string;
+  }>;
+  facebook?: Array<{
+    channelId: string;
+    channelLabel?: string;
+    status: "pending" | "uploading" | "published" | "failed";
+    videoId?: string;
+    url?: string;
+    error?: string;
+    message?: string;
+    firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
+    updatedAt?: string;
+    publishedAt?: string;
+  }>;
+  threads?: Array<{
+    channelId: string;
+    channelLabel?: string;
+    status: "pending" | "uploading" | "published" | "failed";
+    containerId?: string;
+    mediaId?: string;
+    url?: string;
+    error?: string;
+    message?: string;
+    firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
     updatedAt?: string;
     publishedAt?: string;
   }>;
@@ -243,6 +274,8 @@ export interface Reel {
       model?: string;
     };
   };
+  facebookSettings?: { description?: string };
+  threadsSettings?: { text?: string };
   seriesId?: string;
   partNumber?: number;
   partCount?: number;
@@ -257,7 +290,7 @@ export interface Reel {
   destinations?: ReelDestination[];
   /** Ephemeral response metadata from a destination-delete mutation. */
   lastDestinationRemoval?: {
-    destination: { id: string; platform: "youtube" | "instagram"; channelId: string; channelLabel?: string };
+    destination: { id: string; platform: "youtube" | "instagram" | "facebook" | "threads"; channelId: string; channelLabel?: string };
     cleanup: DestinationRemovalSummary;
   };
   /** Skip multi-part "Stay tuned for part N" (Reddit mid-series only). */
@@ -391,7 +424,7 @@ export interface CreateReelInput {
   outroInstagramChannelId?: string;
   outro?: OutroSettings;
   /** Multi-channel destinations — one video per destination, each with its own outro. */
-  destinations?: { platform: "youtube" | "instagram"; channelId: string; outro?: OutroSettings }[];
+  destinations?: { platform: "youtube" | "instagram" | "facebook" | "threads"; channelId: string; outro?: OutroSettings }[];
   thumbnailMode?: "frame" | "ai";
   imageModel?: string;
   artStyleId?: string;
@@ -467,6 +500,41 @@ export interface InstagramChannelOption {
   niches?: string[];
   status: "active" | "needs_reauth" | "disabled";
   lastError?: string;
+}
+
+export interface FacebookPageOption {
+  id: string;
+  label: string;
+  pageId: string;
+  name?: string;
+  category?: string;
+  pictureUrl?: string;
+  niches?: string[];
+  status: "active" | "needs_reauth" | "disabled";
+  lastError?: string;
+}
+
+export interface ThreadsChannelOption {
+  id: string;
+  label: string;
+  threadsUserId: string;
+  username?: string;
+  name?: string;
+  profilePictureUrl?: string;
+  niches?: string[];
+  status: "active" | "needs_reauth" | "disabled";
+  lastError?: string;
+}
+
+export interface OwnPostComment {
+  id: string;
+  text: string;
+  author?: string;
+  username?: string;
+  publishedAt?: string;
+  timestamp?: string;
+  likeCount?: number;
+  replyCount: number;
 }
 
 export interface ImageModelOption {
@@ -655,6 +723,54 @@ export async function deleteInstagramChannel(id: string): Promise<void> { await 
 export async function updateInstagramChannel(id: string, input: { label?: string; niches?: string[] }): Promise<void> { await request(`/instagram/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
 export async function distributeReel(id: string, input: { youtubeChannelIds?: string[]; instagramChannelIds?: string[]; forceRepublish?: boolean }): Promise<Reel> {
   return request<Reel>(`/reels/${id}/distribute`, { method: "POST", body: JSON.stringify(input) });
+}
+
+// ---- Facebook Reels (owned Pages) ----
+export async function listFacebookPages(): Promise<FacebookPageOption[]> {
+  return request<FacebookPageOption[]>("/facebook/channels");
+}
+export async function startFacebookConnect(input: { label: string; channelKey?: string; niches?: string[] }): Promise<{ authUrl: string }> {
+  return request<{ authUrl: string }>("/facebook/connect/start", { method: "POST", body: JSON.stringify(input) });
+}
+export async function deleteFacebookPage(id: string): Promise<void> { await request(`/facebook/channels/${encodeURIComponent(id)}`, { method: "DELETE" }); }
+export async function updateFacebookPage(id: string, input: { label?: string; niches?: string[] }): Promise<void> { await request(`/facebook/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
+export async function publishReelToFacebook(reelId: string, channelId: string): Promise<{ facebook: unknown }> {
+  return request(`/facebook/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/publish`, { method: "POST" });
+}
+
+// ---- Threads (owned profiles) ----
+export async function listThreadsChannels(): Promise<ThreadsChannelOption[]> {
+  return request<ThreadsChannelOption[]>("/threads/channels");
+}
+export async function startThreadsConnect(input: { label: string; channelKey?: string; niches?: string[] }): Promise<{ authUrl: string }> {
+  return request<{ authUrl: string }>("/threads/connect/start", { method: "POST", body: JSON.stringify(input) });
+}
+export async function deleteThreadsChannel(id: string): Promise<void> { await request(`/threads/channels/${encodeURIComponent(id)}`, { method: "DELETE" }); }
+export async function updateThreadsChannel(id: string, input: { label?: string; niches?: string[] }): Promise<void> { await request(`/threads/channels/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) }); }
+export async function publishReelToThreads(reelId: string, channelId: string): Promise<{ threads: unknown }> {
+  return request(`/threads/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/publish`, { method: "POST" });
+}
+
+// ---- Own-post comment layer (own-media only) ----
+export async function listYouTubeComments(reelId: string, channelId: string, limit?: number): Promise<OwnPostComment[]> {
+  const q = new URLSearchParams({ channelId, ...(limit ? { limit: String(limit) } : {}) });
+  return request<OwnPostComment[]>(`/youtube/reels/${encodeURIComponent(reelId)}/comments?${q}`);
+}
+export async function postYouTubeFirstComment(reelId: string, channelId?: string): Promise<{ commentId: string }> {
+  return request(`/youtube/reels/${encodeURIComponent(reelId)}/first-comment`, { method: "POST", body: JSON.stringify({ channelId }) });
+}
+export async function replyToYouTubeComment(channelId: string, commentId: string, message: string): Promise<{ replyId: string }> {
+  return request(`/youtube/comments/reply`, { method: "POST", body: JSON.stringify({ channelId, commentId, message }) });
+}
+export async function listInstagramComments(reelId: string, channelId: string, limit?: number): Promise<OwnPostComment[]> {
+  const q = new URLSearchParams({ channelId, ...(limit ? { limit: String(limit) } : {}) });
+  return request<OwnPostComment[]>(`/instagram/reels/${encodeURIComponent(reelId)}/comments?${q}`);
+}
+export async function postInstagramFirstComment(reelId: string, channelId: string): Promise<{ commentId: string }> {
+  return request(`/instagram/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/first-comment`, { method: "POST" });
+}
+export async function replyToInstagramComment(channelId: string, commentId: string, message: string): Promise<{ replyId: string }> {
+  return request(`/instagram/comments/reply`, { method: "POST", body: JSON.stringify({ channelId, commentId, message }) });
 }
 
 export async function createReel(input: CreateReelInput): Promise<{ id: string; parts: Reel[] }> {
@@ -1072,10 +1188,22 @@ export interface ReelSettingsInput {
     shareToFeed?: boolean;
     poll?: { question?: string; optionA?: string; optionB?: string };
   };
+  facebook?: { description?: string };
+  threads?: { text?: string };
 }
 
 export async function updateReelSettings(id: string, patch: ReelSettingsInput): Promise<Reel> {
   return request<Reel>(`/reels/${id}/settings`, { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export interface WordAlignmentStatus {
+  enabled: boolean;
+  ready: boolean;
+  detail: string;
+}
+
+export async function getWordAlignmentStatus(): Promise<WordAlignmentStatus> {
+  return request<WordAlignmentStatus>("/maintenance/word-alignment");
 }
 
 export async function updateCaptions(id: string, patch: CaptionStyle): Promise<Reel> {
@@ -1109,6 +1237,18 @@ export async function regenerateReel(
   mode: "render_only" | "assets" | "outro_only" | "composite_only"
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/regenerate`, { method: "POST", body: JSON.stringify({ mode }) });
+}
+
+/** Rebuild outro card/video from current account data. The backend reuses
+ * cached outro audio when the narration text and TTS choice still match. */
+export async function retryReelOutro(
+  id: string,
+  retry: { scope: "all" | "primary" | "destination"; destinationId?: string },
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/outro/retry`, {
+    method: "POST",
+    body: JSON.stringify(retry),
+  });
 }
 
 /** Resume a failed produce job — reuses S3 scene assets, re-runs render→upload. */
@@ -1312,7 +1452,12 @@ export async function listReelDestinations(id: string): Promise<ReelDestination[
 /** Add a channel destination. Renders its outro now when the reel is produced. */
 export async function addReelDestination(
   id: string,
-  input: { platform: "youtube" | "instagram"; channelId: string; outro?: OutroSettings },
+  input: {
+    platform: "youtube" | "instagram" | "facebook" | "threads";
+    channelId: string;
+    outro?: OutroSettings;
+    scope?: "reel" | "series";
+  },
 ): Promise<Reel> {
   return request<Reel>(`/reels/${id}/destinations`, {
     method: "POST",
@@ -1340,7 +1485,7 @@ export async function setReelPrimaryDestination(
 export async function removeReelDestination(id: string, destId: string): Promise<Reel> {
   const result = await request<{
     reel: Reel;
-    destination: { id: string; platform: "youtube" | "instagram"; channelId: string; channelLabel?: string };
+    destination: { id: string; platform: "youtube" | "instagram" | "facebook" | "threads"; channelId: string; channelLabel?: string };
     cleanup: DestinationRemovalSummary;
   }>(`/reels/${id}/destinations/${destId}`, { method: "DELETE" });
   // The Studio action runner still receives a normal Reel, while the panel can
