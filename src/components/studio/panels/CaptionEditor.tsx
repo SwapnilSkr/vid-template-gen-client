@@ -3,11 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyCaptions,
   getReel,
+  getWordAlignmentStatus,
   listFonts,
   updateCaptions,
   type CaptionStyle,
   type FontOption,
   type Reel,
+  type WordAlignmentStatus,
 } from "@/api/reels";
 import { CaptionSmokeButton } from "@/components/reels/CaptionSmokeDialog";
 import { CostChip, RenderCacheStatus, describeRenderCost } from "@/components/reels/RenderCostHint";
@@ -71,6 +73,26 @@ export function CaptionEditor({
       .then(setFonts)
       .catch(() => setFonts([]));
   }, []);
+  const isRedditStory = reel.niche === "reddit" || reel.strategy === "gameplay_overlay";
+  const [alignmentStatus, setAlignmentStatus] = useState<WordAlignmentStatus>();
+  useEffect(() => {
+    if (!isRedditStory) return;
+    let cancelled = false;
+    void getWordAlignmentStatus()
+      .then((status) => {
+        if (!cancelled) setAlignmentStatus(status);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setAlignmentStatus({
+            enabled: false,
+            ready: false,
+            detail: error instanceof Error ? error.message : "Could not check local word sync.",
+          });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [isRedditStory]);
   const previewRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const dragOffsetRef = useRef(0);
@@ -162,6 +184,26 @@ export function CaptionEditor({
   return (
     <div className="grid gap-2.5">
       <PanelTitle className="text-foreground">Captions</PanelTitle>
+      {isRedditStory ? (
+        <div
+          role="status"
+          className={cn(
+            "grid gap-0.5 rounded-md border px-2.5 py-2 text-[11px]",
+            alignmentStatus?.ready
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : alignmentStatus?.enabled
+                ? "border-warning/40 bg-warning/10 text-warning"
+                : "border-border bg-muted/40 text-muted-foreground",
+          )}
+        >
+          <span className="font-medium">
+            {alignmentStatus
+              ? alignmentStatus.ready ? "Local word sync ready" : "Local word sync unavailable"
+              : "Checking local word sync…"}
+          </span>
+          {alignmentStatus ? <span className="leading-relaxed">{alignmentStatus.detail}</span> : null}
+        </div>
+      ) : null}
       <RenderCacheStatus reel={reel} intent="captions" />
 
       <div

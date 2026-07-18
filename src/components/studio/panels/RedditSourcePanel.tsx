@@ -5,14 +5,11 @@ import {
   replanReel,
   replanReelSeries,
   restructureSeriesParts,
-  getSeriesStructureAdvice,
-  chooseSeriesStructure,
   regenerateReel,
   updateRedditCard,
   updateReelSettings,
   type GameplayClip,
   type Reel,
-  type SeriesStructureAdvice,
 } from "@/api/reels";
 import type { StorySource } from "@/api/stories";
 import {
@@ -58,20 +55,6 @@ function isMultiPartSeries(reel: Reel): boolean {
   return Boolean(reel.seriesId && (reel.partCount ?? 1) > 1);
 }
 
-function breakSummary(advice: SeriesStructureAdvice): string {
-  if (advice.breaks.length === 0) return "No episode seam is needed.";
-  const strong = advice.breaks.filter((item) => item.quality === "strong").length;
-  const serviceable = advice.breaks.filter((item) => item.quality === "serviceable").length;
-  const weak = advice.breaks.length - strong - serviceable;
-  return [
-    strong ? `${strong} strong hook${strong === 1 ? "" : "s"}` : "",
-    serviceable ? `${serviceable} serviceable` : "",
-    weak ? `${weak} duration-driven` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 export function RedditSourcePanel({
   reel,
   busy,
@@ -100,8 +83,6 @@ export function RedditSourcePanel({
   );
   const [seriesParts, setSeriesParts] = useState<SeriesParts>(() => defaultSeriesParts(reel));
   const [restructureTo, setRestructureTo] = useState<SeriesParts>(() => defaultSeriesParts(reel));
-  const [structureAdvice, setStructureAdvice] = useState<SeriesStructureAdvice>();
-  const [structureAdviceLoading, setStructureAdviceLoading] = useState(false);
 
   useEffect(() => {
     setReplanScope(isMultiPartSeries(reel) ? "series" : "episode");
@@ -124,28 +105,6 @@ export function RedditSourcePanel({
       .then(setClips)
       .catch(() => setClips([]));
   }, []);
-
-  useEffect(() => {
-    if (!reelKey || !story?.body) {
-      setStructureAdvice(undefined);
-      return;
-    }
-    let cancelled = false;
-    setStructureAdviceLoading(true);
-    void getSeriesStructureAdvice(reelKey)
-      .then((advice) => {
-        if (!cancelled) setStructureAdvice(advice);
-      })
-      .catch(() => {
-        if (!cancelled) setStructureAdvice(undefined);
-      })
-      .finally(() => {
-        if (!cancelled) setStructureAdviceLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reelKey, story?.body]);
 
   const cardDirty =
     title !== (story?.title ?? reel.title ?? "") ||
@@ -404,67 +363,9 @@ export function RedditSourcePanel({
             Re-split keeps the same words; each reel stays ~1–2 min.
             {isMultiPartSeries(reel) ? " Applies across every episode." : " Splits this reel into a series."}
           </p>
-          {structureAdviceLoading ? (
-            <p className="m-0 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <Loader2 size={13} className="animate-spin" /> AI is assessing story structure…
-            </p>
-          ) : structureAdvice ? (
-            <div className="grid gap-2 rounded-md border border-primary/25 bg-primary/5 p-2.5 text-xs">
-              <p className="m-0 font-medium text-foreground">
-                AI recommendation: {structureAdvice.recommendedParts} {structureAdvice.recommendedParts === 1 ? "reel" : "parts"}
-                <span className="font-normal text-muted-foreground">
-                  {` · ~${Math.ceil(structureAdvice.estimatedDurationSeconds / 60)} min total · ${structureAdvice.wordCount} words`}
-                </span>
-              </p>
-              <p className="m-0 leading-relaxed text-muted-foreground">{structureAdvice.reason}</p>
-              <p className="m-0 text-[11px] text-muted-foreground">
-                Proposed seams: {breakSummary(structureAdvice)}
-              </p>
-              {structureAdvice.hasWeakBreaks ? (
-                <p className="m-0 leading-relaxed text-amber-300">
-                  At least one break is driven by the two-minute cap rather than a strong cliffhanger.
-                </p>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || structureAdvice.recommendedParts === structureAdvice.currentParts}
-                  onClick={() =>
-                    requestConfirm({
-                      title: "Use AI-recommended structure?",
-                      body: `This will re-plan the story into ${structureAdvice.recommendedParts} ${structureAdvice.recommendedParts === 1 ? "reel" : "parts"}: ${structureAdvice.reason}`,
-                      details: [
-                        "The AI assessment cost is already recorded; applying this also uses LLM cut-selection credits.",
-                        "Every affected episode is re-planned; scene assets are cleared until you approve and produce again.",
-                      ],
-                      confirmLabel: "Use recommendation",
-                      costTone: "paid",
-                      onConfirm: () => run(() => chooseSeriesStructure(reelKey, "recommended")),
-                    })
-                  }
-                >
-                  <Wand2 size={14} />
-                  {structureAdvice.recommendedParts === structureAdvice.currentParts
-                    ? "Current structure matches"
-                    : "Use recommendation"}
-                </Button>
-                {structureAdvice.recommendedParts !== structureAdvice.currentParts ? (
-                  <span className="text-[11px] text-muted-foreground">Or choose a manual override below, then confirm it.</span>
-                ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => run(() => chooseSeriesStructure(reelKey, "manual"))}
-                >
-                  Keep current plan
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+            The AI recommendation and the required “Keep current plan” / “Use recommendation” decision appear in the Generate reel confirmation, where the choice is applied immediately before paid production.
+          </p>
           <div className="flex items-end gap-2">
             <Label className="flex-1">
               Parts

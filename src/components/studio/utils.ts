@@ -18,17 +18,17 @@ export function compactOutroSettings(outro: OutroSettings): OutroSettings {
 export const DEFAULT_OUTRO_COMMENT_PROMPT =
   "What would you have done in this situation?";
 
-export function defaultOutroCta(platform: "youtube" | "instagram"): "SUBSCRIBE" | "FOLLOW" {
-  return platform === "instagram" ? "FOLLOW" : "SUBSCRIBE";
+export function defaultOutroCta(platform: "youtube" | "instagram" | "facebook" | "threads"): "SUBSCRIBE" | "FOLLOW" {
+  return platform === "youtube" ? "SUBSCRIBE" : "FOLLOW";
 }
 
 export function defaultOutroSpokenLine(
-  platform: "youtube" | "instagram",
+  platform: "youtube" | "instagram" | "facebook" | "threads",
   channelName = "Channel Name",
 ): string {
-  return platform === "instagram"
-    ? `Follow ${channelName} for more stories.`
-    : `Subscribe to ${channelName} for more stories.`;
+  return platform === "youtube"
+    ? `Subscribe to ${channelName} for more stories.`
+    : `Follow ${channelName} for more stories.`;
 }
 
 export function channelDisplayName(channel: YouTubeChannelOption): string {

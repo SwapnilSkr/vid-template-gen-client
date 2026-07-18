@@ -1,6 +1,7 @@
 import { Film, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { getReelDefaults, listInstagramChannels, type CreateReelInput, type ImageModelOption, type InstagramChannelOption, type ReelDefaults, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
+import { getReelDefaults, listFacebookPages, listInstagramChannels, listThreadsChannels, type CreateReelInput, type FacebookPageOption, type ImageModelOption, type InstagramChannelOption, type ReelDefaults, type ThreadsChannelOption, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
+import { listStoryGenres, type RedditGenreOption } from "@/api/stories";
 import { listHorrorReferences, type HorrorReference } from "@/api/trends";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -132,6 +133,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const loadYouTubeChannels = useReelStudio((state) => state.loadYouTubeChannels);
   const [form, setForm] = useState<CreateReelInput>(defaultForm);
   const [instagramChannels, setInstagramChannels] = useState<InstagramChannelOption[]>([]);
+  const [facebookPages, setFacebookPages] = useState<FacebookPageOption[]>([]);
+  const [threadsChannels, setThreadsChannels] = useState<ThreadsChannelOption[]>([]);
+  const [redditGenres, setRedditGenres] = useState<RedditGenreOption[]>([]);
   const [sourcePostMode, setSourcePostMode] = useState<SourcePostMode>("browse");
   const [step, setStep] = useState<CreateStep>("settings");
   const [storySelection, setStorySelection] = useState<StorySelection | null>(null);
@@ -155,6 +159,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
     void loadArtStyles();
     void loadYouTubeChannels();
     void listInstagramChannels().then(setInstagramChannels).catch(() => setInstagramChannels([]));
+    void listFacebookPages().then(setFacebookPages).catch(() => setFacebookPages([]));
+    void listThreadsChannels().then(setThreadsChannels).catch(() => setThreadsChannels([]));
+    void listStoryGenres().then(setRedditGenres).catch(() => setRedditGenres([]));
   }, [loadGameplay, loadHorrorAudio, loadImageModels, loadArtStyles, loadYouTubeChannels]);
 
   useEffect(() => {
@@ -203,7 +210,11 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
   const selectedVoice = useReelStudio((state) =>
     state.ttsVoices.find((option) => option.model === form.ttsModel && option.voice === form.ttsVoice)
   );
-  const genreOptions = NICHE_GENRES[form.niche] ?? [];
+  // Reddit genres are authored and expanded in the server's REDDIT_GENRES
+  // catalog. Keep the legacy client list only as an offline/API-error fallback.
+  const genreOptions = form.niche === "reddit" && redditGenres.length
+    ? redditGenres.map((genre) => ({ id: genre.id, label: genre.label }))
+    : (NICHE_GENRES[form.niche] ?? []).map((genre) => ({ id: genre, label: formatLabel(genre) }));
   const estimatedSceneCount = form.niche.startsWith("horror") ? 9 : 5;
   const horrorArtStyles = artStyles.filter((style) => style.niches.includes("horror"));
   const selectedArtStyle = horrorArtStyles.find((style) => style.id === form.artStyleId);
@@ -335,7 +346,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             value={form.niche}
             onChange={(event) => {
               const niche = event.target.value;
-              const genres = NICHE_GENRES[niche] ?? [];
+              const genres = niche === "reddit" && redditGenres.length
+                ? redditGenres.map((genre) => genre.id)
+                : NICHE_GENRES[niche] ?? [];
               setForm({ ...form, niche, genre: genres[0], outroChannelId: undefined });
             }}
           >
@@ -350,8 +363,8 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
           Genre
           <Select value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })}>
             {genreOptions.map((genre) => (
-              <option key={genre} value={genre}>
-                {formatLabel(genre)}
+              <option key={genre.id} value={genre.id}>
+                {genre.label}
               </option>
             ))}
           </Select>
@@ -485,11 +498,17 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               {(form.destinations ?? []).map((dest) => {
                 const yt = youtubeChannels.find((c) => c.id === dest.channelId);
                 const ig = instagramChannels.find((c) => c.id === dest.channelId);
+                const fb = facebookPages.find((c) => c.id === dest.channelId);
+                const th = threadsChannels.find((c) => c.id === dest.channelId);
                 const label =
                   dest.platform === "instagram"
                     ? ig?.username
                       ? `@${ig.username}`
                       : (ig?.label ?? dest.channelId)
+                    : dest.platform === "facebook"
+                      ? fb?.name || fb?.label || dest.channelId
+                      : dest.platform === "threads"
+                        ? th?.username ? `@${th.username}` : th?.name || th?.label || dest.channelId
                     : yt
                       ? channelName(yt)
                       : dest.channelId;
@@ -524,8 +543,9 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
             onChange={(event) => {
               const value = event.target.value;
               if (!value) return;
-              const platform = value.startsWith("instagram:") ? "instagram" : "youtube";
-              const channelId = platform === "instagram" ? value.slice("instagram:".length) : value;
+              const [rawPlatform, ...channelParts] = value.split(":");
+              const platform = (channelParts.length ? rawPlatform : "youtube") as "youtube" | "instagram" | "facebook" | "threads";
+              const channelId = channelParts.length ? channelParts.join(":") : value;
               setForm((current) => ({
                 ...current,
                 destinations: [...(current.destinations ?? []), { platform, channelId }],
@@ -553,6 +573,20 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
               .map((c) => (
                 <option key={`instagram:${c.id}`} value={`instagram:${c.id}`}>
                   Instagram · {c.username ? `@${c.username}` : c.label}
+                </option>
+              ))}
+            {facebookPages
+              .filter((page) => !(form.destinations ?? []).some((d) => d.platform === "facebook" && d.channelId === page.id))
+              .map((page) => (
+                <option key={`facebook:${page.id}`} value={`facebook:${page.id}`}>
+                  Facebook Page · {page.name || page.label}
+                </option>
+              ))}
+            {threadsChannels
+              .filter((channel) => !(form.destinations ?? []).some((d) => d.platform === "threads" && d.channelId === channel.id))
+              .map((channel) => (
+                <option key={`threads:${channel.id}`} value={`threads:${channel.id}`}>
+                  Threads · {channel.username ? `@${channel.username}` : channel.name || channel.label}
                 </option>
               ))}
           </Select>

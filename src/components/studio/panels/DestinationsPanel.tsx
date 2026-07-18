@@ -1,23 +1,30 @@
-import { ChevronDown, Crown, Plus, RefreshCw, Sparkles, Trash2, Youtube } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { AtSign, ChevronDown, Crown, Facebook, Plus, RefreshCw, Sparkles, Trash2, Youtube } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addReelDestination,
+  listFacebookPages,
   listInstagramChannels,
+  listThreadsChannels,
   listYouTubeChannels,
   mediaUrl,
   regenerateOutroCommentPrompt,
   regenerateReel,
+  retryReelOutro,
   removeReelDestination,
   setReelPrimaryDestination,
   updateReelDestinationOutro,
   updateReelSettings,
   type InstagramChannelOption,
+  type FacebookPageOption,
   type OutroSettings,
   type Reel,
   type ReelDestination,
+  type ThreadsChannelOption,
   type YouTubeChannelOption,
 } from "@/api/reels";
 import { OutroIncludeToggles } from "@/components/studio/panels/OutroIncludeToggles";
+import { StudioDialog } from "@/components/studio/StudioDialog";
 import type { ConfirmAction, StudioRun } from "@/components/studio/types";
 import {
   channelDisplayName,
@@ -33,7 +40,8 @@ import { PanelTitle } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 import { canOutroOnlyRerender, REEL_ACTIVE_STATUSES } from "@/utils/reel";
 
-type Platform = "youtube" | "instagram";
+type Platform = "youtube" | "instagram" | "facebook" | "threads";
+type PrimaryPlatform = Extract<Platform, "youtube" | "instagram">;
 type PromptScope = "primary" | "inheriting" | "all";
 type PrimaryScope = "reel" | "series";
 
@@ -46,6 +54,13 @@ type ChannelChoice = {
   note?: string;
 };
 
+type OutroControlTarget = {
+  value: string;
+  label: string;
+  scope: "primary" | "destination";
+  destinationId?: string;
+};
+
 const statusTone: Record<ReelDestination["status"], string> = {
   ready: "text-emerald-500",
   rendering: "text-amber-500",
@@ -53,7 +68,7 @@ const statusTone: Record<ReelDestination["status"], string> = {
   failed: "text-destructive",
 };
 
-function primaryPlatform(reel: Reel): Platform {
+function primaryPlatform(reel: Reel): PrimaryPlatform {
   return reel.outroInstagramChannelId ? "instagram" : "youtube";
 }
 
@@ -69,7 +84,7 @@ function promptScopeLabel(scope: PromptScope): string {
 
 /** One destination-first workspace. The story question is global; account card
  * fields stay with their channel, so output/publish ownership is obvious. */
-export function DestinationsPanel({
+function DestinationManager({
   reel,
   busy,
   run,
@@ -89,7 +104,11 @@ export function DestinationsPanel({
   const extras = useMemo(() => reel.destinations ?? [], [reel.destinations]);
   const [yt, setYt] = useState<YouTubeChannelOption[]>([]);
   const [ig, setIg] = useState<InstagramChannelOption[]>([]);
+  const [facebook, setFacebook] = useState<FacebookPageOption[]>([]);
+  const [threads, setThreads] = useState<ThreadsChannelOption[]>([]);
+  const [crossPostLoadError, setCrossPostLoadError] = useState<string>();
   const [addValue, setAddValue] = useState("");
+  const [addScope, setAddScope] = useState<PrimaryScope>("reel");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, OutroSettings>>({});
   const [primaryDraft, setPrimaryDraft] = useState<OutroSettings>(reel.outro ?? {});
@@ -102,9 +121,18 @@ export function DestinationsPanel({
   const questionDirty = useRef(false);
 
   useEffect(() => {
-    void Promise.allSettled([listYouTubeChannels(), listInstagramChannels()]).then(([a, b]) => {
+    void Promise.allSettled([
+      listYouTubeChannels(),
+      listInstagramChannels(),
+      listFacebookPages(),
+      listThreadsChannels(),
+    ]).then(([a, b, fb, th]) => {
       setYt(a.status === "fulfilled" ? a.value : []);
       setIg(b.status === "fulfilled" ? b.value : []);
+      setFacebook(fb.status === "fulfilled" ? fb.value : []);
+      setThreads(th.status === "fulfilled" ? th.value : []);
+      const failure = fb.status === "rejected" ? fb.reason : th.status === "rejected" ? th.reason : undefined;
+      setCrossPostLoadError(failure instanceof Error ? failure.message : undefined);
     });
   }, []);
 
@@ -121,7 +149,7 @@ export function DestinationsPanel({
       key: `youtube:${channel.id}`,
       platform: "youtube" as const,
       channelId: channel.id,
-      label: channelDisplayName(channel),
+      label: `YouTube · ${channelDisplayName(channel)}`,
     })),
     ...ig.map((channel) => ({
       key: `instagram:${channel.id}`,
@@ -129,7 +157,19 @@ export function DestinationsPanel({
       channelId: channel.id,
       label: `Instagram · ${channel.username ? `@${channel.username}` : channel.label}`,
     })),
-  ], [yt, ig]);
+    ...facebook.map((page) => ({
+      key: `facebook:${page.id}`,
+      platform: "facebook" as const,
+      channelId: page.id,
+      label: `Facebook Page · ${page.name || page.label}`,
+    })),
+    ...threads.map((channel) => ({
+      key: `threads:${channel.id}`,
+      platform: "threads" as const,
+      channelId: channel.id,
+      label: `Threads · ${channel.username ? `@${channel.username}` : channel.name || channel.label}`,
+    })),
+  ], [yt, ig, facebook, threads]);
   const channelLabelByKey = useMemo(
     () => new Map(channels.map((channel) => [channel.key, channel.label])),
     [channels],
@@ -155,8 +195,10 @@ export function DestinationsPanel({
   // Do not preselect the current primary as a supposed replacement. That made
   // the destructive-looking actions disabled with no explanation and left the
   // creator guessing what they had done wrong.
-  const primaryOptions = useMemo(
-    () => channels.filter((channel) => channel.key !== currentPrimaryKey),
+  const primaryOptions = useMemo<Array<ChannelChoice & { platform: PrimaryPlatform }>>(
+    () => channels.filter((channel): channel is ChannelChoice & { platform: PrimaryPlatform } =>
+      channel.key !== currentPrimaryKey && (channel.platform === "youtube" || channel.platform === "instagram"),
+    ),
     [channels, currentPrimaryKey],
   );
   const selectedPrimary = primaryOptions.find((channel) => channel.key === primaryTarget);
@@ -177,8 +219,31 @@ export function DestinationsPanel({
   const addChannel = () => {
     const choice = addOptions.find((option) => option.key === addValue);
     if (!choice || choice.disabled) return;
-    void run(() => addReelDestination(reelKey, { platform: choice.platform, channelId: choice.channelId }));
-    setAddValue("");
+    const add = async () => {
+      const result = await run(() => addReelDestination(reelKey, {
+        platform: choice.platform,
+        channelId: choice.channelId,
+        scope: addScope,
+      }));
+      if (result.ok) setAddValue("");
+      return result;
+    };
+    if (addScope === "series" && reel.seriesId) {
+      requestConfirm({
+        title: `Add ${choice.label} to every story part?`,
+        body: "Each part gets its own channel-specific final output and branded outro for this account.",
+        details: [
+          "Parts that already have this extra destination are left unchanged.",
+          "Ready parts render only the newly added outro over their cached shared body.",
+          "Facebook/Threads get their own branded output only when you add them here; otherwise their publish flow keeps using the primary render.",
+        ],
+        confirmLabel: "Add to every part",
+        costTone: "paid",
+        onConfirm: add,
+      });
+      return;
+    }
+    void add();
   };
 
   const savePrimaryOutro = async (renderAfterSave = false) => {
@@ -292,13 +357,9 @@ export function DestinationsPanel({
   return (
     <div className="grid gap-4">
       <div className="grid gap-2.5">
-        <PanelTitle className="inline-flex items-center gap-2 text-foreground">
-          <Youtube size={15} className="text-primary" /> Destinations & outro
-        </PanelTitle>
         <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
           One story body, one required primary account, and dedicated branded outputs for every selected channel. Story discussion copy is global; account branding stays with its channel.
         </p>
-        <OutroIncludeToggles reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} />
         {!brandedEnabled ? (
           <p className="m-0 rounded border border-amber-500/25 bg-amber-500/[0.04] px-2.5 py-2 text-[11px] text-muted-foreground">
             Branded outro is off. You can still save its question and account-card copy now; it will be used when you enable the outro again. No outro render is queued while it stays off.
@@ -387,7 +448,12 @@ export function DestinationsPanel({
           Replace this primary with another connected account
           <Select disabled={busy || !primaryOptions.length} value={primaryTarget} onChange={(event) => setPrimaryTarget(event.target.value)}>
             <option value="">{primaryOptions.length ? "Choose a replacement account…" : "No other connected account"}</option>
-            {primaryOptions.map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
+            <optgroup label="YouTube Shorts">
+              {primaryOptions.filter((channel) => channel.platform === "youtube").map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
+            </optgroup>
+            <optgroup label="Instagram Reels">
+              {primaryOptions.filter((channel) => channel.platform === "instagram").map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
+            </optgroup>
           </Select>
         </Label>
         {!primaryOptions.length ? (
@@ -511,22 +577,231 @@ export function DestinationsPanel({
         })}
       </section>
 
+      <section className="grid gap-2 rounded-md border border-dashed border-border bg-background/30 p-3">
+        <div className="grid gap-0.5">
+          <span className="text-xs font-semibold text-foreground">Cross-post accounts</span>
+          <span className="text-[11px] leading-relaxed text-muted-foreground">By default these cross-post the completed primary render. Add either one below only when it needs its own profile-card outro.</span>
+        </div>
+        {crossPostLoadError ? <p role="status" className="m-0 text-[11px] text-warning">Could not load every cross-post account: {crossPostLoadError}</p> : null}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <ConnectedPlatformSummary icon={<Facebook size={14} className="text-blue-600" />} title="Facebook Reels" accounts={facebook.map((page) => page.name || page.label)} empty="No Facebook Page connected" />
+          <ConnectedPlatformSummary icon={<AtSign size={14} />} title="Threads" accounts={threads.map((channel) => channel.username ? `@${channel.username}` : channel.label)} empty="No Threads profile connected" />
+        </div>
+        <Link to="/accounts" className="justify-self-start text-[11px] font-medium text-primary underline-offset-2 hover:underline">Manage Facebook and Threads connections →</Link>
+      </section>
+
       <section className="grid gap-2 rounded-md border border-dashed border-border px-3 py-2.5">
-        <span className="text-[11px] font-semibold text-muted-foreground">Add a channel output</span>
-        {addOptions.length === 0 ? <p className="m-0 text-[11px] text-muted-foreground/70">Connect a YouTube or Instagram account first.</p> : (
+        <span className="text-[11px] font-semibold text-muted-foreground">Add a channel-specific outro output</span>
+        <p className="m-0 text-[11px] text-muted-foreground/70">Each added account gets a platform-specific branded final. Leave Facebook/Threads unadded to keep their low-cost primary-render cross-post.</p>
+        {addOptions.length === 0 ? <p className="m-0 text-[11px] text-muted-foreground/70">Connect a platform account first.</p> : (
           <div className="flex items-center gap-2">
             <Select disabled={busy} value={addValue} onChange={(event) => setAddValue(event.target.value)} className="min-w-0 flex-1">
               <option value="">{hasSelectableExtra ? "Choose a channel…" : "All connected channels are already assigned"}</option>
-              {addOptions.map((option) => <option key={option.key} value={option.key} disabled={option.disabled}>{option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}</option>)}
+              <optgroup label="YouTube Shorts">
+                {addOptions.filter((option) => option.platform === "youtube").map((option) => <option key={option.key} value={option.key} disabled={option.disabled}>{option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}</option>)}
+              </optgroup>
+              <optgroup label="Instagram Reels">
+                {addOptions.filter((option) => option.platform === "instagram").map((option) => <option key={option.key} value={option.key} disabled={option.disabled}>{option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}</option>)}
+              </optgroup>
+              <optgroup label="Facebook Pages">
+                {addOptions.filter((option) => option.platform === "facebook").map((option) => <option key={option.key} value={option.key} disabled={option.disabled}>{option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}</option>)}
+              </optgroup>
+              <optgroup label="Threads profiles">
+                {addOptions.filter((option) => option.platform === "threads").map((option) => <option key={option.key} value={option.key} disabled={option.disabled}>{option.disabled ? `✓ ${option.label} — ${option.note}` : option.label}</option>)}
+              </optgroup>
+            </Select>
+            <Select value={addScope} disabled={busy || !reel.seriesId} onChange={(event) => setAddScope(event.target.value as PrimaryScope)} className="w-[145px] shrink-0">
+              <option value="reel">This reel part</option>
+              <option value="series">Every story part</option>
             </Select>
             <Button type="button" variant="outline" disabled={busy || !addValue} onClick={addChannel}><Plus size={14} /> Add</Button>
           </div>
         )}
         <p className="m-0 text-[11px] text-muted-foreground/70">
-          {isPlanReview ? "Planned accounts receive their own branded output during first production." : "Adding a channel after production renders only that account's outro over the cached body."}
+          {isPlanReview ? "Planned accounts receive their own branded output during first production." : addScope === "series" && reel.seriesId ? "Every story part receives this account's own branded output; ready parts reuse their cached body." : "Adding a channel after production renders only that account's outro over the cached body."}
         </p>
       </section>
     </div>
+  );
+}
+
+export function DestinationManagerDialog({
+  reel,
+  busy,
+  run,
+  requestConfirm,
+  onClose,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: StudioRun;
+  requestConfirm: (action: ConfirmAction) => void;
+  onClose: () => void;
+}) {
+  return (
+    <StudioDialog
+      title="Accounts & branded outros"
+      description="Choose the primary and secondary accounts for this reel, then tailor each channel's outro. These changes affect this reel only."
+      onClose={onClose}
+    >
+      <DestinationManager reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} />
+    </StudioDialog>
+  );
+}
+
+function ConnectedPlatformSummary({
+  icon,
+  title,
+  accounts,
+  empty,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  accounts: string[];
+  empty: string;
+}) {
+  return (
+    <div className="grid gap-1 rounded border border-border bg-card/60 p-2.5">
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">{icon}{title}</span>
+      {accounts.length ? (
+        <span className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{accounts.join(" · ")}</span>
+      ) : (
+        <span className="text-[11px] text-muted-foreground/75">{empty}</span>
+      )}
+    </div>
+  );
+}
+
+export function DestinationsPanel({
+  reel,
+  busy,
+  run,
+  requestConfirm,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: StudioRun;
+  requestConfirm: (action: ConfirmAction) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [outroControlOpen, setOutroControlOpen] = useState(false);
+  const destinationCount = 1 + (reel.destinations?.length ?? 0);
+  const brandedEnabled = !reel.skipBrandedOutro;
+
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-1.5">
+        <PanelTitle className="inline-flex items-center gap-2 text-foreground">
+          <Youtube size={15} className="text-primary" /> Destinations & outro
+        </PanelTitle>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
+          Keep the inspector quiet: account routing and per-account branding open only when you need to change them.
+        </p>
+      </div>
+      <OutroIncludeToggles reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} />
+      {!brandedEnabled ? (
+        <p className="m-0 rounded border border-amber-500/25 bg-amber-500/[0.04] px-2.5 py-2 text-[11px] text-muted-foreground">
+          Branded outro is off. Your saved account copy remains available when you enable it again.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setOutroControlOpen(true)}
+        className="grid cursor-pointer gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground"><RefreshCw size={14} className="text-primary" /> Outro control centre</span>
+        <span className="text-[11px] leading-relaxed text-muted-foreground">Rebuild every outro or one account&apos;s card after a profile picture, name, handle, or card render issue — without re-voicing unchanged speech.</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="grid cursor-pointer gap-1 rounded-md border border-primary/25 bg-primary/[0.035] p-3 text-left transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground"><Crown size={14} className="text-primary" /> Manage primary & secondary accounts</span>
+        <span className="text-[11px] leading-relaxed text-muted-foreground">{destinationCount} assigned publish {destinationCount === 1 ? "account" : "accounts"} · add, remove, replace the primary, or edit channel-specific outro copy.</span>
+      </button>
+      {open ? <DestinationManagerDialog reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} onClose={() => setOpen(false)} /> : null}
+      {outroControlOpen ? <OutroControlDialog reel={reel} busy={busy} run={run} requestConfirm={requestConfirm} onClose={() => setOutroControlOpen(false)} /> : null}
+    </div>
+  );
+}
+
+function OutroControlDialog({
+  reel,
+  busy,
+  run,
+  requestConfirm,
+  onClose,
+}: {
+  reel: Reel;
+  busy: boolean;
+  run: StudioRun;
+  requestConfirm: (action: ConfirmAction) => void;
+  onClose: () => void;
+}) {
+  const reelKey = reel._id ?? reel.id ?? "";
+  const canRetry = !reel.skipBrandedOutro && Boolean(reel.bodyVideoUrl) && !REEL_ACTIVE_STATUSES.includes(reel.status);
+  const [target, setTarget] = useState("primary");
+  const primaryLabel = reel.outro?.channelName || reel.outroInstagramChannelId || reel.outroChannelId || "Primary account";
+  const targetOptions: OutroControlTarget[] = [
+    { value: "primary", label: `Primary · ${primaryLabel}`, scope: "primary" as const },
+    ...(reel.destinations ?? []).map((destination) => ({
+      value: destination.id,
+      label: `${destination.platform === "instagram" ? "Instagram" : destination.platform === "facebook" ? "Facebook" : destination.platform === "threads" ? "Threads" : "YouTube"} · ${destination.channelLabel || destination.channelId}`,
+      scope: "destination" as const,
+      destinationId: destination.id,
+    })),
+  ];
+  const selected = targetOptions.find((option) => option.value === target) ?? targetOptions[0];
+
+  const requestRetry = (scope: "all" | "primary" | "destination", destinationId?: string, label?: string) => {
+    if (!canRetry) return;
+    requestConfirm({
+      title: scope === "all" ? "Rebuild every branded outro?" : `Retry ${label ?? "this account"}'s outro?`,
+      body: scope === "all"
+        ? "Rebuilds every channel's outro card and final destination video over the cached story body."
+        : "Rebuilds only this account's outro card and final destination video over the cached story body.",
+      details: [
+        "The latest connected profile picture, name, and handle are resolved again before the card is drawn.",
+        "Existing outro speech is reused exactly when its saved narration matches the current spoken line and voice settings.",
+        "The story body, scene images, captions, and body narration are not regenerated.",
+      ],
+      confirmLabel: scope === "all" ? "Rebuild all outros" : "Retry outro visual",
+      costTone: "warm",
+      onConfirm: () => run(() => retryReelOutro(reelKey, { scope, destinationId })),
+    });
+  };
+
+  return (
+    <StudioDialog
+      title="Outro control centre"
+      description="Use this only when a completed outro needs its visual card rebuilt. It deliberately keeps matching cached speech instead of creating a new voice line."
+      onClose={onClose}
+    >
+      <div className="grid gap-3">
+        {!canRetry ? (
+          <p className="m-0 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning">
+            A completed shared body and an enabled branded outro are required. Wait for any active render to finish, then retry from here.
+          </p>
+        ) : null}
+        <section className="grid gap-2 rounded-md border border-primary/25 bg-primary/[0.035] p-3">
+          <div className="grid gap-0.5"><span className="text-xs font-semibold text-foreground">Global visual rebuild</span><span className="text-[11px] text-muted-foreground">Best after reconnecting an account or when several profile cards have missing/old profile information.</span></div>
+          <Button type="button" className="justify-self-start" disabled={busy || !canRetry} onClick={() => requestRetry("all")}><RefreshCw size={14} /> Rebuild all outros</Button>
+        </section>
+        <section className="grid gap-2 rounded-md border border-border bg-card p-3">
+          <div className="grid gap-0.5"><span className="text-xs font-semibold text-foreground">One-account visual retry</span><span className="text-[11px] text-muted-foreground">Use when only one channel&apos;s photo, handle, or card failed to appear correctly.</span></div>
+          <div className="flex flex-wrap items-end gap-2">
+            <Label className="min-w-[220px] flex-1 text-[11px] text-muted-foreground">Account
+              <Select value={target} disabled={busy || !canRetry} onChange={(event) => setTarget(event.target.value)}>
+                {targetOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </Select>
+            </Label>
+            <Button type="button" variant="outline" disabled={busy || !canRetry || !selected} onClick={() => requestRetry(selected.scope, selected.destinationId, selected.label)}><RefreshCw size={14} /> Retry selected outro</Button>
+          </div>
+        </section>
+        <p className="m-0 text-[11px] leading-relaxed text-muted-foreground/80">If the current spoken line or TTS choice changed since the cached outro was made, the system must create fresh outro speech. Otherwise this is a visual-only retry.</p>
+      </div>
+    </StudioDialog>
   );
 }
 
