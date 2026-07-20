@@ -1,5 +1,5 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { ArrowLeft, Film, Loader2, Play, Trash2, Volume2 } from "lucide-react";
+import { ArrowLeft, Film, Gamepad2, Loader2, Play, Trash2, Volume2 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   audioClipUrl,
@@ -190,8 +190,10 @@ export function YtImportDetailScreen() {
           onClick={() =>
             setConfirmAction({
               title: "Delete YouTube import?",
-              body: "Delete this import and all downloaded/extracted assets.",
-              confirmLabel: "Delete import",
+              body: item.purpose === "gameplay"
+                ? "Delete this import record. The gameplay clips remain in the gameplay library until you delete them there."
+                : "Delete this import and all downloaded/extracted assets.",
+              confirmLabel: item.purpose === "gameplay" ? "Delete import record" : "Delete import",
               variant: "destructive",
               onConfirm: () => handleDelete(),
             })
@@ -236,6 +238,22 @@ export function YtImportDetailScreen() {
             {item.error ? (
               <p className="mt-2 text-sm text-destructive">{item.error}</p>
             ) : null}
+          </div>
+        </Panel>
+      ) : null}
+
+      {item.purpose === "gameplay" && item.status === "completed" ? (
+        <Panel>
+          <PanelHeader>
+            <PanelTitle>Gameplay added</PanelTitle>
+          </PanelHeader>
+          <div className="flex flex-col gap-3 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {item.gameplayClipKeys?.length ?? 0} clean, muted 9:16 clip{item.gameplayClipKeys?.length === 1 ? "" : "s"} were added to S3. The original YouTube download was not kept.
+            </p>
+            <Link to="/gameplay" className="inline-flex shrink-0 items-center gap-2 font-medium text-primary no-underline hover:underline">
+              <Gamepad2 size={16} />Manage gameplay
+            </Link>
           </div>
         </Panel>
       ) : null}

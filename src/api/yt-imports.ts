@@ -21,6 +21,11 @@ export interface YoutubeSearchResult {
   viewCount?: number;
 }
 
+export interface YoutubeSearchPage {
+  items: YoutubeSearchResult[];
+  nextPageToken?: string;
+}
+
 export interface YtImportCaptionCue {
   startSec: number;
   endSec: number;
@@ -43,6 +48,11 @@ export interface YtImport {
   thumbnailUrl?: string;
   durationSec?: number;
   storage: YtImportStorage;
+  purpose: "reference" | "gameplay" | "gameplay_mix";
+  sourceVideoIds?: string[];
+  gameplayMixSources?: Array<{ videoId: string; startSec?: number; endSec?: number }>;
+  sourceTrimStartSec?: number;
+  sourceTrimEndSec?: number;
   downloadCaptions: boolean;
   extractFrames: boolean;
   frameRangeStartSec?: number;
@@ -57,6 +67,7 @@ export interface YtImport {
   frameCount: number;
   fps?: number;
   framesExtracted: boolean;
+  gameplayClipKeys?: string[];
   frameIndices?: number[];
   frameIndicesTotal?: number;
   frameDelivery?: YtImportFrameDelivery;
@@ -96,9 +107,10 @@ export function resolveMediaUrl(pathOrUrl?: string): string | undefined {
   return `${SERVER_BASE}${pathOrUrl}`;
 }
 
-export async function searchYoutube(q: string, maxResults = 12): Promise<YoutubeSearchResult[]> {
+export async function searchYoutube(q: string, maxResults = 12, pageToken?: string): Promise<YoutubeSearchPage> {
   const params = new URLSearchParams({ q, maxResults: String(maxResults) });
-  return request<YoutubeSearchResult[]>(`/yt-imports/search?${params}`);
+  if (pageToken) params.set("pageToken", pageToken);
+  return request<YoutubeSearchPage>(`/yt-imports/search?${params}`);
 }
 
 export async function listYtImports(limit = 50): Promise<YtImport[]> {
@@ -116,8 +128,23 @@ export async function createYtImport(body: {
   extractFrames?: boolean;
   frameRangeStartSec?: number;
   frameRangeEndSec?: number;
+  asGameplay?: boolean;
+  sourceTrimStartSec?: number;
+  sourceTrimEndSec?: number;
+  /** Bake a playback rate into muted gameplay segments (default 1). */
+  gameplaySpeed?: number;
 }): Promise<YtImport> {
   return request<YtImport>("/yt-imports", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function createGameplayMix(body: {
+  sources: Array<{ videoId: string; startSec?: number; endSec?: number }>;
+  title?: string;
+}): Promise<YtImport> {
+  return request<YtImport>("/yt-imports/gameplay-mix", {
     method: "POST",
     body: JSON.stringify(body),
   });

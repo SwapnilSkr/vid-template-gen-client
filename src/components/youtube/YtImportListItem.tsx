@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Cloud, HardDrive, Trash2 } from "lucide-react";
+import { Cloud, Gamepad2, HardDrive, Trash2 } from "lucide-react";
 import { memo } from "react";
 import type { YtImport } from "@/api/yt-imports";
 import { Button } from "@/components/ui/button";
@@ -43,11 +43,17 @@ export const YtImportListItem = memo(function YtImportListItem({
       </Link>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {item.storage === "s3" ? <Cloud size={12} /> : <HardDrive size={12} />}
+        {item.purpose === "gameplay" ? <Gamepad2 size={12} aria-label="Gameplay" /> : null}
         <span>{statusLabel(item.status)}</span>
         {inProgress ? <span>{item.progress}%</span> : null}
       </div>
       {item.status === "failed" && item.error ? (
         <p className="mt-1 text-xs text-destructive">{item.error}</p>
+      ) : null}
+      {item.status === "completed" && item.purpose === "gameplay" ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Added {item.gameplayClipKeys?.length ?? 0} muted gameplay clip{item.gameplayClipKeys?.length === 1 ? "" : "s"} to S3.
+        </p>
       ) : null}
       <div className="mt-2 flex gap-2">
         <Button

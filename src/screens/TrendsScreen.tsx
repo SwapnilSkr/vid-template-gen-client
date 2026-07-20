@@ -116,11 +116,10 @@ export function TrendsScreen() {
       <header className="mb-5 grid min-h-12 gap-3 border-b border-border pb-4 sm:flex sm:items-start sm:justify-between">
         <div>
           <h1 className="m-0 flex items-center gap-2 text-lg leading-tight text-foreground">
-            <TrendingUp size={22} className="text-primary" /> Trend Scout
+            <TrendingUp size={22} className="text-primary" /> YouTube Research
           </h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Top-performing {NICHES.find((n) => n.value === niche)?.label ?? niche} Shorts per genre, pulled
-            from YouTube — feeds hooks, titles, and thumbnail prompts.
+            On-demand public YouTube samples, ranked by observed age-adjusted velocity and engagement. They inform copy; they never pretend to reveal competitor retention.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -140,8 +139,8 @@ export function TrendsScreen() {
             value={period}
             onChange={(event) => setPeriod(event.target.value as "week" | "month")}
           >
-            <option value="week">This week</option>
-            <option value="month">This month</option>
+              <option value="week">Last 7 days</option>
+              <option value="month">Last 30 days</option>
           </Select>
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={16} className={loading ? "animate-spin" : undefined} />
@@ -149,7 +148,7 @@ export function TrendsScreen() {
           </Button>
           <Button type="button" variant="default" onClick={() => void runScout()} disabled={scouting}>
             {scouting ? <Loader2 className="animate-spin" size={16} /> : <TrendingUp size={16} />}
-            Run Scout
+            Run research scan
           </Button>
           {isHorror ? (
             <Button
@@ -180,8 +179,7 @@ export function TrendsScreen() {
         <div className={cn(panelClassName, "grid place-items-center gap-2 p-8 text-center text-muted-foreground")}>
           <TrendingUp size={22} />
           <p className="m-0 text-sm">
-            No trend data yet for this window. Run the scout, or seed it with{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">bun scripts/trend-scout-backfill.ts</code>.
+          No research data yet for this window. Run an on-demand research scan while the server is running. No cron or always-on process is required.
           </p>
         </div>
       ) : null}

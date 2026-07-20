@@ -1,8 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Search } from "lucide-react";
+import { Gamepad2, Layers3, Loader2, Search } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 import {
   createYtImport,
+  createGameplayMix,
   deleteYtImport,
   searchYoutube,
   type YtImportStorage,
@@ -42,13 +43,22 @@ export function YtSearchScreen() {
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<YoutubeSearchResult[]>([]);
+  const [activeQuery, setActiveQuery] = useState("");
+  const [nextPageToken, setNextPageToken] = useState<string>();
+  const [mixVideoIds, setMixVideoIds] = useState<Set<string>>(() => new Set());
+  const [gameplayTrims, setGameplayTrims] = useState<Record<string, { startSec: string; endSec: string }>>({});
+  const [mixTitle, setMixTitle] = useState("");
   const [searchPending, startSearchTransition] = useTransition();
   const [downloadPending, startDownloadTransition] = useTransition();
+  const [mixPending, startMixTransition] = useTransition();
   const [downloadingId, setDownloadingId] = useState<string | undefined>();
+  const [gameplayId, setGameplayId] = useState<string | undefined>();
 
   const [storage, setStorage] = useState<YtImportStorage>("local");
   const [downloadCaptions, setDownloadCaptions] = useState(true);
   const [extractFramesOnDownload, setExtractFramesOnDownload] = useState(false);
+  /** Baked into muted gameplay segments on “Add as gameplay”. */
+  const [gameplaySpeed, setGameplaySpeed] = useState(1);
   const [frameRange, setFrameRange] = useState<FrameRangeValues>({
     startSec: "0",
     endSec: "2",
@@ -66,7 +76,12 @@ export function YtSearchScreen() {
       startSearchTransition(async () => {
         setError(undefined);
         try {
-          setResults(await searchYoutube(trimmed));
+          const page = await searchYoutube(trimmed);
+          setActiveQuery(trimmed);
+          setResults(page.items);
+          setNextPageToken(page.nextPageToken);
+          setMixVideoIds(new Set());
+          setGameplayTrims({});
         } catch (err) {
           setError(err instanceof Error ? err.message : "Search failed");
         }
@@ -74,6 +89,67 @@ export function YtSearchScreen() {
     },
     [query, setError],
   );
+
+  const loadMore = useCallback(() => {
+    if (!nextPageToken || !activeQuery) return;
+    startSearchTransition(async () => {
+      setError(undefined);
+      try {
+        const page = await searchYoutube(activeQuery, 12, nextPageToken);
+        setResults((current) => {
+          const seen = new Set(current.map((video) => video.videoId));
+          return [...current, ...page.items.filter((video) => !seen.has(video.videoId))];
+        });
+        setNextPageToken(page.nextPageToken);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load more results");
+      }
+    });
+  }, [activeQuery, nextPageToken, setError]);
+
+  const toggleMixVideo = useCallback((video: YoutubeSearchResult) => {
+    setMixVideoIds((current) => {
+      const next = new Set(current);
+      if (next.has(video.videoId)) next.delete(video.videoId);
+      else if (next.size < 8) next.add(video.videoId);
+      return next;
+    });
+  }, []);
+
+  const gameplayTrimFor = useCallback((videoId: string) =>
+    gameplayTrims[videoId] ?? { startSec: "0", endSec: "" }, [gameplayTrims]);
+
+  const setGameplayTrim = useCallback((video: YoutubeSearchResult, next: { startSec: string; endSec: string }) => {
+    setGameplayTrims((current) => ({ ...current, [video.videoId]: next }));
+  }, []);
+
+  const parseGameplayTrim = useCallback((videoId: string) => {
+    const raw = gameplayTrims[videoId] ?? { startSec: "0", endSec: "" };
+    const startSec = Number(raw.startSec || 0);
+    const endSec = raw.endSec === "" ? undefined : Number(raw.endSec);
+    if (!Number.isFinite(startSec) || startSec < 0 || (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec))) {
+      throw new Error("Gameplay out must be later than gameplay in.");
+    }
+    return { startSec: startSec || undefined, endSec };
+  }, [gameplayTrims]);
+
+  const createMix = useCallback(() => {
+    const videoIds = [...mixVideoIds];
+    if (videoIds.length < 2) return;
+    startMixTransition(async () => {
+      setError(undefined);
+      try {
+        const created = await createGameplayMix({
+          sources: videoIds.map((videoId) => ({ videoId, ...parseGameplayTrim(videoId) })),
+          title: mixTitle.trim() || undefined,
+        });
+        void refresh();
+        void navigate({ to: "/youtube/$importId", params: { importId: created._id } });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not create gameplay mix");
+      }
+    });
+  }, [mixTitle, mixVideoIds, navigate, parseGameplayTrim, refresh, setError]);
 
   const startDownload = useCallback(
     (video: YoutubeSearchResult) => {
@@ -117,6 +193,31 @@ export function YtSearchScreen() {
     ],
   );
 
+  const addAsGameplay = useCallback(
+    (video: YoutubeSearchResult) => {
+      startDownloadTransition(async () => {
+        setGameplayId(video.videoId);
+        setError(undefined);
+        try {
+          const created = await createYtImport({
+            videoId: video.videoId,
+            storage: "s3",
+            asGameplay: true,
+            gameplaySpeed,
+            ...parseGameplayTrim(video.videoId),
+          });
+          void refresh();
+          void navigate({ to: "/youtube/$importId", params: { importId: created._id } });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Gameplay import failed");
+        } finally {
+          setGameplayId(undefined);
+        }
+      });
+    },
+    [gameplaySpeed, navigate, parseGameplayTrim, refresh, setError],
+  );
+
   const removeImport = useCallback(
     (id: string) => {
       setConfirmAction({
@@ -142,8 +243,8 @@ export function YtSearchScreen() {
           YouTube Import
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Search YouTube, download videos locally or to S3, and inspect frames
-          with captions.
+          Search YouTube for reference footage, or turn a result directly into
+          muted, vertical gameplay clips in your S3 library.
         </p>
       </header>
 
@@ -202,10 +303,22 @@ export function YtSearchScreen() {
                 key={video.videoId}
                 video={video}
                 downloading={downloadPending && downloadingId === video.videoId}
+                addingAsGameplay={downloadPending && gameplayId === video.videoId}
+                selectedForMix={mixVideoIds.has(video.videoId)}
+                gameplayTrim={gameplayTrimFor(video.videoId)}
                 onDownload={startDownload}
+                onAddAsGameplay={addAsGameplay}
+                onToggleMixSelection={toggleMixVideo}
+                onGameplayTrimChange={setGameplayTrim}
               />
             ))
           )}
+          {nextPageToken ? (
+            <Button variant="secondary" disabled={searchPending} onClick={loadMore}>
+              {searchPending ? <Loader2 className="animate-spin" size={16} /> : null}
+              Load more results
+            </Button>
+          ) : null}
         </section>
 
         <aside className="flex flex-col gap-3">
@@ -224,6 +337,24 @@ export function YtSearchScreen() {
                 <option value="local">Local (server storage)</option>
                 <option value="s3">S3 (no local copy)</option>
               </Select>
+              <label className="text-xs font-medium uppercase text-muted-foreground">
+                Gameplay speed
+              </label>
+              <Select
+                value={String(gameplaySpeed)}
+                onChange={(e) => setGameplaySpeed(Number(e.target.value))}
+              >
+                <option value="0.25">0.25x (slow-mo)</option>
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1">1x (native)</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x (faster)</option>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Applied when you choose Add as gameplay. Raw YouTube download is discarded after the sped muted clip is in S3.
+              </p>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -257,6 +388,28 @@ export function YtSearchScreen() {
                   yt-imports/VIDEO_ID_title-slug/
                 </code>
               </p>
+            </div>
+          </Panel>
+
+          <Button variant="secondary" onClick={() => void navigate({ to: "/gameplay" })}>
+            <Gamepad2 size={16} />
+            Manage gameplay library
+          </Button>
+
+          <Panel>
+            <PanelHeader>
+              <PanelTitle>Gameplay mix</PanelTitle>
+            </PanelHeader>
+            <div className="flex flex-col gap-3 p-3.5">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Pick 2–8 search results. They will be made vertical, muted, joined in this order, and saved as one independent gameplay asset.
+              </p>
+              <Input value={mixTitle} onChange={(event) => setMixTitle(event.target.value)} placeholder="Optional mix name" maxLength={100} />
+              <Button variant="default" disabled={mixPending || mixVideoIds.size < 2} onClick={createMix}>
+                {mixPending ? <Loader2 className="animate-spin" size={16} /> : <Layers3 size={16} />}
+                Create mix ({mixVideoIds.size}/8)
+              </Button>
+              {mixVideoIds.size === 1 ? <p className="m-0 text-xs text-amber-500">Add one more video to create a mix.</p> : null}
             </div>
           </Panel>
 

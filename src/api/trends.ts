@@ -4,6 +4,7 @@ export interface TrendReference {
   _id?: string;
   niche: string;
   genre?: string;
+  genreIds?: string[];
   sourceUrl: string;
   platform: string;
   title?: string;
@@ -17,9 +18,30 @@ export interface TrendReference {
     durationSec?: number;
     postedAt?: string;
   };
+  metricHistory?: Array<{
+    views?: number;
+    likes?: number;
+    comments?: number;
+    durationSec?: number;
+    postedAt?: string;
+    capturedAt: string;
+  }>;
   dayOfWeek?: number;
   hourUtc?: number;
   scanWindow?: string;
+}
+
+export interface TrendInsight {
+  digest: string;
+  hooks: string[];
+  evidence?: {
+    titlePatterns: string[];
+    hookTypes: string[];
+    keywordPhrases: string[];
+    cautions: string[];
+    confidence: "low" | "medium" | "high";
+    generatedAt: string;
+  };
 }
 
 export interface TrendTopPerformer {
@@ -118,6 +140,10 @@ export async function listTrends(genre?: string): Promise<TrendReference[]> {
 
 export async function getTrendSummary(period: "week" | "month", niche = "reddit"): Promise<TrendGenreSummary[]> {
   return request<TrendGenreSummary[]>(`/trends/summary?period=${period}&niche=${encodeURIComponent(niche)}`);
+}
+
+export async function getTrendInsight(genre: string, niche = "reddit"): Promise<TrendInsight | null> {
+  return request<TrendInsight | null>(`/trends/insights/${encodeURIComponent(genre)}?niche=${encodeURIComponent(niche)}`);
 }
 
 export async function triggerTrendScout(window: "week" | "month", niche = "reddit"): Promise<TrendScoutRun> {
