@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { RootLayout } from "@/components/layout/RootLayout";
-import { listTrends } from "@/api/trends";
+import { getTrendInsight, listTrends } from "@/api/trends";
 import { ReviewScreen } from "@/screens/ReviewScreen";
 import { TrendsScreen } from "@/screens/TrendsScreen";
 import { GenreDetailScreen } from "@/screens/GenreDetailScreen";
@@ -11,8 +11,10 @@ import { StudioScreen } from "@/screens/StudioScreen";
 import { ThumbnailStudioScreen } from "@/screens/ThumbnailStudioScreen";
 import { YtSearchScreen } from "@/screens/YtSearchScreen";
 import { YtImportDetailScreen } from "@/screens/YtImportDetailScreen";
+import { GameplayLibraryScreen } from "@/screens/GameplayLibraryScreen";
 import { AccountsScreen } from "@/screens/AccountsScreen";
 import { OperationsScreen } from "@/screens/OperationsScreen";
+import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
 import { getYtImport } from "@/api/yt-imports";
 import "@/styles.css";
 
@@ -35,11 +37,17 @@ export const trendsRoute = createRoute({
   component: TrendsScreen,
 });
 
+export const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analytics",
+  component: AnalyticsScreen,
+});
+
 // Loader fetches before the screen mounts (no fetch-on-render waterfall / loading flash).
 export const trendsGenreRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/trends/$genre",
-  loader: ({ params }) => listTrends(params.genre),
+  loader: ({ params }) => Promise.all([listTrends(params.genre), getTrendInsight(params.genre)]),
   component: GenreDetailScreen,
 });
 
@@ -77,6 +85,12 @@ export const ytImportDetailRoute = createRoute({
   component: YtImportDetailScreen,
 });
 
+export const gameplayLibraryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/gameplay",
+  component: GameplayLibraryScreen,
+});
+
 export const accountsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/accounts", component: AccountsScreen });
 
 export const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsScreen });
@@ -84,12 +98,14 @@ export const operationsRoute = createRoute({ getParentRoute: () => rootRoute, pa
 const routeTree = rootRoute.addChildren([
   reviewRoute,
   trendsRoute,
+  analyticsRoute,
   trendsGenreRoute,
   createReelRoute,
   studioRoute,
   thumbnailStudioRoute,
   ytSearchRoute,
   ytImportDetailRoute,
+  gameplayLibraryRoute,
   accountsRoute,
   operationsRoute,
 ]);

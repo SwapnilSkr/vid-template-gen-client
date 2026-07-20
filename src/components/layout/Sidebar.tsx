@@ -9,10 +9,12 @@ import {
   ListVideo,
   Play,
   Activity,
+  BarChart3,
   Send,
   TrendingUp,
   UsersRound,
   Youtube,
+  Gamepad2,
 } from "lucide-react";
 import type { Reel } from "@/api/reels";
 import { cn } from "@/lib/utils";
@@ -101,7 +103,11 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       <SectionLabel>Insights</SectionLabel>
       <Link to="/trends" onClick={onNavigate} className={navLinkClass(pathname === "/trends")}>
         <TrendingUp size={15} />
-        <span>Trend Scout</span>
+        <span>YouTube Research</span>
+      </Link>
+      <Link to="/analytics" onClick={onNavigate} className={navLinkClass(pathname === "/analytics")}>
+        <BarChart3 size={15} />
+        <span>Performance</span>
       </Link>
 
       <SectionLabel>Queue</SectionLabel>
@@ -152,6 +158,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
       >
         <Youtube size={15} />
         <span>YouTube Import</span>
+      </Link>
+      <Link to="/gameplay" onClick={onNavigate} className={navLinkClass(pathname === "/gameplay")}>
+        <Gamepad2 size={15} />
+        <span>Gameplay</span>
       </Link>
       <Link
         to="/"
