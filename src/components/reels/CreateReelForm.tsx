@@ -1,4 +1,5 @@
-import { Film, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Film, Gamepad2, Instagram, Loader2, RefreshCw, Shuffle, Sparkles, UserCircle, Youtube, ArrowLeft, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { getReelDefaults, listFacebookPages, listInstagramChannels, listThreadsChannels, type CreateReelInput, type FacebookPageOption, type ImageModelOption, type InstagramChannelOption, type ReelDefaults, type ThreadsChannelOption, type TtsVoiceOption, type YouTubeChannelOption } from "@/api/reels";
 import { listStoryGenres, type RedditGenreOption } from "@/api/stories";
@@ -746,20 +747,25 @@ export function CreateReelForm({ onCreated }: CreateReelFormProps = {}) {
       ) : null}
 
       {isGameplayNiche && (
-        <Label>
-          Gameplay Background
-          <Select
-            value={form.gameplayKey ?? ""}
-            onChange={(event) => setForm({ ...form, gameplayKey: event.target.value })}
-          >
-            <option value="">Random from S3 pool</option>
-            {gameplayClips.map((clip) => (
-              <option key={clip.key} value={clip.key}>
-                {clip.filename}
-              </option>
-            ))}
-          </Select>
-        </Label>
+        <div className="grid gap-1.5">
+          <Label>
+            Gameplay Background
+            <Select
+              value={form.gameplayKey ?? ""}
+              onChange={(event) => setForm({ ...form, gameplayKey: event.target.value })}
+            >
+              <option value="">Random from S3 pool</option>
+              {gameplayClips.map((clip) => (
+                <option key={clip.key} value={clip.key}>
+                  {clip.filename}
+                </option>
+              ))}
+            </Select>
+          </Label>
+          <Link to="/gameplay" className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-primary no-underline hover:underline">
+            <Gamepad2 size={13} />Manage or import gameplay clips
+          </Link>
+        </div>
       )}
 
       {form.niche.startsWith("horror") && (

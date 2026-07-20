@@ -185,6 +185,11 @@ export interface Reel {
   /** Live pipeline step from the worker (e.g. "Image 3/9"). */
   currentStep?: string;
   outputUrl?: string;
+  finalVideoTrim?: {
+    sourceOutputUrl: string;
+    removedRanges: Array<{ startSec: number; endSec: number }>;
+    appliedAt: string;
+  };
   bodyVideoUrl?: string;
   assemblyVideoUrl?: string;
   subtitlesUrl?: string;
@@ -217,6 +222,10 @@ export interface Reel {
     firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
     firstCommentId?: string;
     firstCommentError?: string;
+    seriesNavigationStatus?: "pending" | "posted" | "failed" | "skipped";
+    seriesNavigationCommentId?: string;
+    seriesNavigationCommentError?: string;
+    seriesNavigationTargetReelId?: string;
   };
   instagram?: Array<{
     channelId: string;
@@ -232,6 +241,10 @@ export interface Reel {
     firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
     firstCommentId?: string;
     firstCommentError?: string;
+    seriesNavigationStatus?: "pending" | "posted" | "failed" | "skipped";
+    seriesNavigationCommentId?: string;
+    seriesNavigationCommentError?: string;
+    seriesNavigationTargetReelId?: string;
   }>;
   facebook?: Array<{
     channelId: string;
@@ -242,6 +255,12 @@ export interface Reel {
     error?: string;
     message?: string;
     firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
+    firstCommentId?: string;
+    firstCommentError?: string;
+    seriesNavigationStatus?: "pending" | "posted" | "failed" | "skipped";
+    seriesNavigationCommentId?: string;
+    seriesNavigationCommentError?: string;
+    seriesNavigationTargetReelId?: string;
     updatedAt?: string;
     publishedAt?: string;
   }>;
@@ -255,6 +274,12 @@ export interface Reel {
     error?: string;
     message?: string;
     firstCommentStatus?: "pending" | "posted" | "failed" | "skipped";
+    firstCommentId?: string;
+    firstCommentError?: string;
+    seriesNavigationStatus?: "pending" | "posted" | "failed" | "skipped";
+    seriesNavigationCommentId?: string;
+    seriesNavigationCommentError?: string;
+    seriesNavigationTargetReelId?: string;
     updatedAt?: string;
     publishedAt?: string;
   }>;
@@ -274,14 +299,25 @@ export interface Reel {
       model?: string;
     };
   };
-  facebookSettings?: { description?: string };
-  threadsSettings?: { text?: string };
+  facebookSettings?: {
+    description?: string;
+    source?: "ai" | "manual" | "fallback";
+    generatedAt?: string;
+    model?: string;
+  };
+  threadsSettings?: {
+    text?: string;
+    source?: "ai" | "manual" | "fallback";
+    generatedAt?: string;
+    model?: string;
+  };
   seriesId?: string;
   partNumber?: number;
   partCount?: number;
   createdAt?: string;
   updatedAt?: string;
   gameplayKey?: string;
+  gameplayAssetMissing?: boolean;
   horrorAudioKey?: string;
   outroChannelId?: string;
   outroInstagramChannelId?: string;
@@ -451,6 +487,9 @@ export interface GameplayClip {
   key: string;
   url: string;
   filename: string;
+  sizeBytes?: number;
+  lastModified?: string;
+  reelReferenceCount: number;
 }
 
 export interface HorrorAudioOption {
@@ -769,6 +808,12 @@ export async function listInstagramComments(reelId: string, channelId: string, l
 export async function postInstagramFirstComment(reelId: string, channelId: string): Promise<{ commentId: string }> {
   return request(`/instagram/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/first-comment`, { method: "POST" });
 }
+export async function postFacebookFirstComment(reelId: string, channelId: string): Promise<{ commentId: string }> {
+  return request(`/facebook/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/first-comment`, { method: "POST" });
+}
+export async function postThreadsFirstReply(reelId: string, channelId: string): Promise<{ replyId: string }> {
+  return request(`/threads/reels/${encodeURIComponent(reelId)}/channels/${encodeURIComponent(channelId)}/first-reply`, { method: "POST" });
+}
 export async function replyToInstagramComment(channelId: string, commentId: string, message: string): Promise<{ replyId: string }> {
   return request(`/instagram/comments/reply`, { method: "POST", body: JSON.stringify({ channelId, commentId, message }) });
 }
@@ -829,6 +874,18 @@ export async function regenerateInstagramPollSuggestion(id: string): Promise<Ree
   return request<Reel>(`/reels/${id}/instagram-poll`, { method: "POST" });
 }
 
+/** Generates one current Facebook Reels description without touching the
+ * Threads draft, rendered video, or publishing state. */
+export async function regenerateFacebookDescription(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/facebook-copy`, { method: "POST" });
+}
+
+/** Generates one current Threads post draft without touching the Facebook
+ * draft, rendered video, or publishing state. */
+export async function regenerateThreadsText(id: string): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/threads-copy`, { method: "POST" });
+}
+
 /** Generates compact thumbnail overlay copy without rendering an image. */
 export async function regenerateThumbnailText(id: string): Promise<Reel> {
   return request<Reel>(`/reels/${id}/review/thumbnail-text`, { method: "POST" });
@@ -860,6 +917,18 @@ export async function deleteReel(id: string): Promise<void> {
   await request(`/reels/${id}`, { method: "DELETE" });
 }
 
+/** Remove the supplied intervals from the finished primary render. The server
+ * atomically replaces the current output and reclaims the superseded S3 file. */
+export async function trimFinishedVideo(
+  id: string,
+  removeRanges: Array<{ startSec: number; endSec: number }>,
+): Promise<Reel> {
+  return request<Reel>(`/reels/${id}/final-video/trim`, {
+    method: "POST",
+    body: JSON.stringify({ removeRanges }),
+  });
+}
+
 /** Delete one part of a series; the backend renumbers the survivors and returns
  *  the remaining part ids in order (empty when the whole reel is gone). */
 export async function deleteSeriesPart(
@@ -874,6 +943,44 @@ export async function purgeFailedReels(): Promise<{ deleted: string[]; errors: {
 
 export async function listGameplay(): Promise<GameplayClip[]> {
   return request<GameplayClip[]>("/gameplay");
+}
+
+export async function renameGameplay(key: string, name: string): Promise<GameplayClip> {
+  return request<GameplayClip>("/gameplay", {
+    method: "PATCH",
+    body: JSON.stringify({ key, name }),
+  });
+}
+
+export async function deleteGameplay(key: string, force = false): Promise<{ key: string; affectedReelIds: string[] }> {
+  return request<{ key: string; affectedReelIds: string[] }>("/gameplay", {
+    method: "DELETE",
+    body: JSON.stringify({ key, force }),
+  });
+}
+
+/** Trim a library clip, replace every reel that selected it, and reclaim the
+ * old S3 source only after the replacement is ready. */
+export async function trimGameplay(
+  key: string,
+  startSec: number,
+  endSec: number,
+): Promise<GameplayClip> {
+  return request<GameplayClip>("/gameplay/trim", {
+    method: "POST",
+    body: JSON.stringify({ key, startSec, endSec }),
+  });
+}
+
+/** Re-time a library clip (0.25x–2x), retarget reels, then delete the old S3 object. */
+export async function speedGameplay(
+  key: string,
+  speed: number,
+): Promise<GameplayClip> {
+  return request<GameplayClip>("/gameplay/speed", {
+    method: "POST",
+    body: JSON.stringify({ key, speed }),
+  });
 }
 
 export async function listHorrorAudio(): Promise<HorrorAudioOption[]> {
@@ -1381,6 +1488,8 @@ export interface SeriesStructureAdvice {
   currentParts: number;
   reason: string;
   hasWeakBreaks: boolean;
+  /** Server-confirmed: Keep current / Use AI was already recorded for this series. */
+  decisionSatisfied: boolean;
   breaks: Array<{
     partNumber: number;
     sentenceNumber: number;

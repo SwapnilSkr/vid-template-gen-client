@@ -364,7 +364,7 @@ export function RedditSourcePanel({
             {isMultiPartSeries(reel) ? " Applies across every episode." : " Splits this reel into a series."}
           </p>
           <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">
-            The AI recommendation and the required “Keep current plan” / “Use recommendation” decision appear in the Generate reel confirmation, where the choice is applied immediately before paid production.
+            The AI recommendation and the “Keep current plan” / “Use recommendation” choice appear in the Generate confirmation the first time. Later parts in the same series reuse that decision.
           </p>
           <div className="flex items-end gap-2">
             <Label className="flex-1">
@@ -545,6 +545,11 @@ export function RedditSourcePanel({
           ))}
         </Select>
       </Label>
+      {reel.gameplayAssetMissing ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+          This reel&apos;s old gameplay clip was deleted from the library. Choose a replacement above before rerendering; the completed video is unchanged.
+        </div>
+      ) : null}
       {canBakeIntoVideo ? (
         <p className="m-0 text-[11px] leading-relaxed text-muted-foreground/80">
           Clip choice is saved immediately. Use{" "}

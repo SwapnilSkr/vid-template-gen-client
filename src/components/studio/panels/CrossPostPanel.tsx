@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { AtSign, ExternalLink, Facebook, Instagram, Loader2, MessageCircle, Send, Youtube } from "lucide-react";
+import { AtSign, ExternalLink, Facebook, Instagram, Loader2, MessageCircle, Send, Sparkles, Youtube } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   listFacebookPages,
@@ -7,7 +7,11 @@ import {
   listThreadsChannels,
   listYouTubeComments,
   postInstagramFirstComment,
+  postFacebookFirstComment,
+  postThreadsFirstReply,
   postYouTubeFirstComment,
+  regenerateFacebookDescription,
+  regenerateThreadsText,
   replyToInstagramComment,
   replyToYouTubeComment,
   updateReelSettings,
@@ -21,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PanelTitle } from "@/components/ui/panel";
+import { PlatformCommentsSection } from "@/components/studio/panels/PlatformCommentsSection";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,11 +35,15 @@ import { cn } from "@/lib/utils";
  * early comments) for published YouTube/Instagram posts. Own-media only.
  */
 function defaultFacebookDescription(reel: Reel): string {
-  return reel.facebookSettings?.description ?? reel.review?.description ?? reel.title ?? reel.hook ?? reel.topic ?? "";
+  // Do not show legacy YouTube metadata as if it were Facebook-native copy.
+  // Older completed reels start blank and can explicitly generate a current
+  // Facebook draft from the focused distribution modal.
+  return reel.facebookSettings?.description ?? "";
 }
 
 function defaultThreadsText(reel: Reel): string {
-  return reel.threadsSettings?.text ?? reel.thumbnailHook ?? reel.hook ?? reel.title ?? reel.topic ?? "";
+  // Likewise, a title fallback is not an actual Threads post draft.
+  return reel.threadsSettings?.text ?? "";
 }
 
 export function CrossPostPanel({
@@ -114,7 +123,15 @@ export function CrossPostPanel({
   }
 
   const publishedInstagram = (reel.instagram ?? []).filter((p) => p.status === "published");
+  const publishedFacebook = (reel.facebook ?? []).filter((p) => p.status === "published");
+  const publishedThreads = (reel.threads ?? []).filter((p) => p.status === "published");
   const youtubePublished = reel.youtube?.status === "published";
+  const hasAnyPublishAttempt = Boolean(
+    reel.youtube ||
+    (reel.instagram?.length ?? 0) ||
+    (reel.facebook?.length ?? 0) ||
+    (reel.threads?.length ?? 0),
+  );
 
   async function savePlatformCopy(
     platform: "facebook" | "threads",
@@ -126,6 +143,19 @@ export function CrossPostPanel({
     if (!result.ok) throw new Error(result.error || "Could not save platform copy.");
   }
 
+  async function regeneratePlatformCopy(platform: "facebook" | "threads") {
+    let generated: Reel | undefined;
+    const result = await run(async () => {
+      generated = platform === "facebook"
+        ? await regenerateFacebookDescription(reelKey)
+        : await regenerateThreadsText(reelKey);
+      return generated;
+    });
+    if (!result.ok || !generated) throw new Error(result.error || "Could not generate platform copy.");
+    if (platform === "facebook") setFacebookDescription(generated.facebookSettings?.description ?? "");
+    else setThreadsText(generated.threadsSettings?.text ?? "");
+  }
+
   return (
     <div className="grid gap-2 rounded-md border border-border bg-background/35 p-2.5">
       <PanelTitle className="inline-flex items-center gap-2 text-foreground"><Send size={14} className="text-primary" /> {focus === "all" ? "Cross-post settings & engagement" : focus === "facebook" ? "Facebook Reels settings" : "Threads settings"}</PanelTitle>
@@ -135,22 +165,30 @@ export function CrossPostPanel({
 
       <div className="grid gap-2 border-b border-border pb-2">
         <div className="text-xs font-medium text-foreground">{focus === "all" ? "Facebook & Threads copy" : `${focus === "facebook" ? "Facebook" : "Threads"} copy`}</div>
-        <p className="m-0 text-[11px] text-muted-foreground">Save distinct copy now; it will be used only when you later cross-post to that platform.</p>
+        <p className="m-0 text-[11px] text-muted-foreground">Save distinct copy now; it will be used only when you later cross-post to that platform. Generate uses the current platform rules and your owned-platform learning; it never changes the video or publishes anything.</p>
         {showFacebook ? <>
         <Label className="grid gap-1 text-[11px] text-muted-foreground">
           Facebook Reel description
-          <Textarea value={facebookDescription} maxLength={2200} rows={3} disabled={disabled} onChange={(event) => setFacebookDescription(event.target.value)} />
+          <Textarea value={facebookDescription} maxLength={2200} rows={3} disabled={disabled} placeholder="Generate a Facebook-specific draft or write one here." onChange={(event) => setFacebookDescription(event.target.value)} />
           <span className="justify-self-end text-[10px] text-muted-foreground/80">{facebookDescription.length}/2,200</span>
+          <span className="text-[10px] text-muted-foreground/80">{reel.facebookSettings?.description ? reel.facebookSettings.source === "ai" ? `AI draft · ${reel.facebookSettings.model ?? "configured model"}` : "Saved Facebook-specific draft" : "No Facebook-specific draft yet."}</span>
         </Label>
-        <Button size="sm" variant="outline" className="justify-self-start" disabled={disabled} onClick={() => void act("fb-copy", () => savePlatformCopy("facebook", facebookDescription), "Facebook description saved.")}>{working === "fb-copy" ? <Loader2 className="size-3 animate-spin" /> : "Save Facebook description"}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act("fb-copy", () => savePlatformCopy("facebook", facebookDescription), "Facebook description saved.")}>{working === "fb-copy" ? <Loader2 className="size-3 animate-spin" /> : "Save Facebook description"}</Button>
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act("fb-generate", () => regeneratePlatformCopy("facebook"), "Generated and saved a current Facebook description. Edit and save only if you change it.")}>{working === "fb-generate" ? <Loader2 className="size-3 animate-spin" /> : <><Sparkles className="size-3" />{reel.facebookSettings?.description ? "Regenerate Facebook draft" : "Generate Facebook draft"}</>}</Button>
+        </div>
         </> : null}
         {showThreads ? <>
         <Label className="grid gap-1 text-[11px] text-muted-foreground">
           Threads post text
-          <Textarea value={threadsText} maxLength={500} rows={3} disabled={disabled} onChange={(event) => setThreadsText(event.target.value)} />
+          <Textarea value={threadsText} maxLength={500} rows={3} disabled={disabled} placeholder="Generate Threads-specific text or write it here." onChange={(event) => setThreadsText(event.target.value)} />
           <span className="justify-self-end text-[10px] text-muted-foreground/80">{threadsText.length}/500</span>
+          <span className="text-[10px] text-muted-foreground/80">{reel.threadsSettings?.text ? reel.threadsSettings.source === "ai" ? `AI draft · ${reel.threadsSettings.model ?? "configured model"}` : "Saved Threads-specific draft" : "No Threads-specific draft yet."}</span>
         </Label>
-        <Button size="sm" variant="outline" className="justify-self-start" disabled={disabled} onClick={() => void act("threads-copy", () => savePlatformCopy("threads", threadsText), "Threads post text saved.")}>{working === "threads-copy" ? <Loader2 className="size-3 animate-spin" /> : "Save Threads text"}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act("threads-copy", () => savePlatformCopy("threads", threadsText), "Threads text saved.")}>{working === "threads-copy" ? <Loader2 className="size-3 animate-spin" /> : "Save Threads text"}</Button>
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act("threads-generate", () => regeneratePlatformCopy("threads"), "Generated and saved current Threads text. Edit and save only if you change it.")}>{working === "threads-generate" ? <Loader2 className="size-3 animate-spin" /> : <><Sparkles className="size-3" />{reel.threadsSettings?.text ? "Regenerate Threads draft" : "Generate Threads draft"}</>}</Button>
+        </div>
         </> : null}
       </div>
 
@@ -181,35 +219,48 @@ export function CrossPostPanel({
         </div> : null}
       </div>
 
-      {focus === "all" && (youtubePublished || publishedInstagram.length) ? (
-        <div className="grid gap-1.5 border-t border-border pt-2">
-          <div className="inline-flex items-center gap-1 text-xs font-medium text-foreground"><MessageCircle size={13} className="text-primary" /> Own-post comments</div>
-          {youtubePublished ? (
-            <CommentBlock
-              icon={<Youtube size={12} className="text-red-500" />}
-              label={reel.youtube?.channelLabel || "YouTube"}
-              firstCommentStatus={reel.youtube?.firstCommentStatus}
-              disabled={disabled}
-              onPostFirst={() => act("yt-fc", () => postYouTubeFirstComment(reelKey, reel.youtube?.channelId), "Posted first comment.")}
-              working={working === "yt-fc"}
-              loadComments={() => listYouTubeComments(reelKey, reel.youtube?.channelId ?? "default")}
-              reply={(commentId, msg) => replyToYouTubeComment(reel.youtube?.channelId ?? "default", commentId, msg)}
-            />
+      {focus === "all" ? (
+        <div className="grid gap-2 border-t border-border pt-2">
+          <PlatformCommentsSection reel={reel} />
+          {hasAnyPublishAttempt && (youtubePublished || publishedInstagram.length || publishedFacebook.length || publishedThreads.length) ? (
+            <div className="grid gap-1.5">
+              <div className="inline-flex items-center gap-1 text-xs font-medium text-foreground"><MessageCircle size={13} className="text-primary" /> Comment actions</div>
+              {youtubePublished ? (
+                <CommentBlock
+                  icon={<Youtube size={12} className="text-red-500" />}
+                  label={reel.youtube?.channelLabel || "YouTube"}
+                  firstCommentStatus={reel.youtube?.firstCommentStatus}
+                  navigationStatus={reel.youtube?.seriesNavigationStatus}
+                  disabled={disabled}
+                  onPostFirst={() => act("yt-fc", () => postYouTubeFirstComment(reelKey, reel.youtube?.channelId), "Posted first comment.")}
+                  working={working === "yt-fc"}
+                  loadComments={() => listYouTubeComments(reelKey, reel.youtube?.channelId ?? "default")}
+                  reply={(commentId, msg) => replyToYouTubeComment(reel.youtube?.channelId ?? "default", commentId, msg)}
+                />
+              ) : null}
+              {publishedInstagram.map((publish) => (
+                <CommentBlock
+                  key={publish.channelId}
+                  icon={<Instagram size={12} className="text-pink-500" />}
+                  label={publish.channelLabel || publish.channelId}
+                  firstCommentStatus={publish.firstCommentStatus}
+                  navigationStatus={publish.seriesNavigationStatus}
+                  disabled={disabled}
+                  onPostFirst={() => act(`ig-fc:${publish.channelId}`, () => postInstagramFirstComment(reelKey, publish.channelId), "Posted first comment.")}
+                  working={working === `ig-fc:${publish.channelId}`}
+                  loadComments={() => listInstagramComments(reelKey, publish.channelId)}
+                  reply={(commentId, msg) => replyToInstagramComment(publish.channelId, commentId, msg)}
+                />
+              ))}
+              {publishedFacebook.map((publish) => (
+                <CommentPostBlock key={publish.channelId} icon={<Facebook size={12} className="text-blue-600" />} label={publish.channelLabel || publish.channelId} firstCommentStatus={publish.firstCommentStatus} navigationStatus={publish.seriesNavigationStatus} disabled={disabled} onPostFirst={() => act(`fb-fc:${publish.channelId}`, () => postFacebookFirstComment(reelKey, publish.channelId), "Posted discussion comment. Live-part navigation will post only when verified.")} working={working === `fb-fc:${publish.channelId}`} />
+              ))}
+              {publishedThreads.map((publish) => (
+                <CommentPostBlock key={publish.channelId} icon={<AtSign size={12} />} label={publish.channelLabel || publish.channelId} firstCommentStatus={publish.firstCommentStatus} navigationStatus={publish.seriesNavigationStatus} disabled={disabled} onPostFirst={() => act(`threads-fc:${publish.channelId}`, () => postThreadsFirstReply(reelKey, publish.channelId), "Posted discussion reply. Live-part navigation will post only when verified.")} working={working === `threads-fc:${publish.channelId}`} />
+              ))}
+              <p className="m-0 text-[11px] text-muted-foreground/80">Manual post actions only appear for successful uploads. Instagram cannot pin an app-posted comment — pinning stays manual in Instagram.</p>
+            </div>
           ) : null}
-          {publishedInstagram.map((publish) => (
-            <CommentBlock
-              key={publish.channelId}
-              icon={<Instagram size={12} className="text-pink-500" />}
-              label={publish.channelLabel || publish.channelId}
-              firstCommentStatus={publish.firstCommentStatus}
-              disabled={disabled}
-              onPostFirst={() => act(`ig-fc:${publish.channelId}`, () => postInstagramFirstComment(reelKey, publish.channelId), "Posted first comment.")}
-              working={working === `ig-fc:${publish.channelId}`}
-              loadComments={() => listInstagramComments(reelKey, publish.channelId)}
-              reply={(commentId, msg) => replyToInstagramComment(publish.channelId, commentId, msg)}
-            />
-          ))}
-          <p className="m-0 text-[11px] text-muted-foreground/80">Instagram cannot pin an app-posted comment — pinning stays manual in the app.</p>
         </div>
       ) : null}
     </div>
@@ -225,8 +276,8 @@ function StatusPill({ status, url }: { status?: string; url?: string }) {
   );
 }
 
-function CommentBlock({ icon, label, firstCommentStatus, disabled, onPostFirst, working, loadComments, reply }: {
-  icon: React.ReactNode; label: string; firstCommentStatus?: string; disabled: boolean; working: boolean;
+function CommentBlock({ icon, label, firstCommentStatus, navigationStatus, disabled, onPostFirst, working, loadComments, reply }: {
+  icon: React.ReactNode; label: string; firstCommentStatus?: string; navigationStatus?: string; disabled: boolean; working: boolean;
   onPostFirst: () => void; loadComments: () => Promise<OwnPostComment[]>; reply: (commentId: string, message: string) => Promise<unknown>;
 }) {
   const [comments, setComments] = useState<OwnPostComment[]>();
@@ -252,7 +303,7 @@ function CommentBlock({ icon, label, firstCommentStatus, disabled, onPostFirst, 
     <div className="grid gap-1 rounded border border-border bg-card/50 p-2">
       <div className="flex items-center gap-2 text-xs">
         <span className="inline-flex items-center gap-1 font-medium">{icon}{label}</span>
-        <span className="ml-auto text-[10px] capitalize text-muted-foreground">first comment: {firstCommentStatus ?? "not posted"}</span>
+        <span className="ml-auto text-[10px] capitalize text-muted-foreground">discussion: {firstCommentStatus ?? "not posted"} · navigation: {navigationStatus ?? "waiting"}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <Button size="sm" variant="outline" disabled={disabled} onClick={onPostFirst}>{working ? <Loader2 className="size-3 animate-spin" /> : "Post first comment"}</Button>
@@ -273,6 +324,17 @@ function CommentBlock({ icon, label, firstCommentStatus, disabled, onPostFirst, 
           ))}
         </div>
       ) : <p className="m-0 text-[11px] text-muted-foreground">No comments yet.</p>) : null}
+    </div>
+  );
+}
+
+function CommentPostBlock({ icon, label, firstCommentStatus, navigationStatus, disabled, onPostFirst, working }: {
+  icon: React.ReactNode; label: string; firstCommentStatus?: string; navigationStatus?: string; disabled: boolean; onPostFirst: () => void; working: boolean;
+}) {
+  return (
+    <div className="grid gap-1 rounded border border-border bg-card/50 p-2">
+      <div className="flex items-center gap-2 text-xs"><span className="inline-flex items-center gap-1 font-medium">{icon}{label}</span><span className="ml-auto text-[10px] capitalize text-muted-foreground">discussion: {firstCommentStatus ?? "not posted"} · navigation: {navigationStatus ?? "waiting"}</span></div>
+      <Button size="sm" variant="outline" className="justify-self-start" disabled={disabled} onClick={onPostFirst}>{working ? <Loader2 className="size-3 animate-spin" /> : "Post discussion comment"}</Button>
     </div>
   );
 }

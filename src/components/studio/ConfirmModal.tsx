@@ -16,7 +16,12 @@ export function ConfirmModal({
   const [confirmError, setConfirmError] = useState<string>();
   const [seriesChoice, setSeriesChoice] = useState<"manual" | "recommended">("manual");
   useEffect(() => {
-    setSeriesChoice("manual");
+    // When the AI plan differs from the current split, default to that choice
+    // so "Generate with selected plan" cannot silently keep the old part count.
+    const preferRecommended =
+      Boolean(action?.seriesStructure) &&
+      action!.seriesStructure!.recommendedParts !== action!.seriesStructure!.currentParts;
+    setSeriesChoice(preferRecommended ? "recommended" : "manual");
     setConfirmError(undefined);
   }, [action]);
   if (!action) return null;

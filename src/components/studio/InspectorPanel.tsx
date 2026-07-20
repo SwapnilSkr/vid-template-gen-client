@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect } from "react";
 import type { Reel } from "@/api/reels";
 import { EditorPanel } from "@/components/studio/EditorPanel";
 import { INSPECTOR_TABS } from "@/components/studio/constants";
-import type { ConfirmAction, InspectorTab, StudioRun } from "@/components/studio/types";
+import type { ConfirmAction, InspectorTab, StudioPublishTarget, StudioRun } from "@/components/studio/types";
 import { CostPanel } from "@/components/studio/panels/CostPanel";
 import { ThumbnailPanel } from "@/components/studio/panels/ThumbnailPanel";
 import { cn } from "@/lib/utils";
@@ -74,6 +74,7 @@ export function InspectorPanel({
   isGameplay,
   run,
   requestConfirm,
+  onPublishQueued,
 }: {
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
@@ -83,6 +84,7 @@ export function InspectorPanel({
   isGameplay: boolean;
   run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
+  onPublishQueued?: (targets: StudioPublishTarget[]) => void;
 }) {
   const tabs = isGameplay
     ? INSPECTOR_TABS.filter((item) => item.id !== "look" && item.id !== "effects")
@@ -196,6 +198,7 @@ export function InspectorPanel({
                 busy={busy}
                 run={run}
                 requestConfirm={requestConfirm}
+                onPublishQueued={onPublishQueued}
               />
               <CostPanel reel={reel} seriesReels={seriesReels} />
             </div>

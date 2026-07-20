@@ -40,6 +40,14 @@ export interface StudioActionResult {
   error?: string;
 }
 
+/** A concrete account selected in the final publish dialog. Studio uses this
+ * to follow the asynchronous result after that dialog closes. */
+export interface StudioPublishTarget {
+  platform: "youtube" | "instagram" | "facebook" | "threads";
+  channelId: string;
+  channelLabel: string;
+}
+
 export type StudioRun = (
   action: () => Promise<Reel>,
   opts?: { requireFfmpeg?: boolean }

@@ -1,11 +1,20 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  AtSign,
+  CheckCircle2,
   Clapperboard,
+  CircleAlert,
   Download,
+  Facebook,
   Image as ImageIcon,
+  Instagram,
+  Clock3,
   Loader2,
   RefreshCw,
+  Scissors,
+  X,
+  Youtube,
 } from "lucide-react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -34,13 +43,14 @@ import { ReelStatusChip } from "@/components/reels/ReelStatusChip";
 import { VoiceVariantsPanel } from "@/components/reels/VoiceVariantsPanel";
 import { ConfirmModal } from "@/components/studio/ConfirmModal";
 import { EditDraftBanner } from "@/components/studio/EditDraftBanner";
+import { FinalVideoTrimDialog } from "@/components/studio/FinalVideoTrimDialog";
 import { GateBanner } from "@/components/studio/GateBanner";
 import { InspectorPanel } from "@/components/studio/InspectorPanel";
 import { ProgramMonitor } from "@/components/studio/ProgramMonitor";
 import { ProjectPanel } from "@/components/studio/ProjectPanel";
 import { TimelinePanel } from "@/components/studio/TimelinePanel";
 import { SceneCard } from "@/components/studio/panels/SceneCard";
-import type { ConfirmAction, InspectorTab, StudioRun } from "@/components/studio/types";
+import type { ConfirmAction, InspectorTab, StudioPublishTarget, StudioRun } from "@/components/studio/types";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -55,6 +65,169 @@ import {
 } from "@/utils/reel";
 
 const route = getRouteApi("/studio/$id");
+
+type PublishPlatform = StudioPublishTarget["platform"];
+type PublishState = "pending" | "uploading" | "published" | "failed";
+
+interface PublishDestinationState extends StudioPublishTarget {
+  status: PublishState;
+  url?: string;
+  error?: string;
+  message?: string;
+  updatedAt?: string;
+}
+
+interface PublishSnapshot {
+  status: PublishState;
+  fingerprint: string;
+}
+
+interface PublishToast {
+  id: string;
+  platform: PublishPlatform;
+  channelLabel: string;
+  state: "queued" | "published" | "failed";
+  detail?: string;
+  url?: string;
+}
+
+function publishDestinationStates(reel: Reel): PublishDestinationState[] {
+  const states: PublishDestinationState[] = [];
+  if (reel.youtube) {
+    states.push({
+      platform: "youtube",
+      channelId: reel.youtube.channelId ?? "default",
+      channelLabel: reel.youtube.channelLabel ?? "YouTube Shorts",
+      status: reel.youtube.status,
+      url: reel.youtube.url,
+      error: reel.youtube.error,
+      updatedAt: reel.youtube.publishedAt,
+    });
+  }
+  for (const publish of reel.instagram ?? []) {
+    states.push({
+      platform: "instagram",
+      channelId: publish.channelId,
+      channelLabel: publish.channelLabel ?? "Instagram Reel",
+      status: publish.status,
+      url: publish.url,
+      error: publish.error,
+      message: publish.message,
+      updatedAt: publish.updatedAt ?? publish.publishedAt,
+    });
+  }
+  for (const publish of reel.facebook ?? []) {
+    states.push({
+      platform: "facebook",
+      channelId: publish.channelId,
+      channelLabel: publish.channelLabel ?? "Facebook Reel",
+      status: publish.status,
+      url: publish.url,
+      error: publish.error,
+      message: publish.message,
+      updatedAt: publish.updatedAt ?? publish.publishedAt,
+    });
+  }
+  for (const publish of reel.threads ?? []) {
+    states.push({
+      platform: "threads",
+      channelId: publish.channelId,
+      channelLabel: publish.channelLabel ?? "Threads",
+      status: publish.status,
+      url: publish.url,
+      error: publish.error,
+      message: publish.message,
+      updatedAt: publish.updatedAt ?? publish.publishedAt,
+    });
+  }
+  return states;
+}
+
+function publishTargetKey(target: Pick<StudioPublishTarget, "platform" | "channelId">) {
+  return `${target.platform}:${target.channelId}`;
+}
+
+function publishSnapshot(state: PublishDestinationState): PublishSnapshot {
+  return {
+    status: state.status,
+    fingerprint: [
+      state.status,
+      state.updatedAt ?? "",
+      state.url ?? "",
+      state.error ?? "",
+      state.message ?? "",
+    ].join("\u0001"),
+  };
+}
+
+function PublishToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: PublishToast[];
+  onDismiss: (id: string) => void;
+}) {
+  if (!toasts.length) return null;
+  const labels: Record<PublishPlatform, string> = {
+    youtube: "YouTube Shorts",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    threads: "Threads",
+  };
+  const icons: Record<PublishPlatform, typeof Youtube> = {
+    youtube: Youtube,
+    instagram: Instagram,
+    facebook: Facebook,
+    threads: AtSign,
+  };
+  return (
+    <aside
+      aria-live="polite"
+      aria-label="Publishing updates"
+      className="fixed right-3 top-16 z-[80] grid w-[min(24rem,calc(100vw-1.5rem))] gap-2 sm:right-5"
+    >
+      {toasts.map((toast) => {
+        const PlatformIcon = icons[toast.platform];
+        const isFailure = toast.state === "failed";
+        const isQueued = toast.state === "queued";
+        const StateIcon = isFailure ? CircleAlert : isQueued ? Clock3 : CheckCircle2;
+        const stateLabel = isFailure ? "Publish failed" : isQueued ? "Publish queued" : "Published";
+        return (
+          <div
+            key={toast.id}
+            role={isFailure ? "alert" : "status"}
+            className={cn(
+              "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 rounded-lg border bg-card px-3 py-2.5 shadow-lg backdrop-blur",
+              isFailure
+                ? "border-destructive/45"
+                : isQueued
+                  ? "border-primary/45"
+                  : "border-success/45",
+            )}
+          >
+            <span className={cn("mt-0.5 grid size-7 place-items-center rounded-full", isFailure ? "bg-destructive/12 text-destructive" : isQueued ? "bg-primary/12 text-primary" : "bg-success/12 text-success")}>
+              <PlatformIcon size={14} />
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <StateIcon size={13} className={isFailure ? "text-destructive" : isQueued ? "text-primary" : "text-success"} />
+                {labels[toast.platform]} · {stateLabel}
+              </div>
+              <p className="m-0 mt-0.5 truncate text-xs text-muted-foreground" title={toast.channelLabel}>
+                {toast.channelLabel}
+              </p>
+              {toast.detail ? <p className={cn("m-0 mt-1 text-[11px] leading-snug", isFailure ? "text-destructive" : "text-muted-foreground")}>{toast.detail}</p> : null}
+              {toast.url ? <a href={toast.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline">Open post →</a> : null}
+            </div>
+            <button type="button" onClick={() => onDismiss(toast.id)} className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Dismiss publishing update">
+              <X size={14} />
+            </button>
+          </div>
+        );
+      })}
+    </aside>
+  );
+}
 
 export function StudioScreen() {
   const { id } = route.useParams();
@@ -73,8 +246,36 @@ export function StudioScreen() {
   /** Temporary program-monitor override for a ready voice variant (before promote). */
   const [variantPreviewUrl, setVariantPreviewUrl] = useState<string | undefined>();
   const [openingCoverPreviewUrl, setOpeningCoverPreviewUrl] = useState<string | undefined>();
+  const [publishToasts, setPublishToasts] = useState<PublishToast[]>([]);
+  const [finalVideoTrimOpen, setFinalVideoTrimOpen] = useState(false);
+  const [publishNotificationRevision, setPublishNotificationRevision] = useState(0);
   // A slow poll response must never replace a more recent local edit response.
   const refreshVersionRef = useRef(0);
+  const publishSnapshotsRef = useRef<Map<string, PublishSnapshot>>(new Map());
+  const publishTrackingReadyRef = useRef(false);
+  const requestedPublishTargetsRef = useRef<Map<string, StudioPublishTarget>>(new Map());
+  const publishToastTimersRef = useRef<Map<string, number>>(new Map());
+  const publishToastSequenceRef = useRef(0);
+
+  const dismissPublishToast = useCallback((toastId: string) => {
+    const timer = publishToastTimersRef.current.get(toastId);
+    if (timer) window.clearTimeout(timer);
+    publishToastTimersRef.current.delete(toastId);
+    setPublishToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }, []);
+
+  const addPublishToast = useCallback((toast: Omit<PublishToast, "id">) => {
+    const toastId = `publish-${Date.now()}-${++publishToastSequenceRef.current}`;
+    setPublishToasts((current) => [...current.slice(-4), { ...toast, id: toastId }]);
+    const duration = toast.state === "failed" ? 11_000 : toast.state === "queued" ? 5_500 : 8_000;
+    const timer = window.setTimeout(() => dismissPublishToast(toastId), duration);
+    publishToastTimersRef.current.set(toastId, timer);
+  }, [dismissPublishToast]);
+
+  useEffect(() => () => {
+    for (const timer of publishToastTimersRef.current.values()) window.clearTimeout(timer);
+    publishToastTimersRef.current.clear();
+  }, []);
 
   const selectScene = useCallback((index: number) => {
     startTransition(() => setSelectedSceneIndex(index));
@@ -102,6 +303,79 @@ export function StudioScreen() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Never replay old publishing history when a reel first opens. We only toast
+  // for status changes observed in this Studio session, or a destination the
+  // creator just selected in the final publish dialog.
+  useEffect(() => {
+    publishSnapshotsRef.current.clear();
+    requestedPublishTargetsRef.current.clear();
+    publishTrackingReadyRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!reel) return;
+    const states = publishDestinationStates(reel);
+    const nextSnapshots = new Map<string, PublishSnapshot>();
+    for (const state of states) {
+      nextSnapshots.set(publishTargetKey(state), publishSnapshot(state));
+    }
+    if (!publishTrackingReadyRef.current) {
+      publishSnapshotsRef.current = nextSnapshots;
+      publishTrackingReadyRef.current = true;
+      return;
+    }
+
+    for (const state of states) {
+      const key = publishTargetKey(state);
+      const previous = publishSnapshotsRef.current.get(key);
+      const current = nextSnapshots.get(key)!;
+      const selectedInThisSession = requestedPublishTargetsRef.current.has(key);
+      const wasActive = previous?.status === "pending" || previous?.status === "uploading";
+      const isActive = state.status === "pending" || state.status === "uploading";
+      const changed = previous?.fingerprint !== current.fingerprint;
+
+      if (isActive && !wasActive) {
+        addPublishToast({
+          platform: state.platform,
+          channelLabel: state.channelLabel,
+          state: "queued",
+          detail: state.message ?? "Upload is being prepared in the background.",
+        });
+      }
+
+      if (state.status === "published" && (selectedInThisSession || !previous || previous.status !== "published" || changed)) {
+        addPublishToast({
+          platform: state.platform,
+          channelLabel: state.channelLabel,
+          state: "published",
+          detail: state.message ?? "Your post is live.",
+          url: state.url,
+        });
+        requestedPublishTargetsRef.current.delete(key);
+      }
+
+      if (state.status === "failed" && (selectedInThisSession || !previous || previous.status !== "failed" || changed)) {
+        addPublishToast({
+          platform: state.platform,
+          channelLabel: state.channelLabel,
+          state: "failed",
+          detail: state.error ?? state.message ?? "The platform did not accept this post.",
+        });
+        requestedPublishTargetsRef.current.delete(key);
+      }
+    }
+    publishSnapshotsRef.current = nextSnapshots;
+  }, [addPublishToast, publishNotificationRevision, reel]);
+
+  const trackPublishTargets = useCallback((targets: StudioPublishTarget[]) => {
+    for (const target of targets) {
+      requestedPublishTargetsRef.current.set(publishTargetKey(target), target);
+    }
+    // The publish endpoint can finish synchronously. Force an immediate
+    // reconciliation after selection so that case still gets a success toast.
+    setPublishNotificationRevision((revision) => revision + 1);
+  }, []);
 
   useEffect(() => {
     setVariantPreviewUrl(undefined);
@@ -399,22 +673,13 @@ export function StudioScreen() {
       )}`
     : undefined;
   const selectedScene = scenes[selectedSceneIndex] ?? scenes[0];
-  const seriesStructureLedger = seriesReels[0]?.redditStory ?? reel.redditStory;
-  const structureDecisionRequired = Boolean(
-    isGameplay &&
-      reel.redditStory?.body &&
-      (!seriesStructureLedger?.structureAdvice?.fingerprint ||
-        seriesStructureLedger.structureAdvice.fingerprint !==
-          seriesStructureLedger.structureDecision?.fingerprint),
-  );
-
   const openGenerateConfirmation = () => {
     const baseAction = {
       title:
         reel.partCount && reel.partCount > 1
           ? `Generate part ${reel.partNumber ?? 1}?`
           : "Generate reel?",
-      body: "This starts the paid produce run for the reviewed plan.",
+      body: "This starts paid production for the reviewed plan.",
       details: [
         "Generates missing scene images with OpenRouter.",
         "Generates missing narration audio with OpenRouter TTS.",
@@ -435,7 +700,7 @@ export function StudioScreen() {
       costTone: "paid" as const,
     };
 
-    if (!structureDecisionRequired) {
+    if (!isGameplay || !reel.redditStory?.body) {
       setConfirmAction({
         ...baseAction,
         onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
@@ -443,13 +708,19 @@ export function StudioScreen() {
       return;
     }
 
-    // Fetch only when the creator explicitly opens Generate. The backend
-    // returns its cached assessment when available, avoiding an inspector-time
-    // request and placing the required choice directly in this confirmation.
+    // Ask the server whether Keep/Use-AI is already on file. Local fingerprint
+    // checks drift after produce syncs body from scenes and falsely re-blocked Part 2+.
     setBusy(true);
     setError(undefined);
     void getSeriesStructureAdvice(id)
       .then((advice) => {
+        if (advice.decisionSatisfied) {
+          setConfirmAction({
+            ...baseAction,
+            onConfirm: () => run(() => approvePlan(id), { requireFfmpeg: true }),
+          });
+          return;
+        }
         setConfirmAction({
           ...baseAction,
           seriesStructure: {
@@ -460,11 +731,17 @@ export function StudioScreen() {
             reason: advice.reason,
             hasWeakBreaks: advice.hasWeakBreaks,
           },
-          onConfirm: (choice = "manual") => run(async () => {
-            const structured = await chooseSeriesStructure(id, choice);
-            const structuredId = structured._id ?? structured.id ?? id;
-            return approvePlan(structuredId);
-          }, { requireFfmpeg: true }),
+          onConfirm: (choice = "manual") =>
+            run(async () => {
+              const structured = await chooseSeriesStructure(id, choice);
+              const structuredId = structured._id ?? structured.id ?? id;
+              // Use AI that changes part count re-queues planning. Approving
+              // immediately raced the old 3-part plan and skipped the new split.
+              if (structured.status !== "plan_review") {
+                return structured;
+              }
+              return approvePlan(structuredId);
+            }, { requireFfmpeg: true }),
         });
       })
       .catch((err: unknown) => {
@@ -474,6 +751,8 @@ export function StudioScreen() {
   };
 
   return (
+    <>
+      <PublishToastStack toasts={publishToasts} onDismiss={dismissPublishToast} />
     <section className="studio-workspace w-full min-w-0 overflow-x-clip text-foreground">
       <header className="sticky top-0 z-20 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
@@ -534,6 +813,18 @@ export function StudioScreen() {
               <Download size={14} />
               <span className="hidden sm:inline">Download</span>
             </a>
+          ) : null}
+          {reel.outputUrl ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFinalVideoTrimOpen(true)}
+              disabled={studioLocked}
+              title="Remove intervals from the finished primary video"
+            >
+              <Scissors size={14} />
+              <span className="hidden sm:inline">Trim video</span>
+            </Button>
           ) : null}
           <Button
             type="button"
@@ -749,6 +1040,7 @@ export function StudioScreen() {
             isGameplay={isGameplay}
             run={run}
             requestConfirm={setConfirmAction}
+            onPublishQueued={trackPublishTargets}
           />
           <VoiceVariantsPanel
             reel={reel}
@@ -770,6 +1062,17 @@ export function StudioScreen() {
         capability={ffmpegBlock}
         onClose={() => setFfmpegBlock(undefined)}
       />
+      {finalVideoTrimOpen && reel.outputUrl ? (
+        <FinalVideoTrimDialog
+          reel={reel}
+          onClose={() => setFinalVideoTrimOpen(false)}
+          onApplied={(updated) => {
+            setReel(updated);
+            void refresh();
+          }}
+        />
+      ) : null}
     </section>
+    </>
   );
 }

@@ -22,9 +22,10 @@ import {
   type InstagramChannelOption,
 } from "@/api/reels";
 import { getTrendSummary, type TrendGenreSummary } from "@/api/trends";
-import type { ConfirmAction, StudioRun } from "@/components/studio/types";
+import type { ConfirmAction, StudioPublishTarget, StudioRun } from "@/components/studio/types";
 import { CrossPostPanel } from "@/components/studio/panels/CrossPostPanel";
 import { DestinationManagerDialog } from "@/components/studio/panels/DestinationsPanel";
+import { PlatformCommentsSection } from "@/components/studio/panels/PlatformCommentsSection";
 import { StudioDialog } from "@/components/studio/StudioDialog";
 import {
   channelDisplayName,
@@ -100,11 +101,13 @@ export function PublishPanel({
   busy,
   run,
   requestConfirm,
+  onPublishQueued,
 }: {
   reel: Reel;
   busy: boolean;
   run: StudioRun;
   requestConfirm: (action: ConfirmAction) => void;
+  onPublishQueued?: (targets: StudioPublishTarget[]) => void;
 }) {
   const reelKey = reel._id ?? reel.id ?? "";
   const [channels, setChannels] = useState<YouTubeChannelOption[]>([]);
@@ -527,6 +530,40 @@ export function PublishPanel({
     }),
   });
   const publishSelectedAccounts = async () => {
+    const selectedTargets: StudioPublishTarget[] = [
+      ...selectedYoutubeIds.map((channelId) => {
+        const channel = channels.find((candidate) => candidate.id === channelId);
+        return {
+          platform: "youtube" as const,
+          channelId,
+          channelLabel: channel?.googleChannelTitle || channel?.label || "YouTube Shorts",
+        };
+      }),
+      ...selectedInstagramIds.map((channelId) => {
+        const channel = instagramChannels.find((candidate) => candidate.id === channelId);
+        return {
+          platform: "instagram" as const,
+          channelId,
+          channelLabel: channel?.username ? `@${channel.username}` : channel?.label || "Instagram Reel",
+        };
+      }),
+      ...selectedFacebookIds.map((channelId) => {
+        const page = facebookPages.find((candidate) => candidate.id === channelId);
+        return {
+          platform: "facebook" as const,
+          channelId,
+          channelLabel: page?.name || page?.label || "Facebook Reel",
+        };
+      }),
+      ...selectedThreadsIds.map((channelId) => {
+        const channel = threadsChannels.find((candidate) => candidate.id === channelId);
+        return {
+          platform: "threads" as const,
+          channelId,
+          channelLabel: channel?.username ? `@${channel.username}` : channel?.name || channel?.label || "Threads",
+        };
+      }),
+    ];
     const result = await run(async () => {
       if (selectedYoutubeIds.length) await persistYoutubeMetadata();
       // The adapters read persisted settings, so save before asking them to
@@ -546,6 +583,7 @@ export function PublishPanel({
       return getReel(reelKey);
     });
     if (!result.ok) return;
+    onPublishQueued?.(selectedTargets);
     youtubeCopyDirtyRef.current = false;
     youtubeTagsDirtyRef.current = false;
     setYoutubeSaveState("saved");
@@ -708,7 +746,7 @@ export function PublishPanel({
         </Button>
         <DraftSaveNotice platform="youtube" state={youtubeSaveState} />
         <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestYoutubeCopyGeneration}>
-          <Sparkles size={14} /> Regenerate AI title &amp; description
+          <Sparkles size={14} /> Regenerate with current YouTube rules
         </Button>
         <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestThumbnailTextGeneration}>
           <Sparkles size={14} /> Regenerate AI thumbnail hook
@@ -723,7 +761,7 @@ export function PublishPanel({
         <Label className="text-xs text-muted-foreground">Caption<Textarea value={instagramCaption} maxLength={2200} rows={5} disabled={busy} placeholder="Generate an AI draft, then edit the Reel caption, hook, CTA, and hashtags…" onChange={(event) => updateInstagramCaption(event.target.value)} /><span className={cn("justify-self-end text-[11px]", instagramCaption.length > 2100 || instagramCaptionInvalid ? "text-warning" : "text-muted-foreground/80")}>{instagramCaption.length}/2,200 · {instagramHashtagCount}/{INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags</span><span className="text-[11px] text-muted-foreground/80">{reel.instagramSettings?.source === "ai" ? `AI-generated with ${reel.instagramSettings.model ?? "the configured model"}.` : reel.instagramSettings?.source === "fallback" ? "AI was unavailable; this is a guarded fallback draft." : "Instagram copy is independent from YouTube metadata."}</span></Label>
         {instagramCaptionLimitNotice ? <p role="status" className="m-0 text-xs text-warning">Instagram captions are limited to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags. Extra hashtags from the last edit were not added.</p> : null}
         {instagramCaptionInvalid ? <p role="alert" className="m-0 text-xs text-destructive">Reduce this caption to {INSTAGRAM_CAPTION_MAX_HASHTAGS} hashtags before saving or publishing.</p> : null}
-        <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestInstagramCaptionGeneration}><Sparkles size={14} />{reel.instagramSettings?.caption ? "Regenerate AI caption" : "Generate AI caption"}</Button>
+        <Button type="button" variant="outline" className="justify-self-start" disabled={busy} onClick={requestInstagramCaptionGeneration}><Sparkles size={14} />{reel.instagramSettings?.caption ? "Regenerate with current Instagram rules" : "Generate with current Instagram rules"}</Button>
         <div className="grid gap-2 rounded border border-pink-500/20 bg-card/60 p-2.5">
           <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-foreground">Native poll draft</span><span className="text-[10px] text-muted-foreground">Manual in Instagram</span></div>
           <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">Copy these into Instagram&apos;s Poll sticker before posting manually. They are never attached to API-published Reels.</p>
@@ -741,16 +779,16 @@ export function PublishPanel({
 
       {yt ? (
         <div
-          className={cn(
-            "rounded-md border px-2.5 py-2 text-xs",
-            yt.status === "published"
-              ? "border-success/40 bg-success/10 text-success"
-              : yt.status === "failed"
-                ? "border-destructive/40 bg-destructive/10 text-destructive"
-                : "border-warning/40 bg-warning/10 text-warning",
-          )}
+          className="rounded-md border border-border bg-card/50 px-2.5 py-2 text-xs text-muted-foreground"
         >
-          <span className="font-medium capitalize">{yt.status}</span>
+          <span className={cn(
+            "font-medium capitalize",
+            yt.status === "published"
+              ? "text-success"
+              : yt.status === "failed"
+                ? "text-destructive"
+                : "text-warning",
+          )}>{yt.status}</span>
           {yt.channelLabel ? ` · ${yt.channelLabel}` : ""}
           {yt.url ? (
             <a href={yt.url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-primary">
@@ -813,6 +851,7 @@ export function PublishPanel({
       </StudioDialog> : null}
       {reel.instagram?.length ? <div className="grid gap-1">{reel.instagram.map((publish) => <PublishOutcome key={publish.channelId} label={publish.channelLabel || publish.channelId} status={publish.status} url={publish.url} error={publish.error} message={publish.message} icon={<Instagram size={12} />} />)}</div> : null}
       {activeInstagram.length ? <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"><strong>Publishing in progress.</strong> {activeInstagram.map((publish) => `${publish.channelLabel ?? publish.channelId}: ${publish.message ?? publish.status}`).join(" · ")} The Studio is locked until these destinations settle.</div> : null}
+      <PlatformCommentsSection reel={reel} />
       {distributionDialog === "facebook" ? <StudioDialog title="Facebook Reels publishing settings" description="Edit and save Page-only description. Choose the Page and send the Reel from Publish accounts." onClose={() => setDistributionDialog(null)}>
         <CrossPostPanel reel={reel} busy={busy} run={run} focus="facebook" onOpenPublishAccounts={() => setDistributionDialog("destinations")} />
       </StudioDialog> : null}

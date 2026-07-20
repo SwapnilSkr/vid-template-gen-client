@@ -52,9 +52,8 @@ export function buildDocFromSavedShortsCover(reel: Reel): ThumbDoc | undefined {
   const cover = reel.shortsCover;
   if (!cover?.imageUrl && !cover?.editorState) return undefined;
 
-  // Rebuild any automatic opening cover from the current shared hook without
-  // touching creator-made covers. This clears legacy source-title text while
-  // preserving the Reddit card's separate, verbatim title treatment.
+  // Rebuild only automatic/legacy opening covers from the current shared hook.
+  // Creator saves use `reddit:` / `manual:` fingerprints and must open as saved.
   if (
     reel.strategy === "gameplay_overlay" &&
     (

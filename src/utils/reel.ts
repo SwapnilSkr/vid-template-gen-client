@@ -34,6 +34,8 @@ export function reelNeedsPolling(reel?: Reel | null): boolean {
   const yt = reel.youtube?.status;
   if (yt === "pending" || yt === "uploading") return true;
   if (reel.instagram?.some((publish) => publish.status === "pending" || publish.status === "uploading")) return true;
+  if (reel.facebook?.some((publish) => publish.status === "pending" || publish.status === "uploading")) return true;
+  if (reel.threads?.some((publish) => publish.status === "pending" || publish.status === "uploading")) return true;
   return false;
 }
 
